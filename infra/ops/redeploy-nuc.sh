@@ -2,6 +2,11 @@
 set -Eeuo pipefail
 umask 077
 
+# Not wired into CI: infra/tests/backup-ci-registration.test.mjs pins the
+# exact `application` job run list, and touching ci.yml also stales a hash in
+# docs/evidence/backup-status-outbox that needs owner approval to refresh.
+# Run its test locally instead: bash infra/tests/redeploy-nuc.test.sh
+
 fatal() {
   echo "fatal: $*" >&2
   exit 1
