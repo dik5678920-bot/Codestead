@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "generatedAt": "2026-07-12T16:28:00.000Z",
-  "revalidatedAt": "2026-09-26T17:30:00.000Z",
+  "revalidatedAt": "2026-09-28T09:00:00.000Z",
   "scope": "Local deterministic validation of nightly backup status reporting through the dedicated least-privilege reporter and current PostgreSQL mail-authority chain on native disposable PostgreSQL 17; no Docker, host PostgreSQL service, real data, real credentials, or external email was used.",
   "status": "passed",
   "shellContract": {
@@ -197,11 +197,11 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "2b83df78e83074c38d5f573426485e7428d70271a2309b399544aa90e8d1046f"
+      "sha256": "3dd13e678a10079e21c5a1913ce73164a6cc883098eea5c480a9e8d0150ea7cc"
     },
     {
       "path": "infra/tests/backup-ci-registration.test.mjs",
-      "sha256": "1207721ae62dfbf4bf1634eef1e23ff15a63a41dc613630b7474a40c3ea433de"
+      "sha256": "f92ae172b06074079d6b878403079e8e51549610cbec3b16b0c81236d9312f45"
     }
   ],
   "supersededDigests": [
@@ -409,6 +409,36 @@
       "artifact": "infra/tests/backup-ci-registration.test.mjs",
       "priorDigest": "1da8b33f26364e812c8d80d8399f034e4b70cda436fa677138e770ba6ad9af18",
       "replacedAt": "2026-09-26T17:30:00.000Z"
+    },
+    {
+      "artifact": ".github/workflows/ci.yml",
+      "priorDigest": "2b83df78e83074c38d5f573426485e7428d70271a2309b399544aa90e8d1046f",
+      "replacedAt": "2026-09-27T18:00:00.000Z"
+    },
+    {
+      "artifact": "infra/tests/backup-ci-registration.test.mjs",
+      "priorDigest": "1207721ae62dfbf4bf1634eef1e23ff15a63a41dc613630b7474a40c3ea433de",
+      "replacedAt": "2026-09-27T18:00:00.000Z"
+    },
+    {
+      "artifact": ".github/workflows/ci.yml",
+      "priorDigest": "fcd861e1cad23b54415e0c476381801892b3f49ec00723b72e30b1de663886b6",
+      "replacedAt": "2026-09-27T19:30:00.000Z"
+    },
+    {
+      "artifact": "infra/tests/backup-ci-registration.test.mjs",
+      "priorDigest": "806f9903e04eefe1caae909f4f48d15998956b579d293ceb18e2fa5ba2a839a1",
+      "replacedAt": "2026-09-27T19:30:00.000Z"
+    },
+    {
+      "artifact": ".github/workflows/ci.yml",
+      "priorDigest": "0c864dcc5c29f54548fc3f04874f3d9288c1d3a73307294d562558197158e385",
+      "replacedAt": "2026-09-28T09:00:00.000Z"
+    },
+    {
+      "artifact": "infra/tests/backup-ci-registration.test.mjs",
+      "priorDigest": "703696554bcaa485e59ce1c54505fc664ee260f7ad5250c46bfbed73c93c8bad",
+      "replacedAt": "2026-09-28T09:00:00.000Z"
     }
   ],
   "limitations": [
