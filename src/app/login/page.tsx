@@ -1,8 +1,15 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/auth/auth-shell";
 import { LoginForm } from "@/components/auth/login-form";
 import { isGoogleOAuthConfigured } from "@/lib/security/oauth-provider-config";
 import { signedInDestination } from "@/lib/security/signed-in-destination";
+
+export const metadata: Metadata = {
+  title: "Sign in",
+  description: "Sign in to Codestead on your approved device and resume your roadmap.",
+};
+
 
 export default async function LoginPage() {
   // Signing in again on the device that already holds the live session would
