@@ -929,12 +929,10 @@ describe("database role-boundary test launcher", () => {
     // exit status (CI otherwise shows nothing actionable). Only marker lines
     // are echoed, never the raw child output.
     const diagnostics = output
-      .split("
-")
+      .split("\n")
       .filter((line) => /database-role-boundary lane |^\s*not ok |^\s*# (fail|cancelled) /.test(line))
       .map((line) => line.replaceAll(tokenCanary, "[canary]"))
-      .join("
-");
+      .join("\n");
     expect(result.status, diagnostics).toBe(0);
     expect(output).toContain(
       "publishes the exact migration-derived 0069 public and Drizzle inventory",
