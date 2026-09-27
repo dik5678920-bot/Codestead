@@ -106,12 +106,28 @@ if REPO_ROOT="$fake_repo" "$script" --dry-run "$head_sha" >/dev/null 2>&1; then
 fi
 git -C "$fake_repo" checkout --quiet -- README.md
 
-# --- --no-scan is accepted and skips the trivy gate in the dry-run preview -
+# --- --no-scan is accepted, skips the trivy gate, and never calls the
+#     record step (it requires scan evidence) -------------------------------
 
 dry_run_output="$(REPO_ROOT="$fake_repo" "$script" --no-scan --dry-run "$head_sha" 2>&1)" \
   || fail "--no-scan dry run should succeed"
 grep -qF "skipping trivy scan" <<<"$dry_run_output" \
   || fail "--no-scan did not skip the trivy scan step"
+grep -qF "UNSCANNED" <<<"$dry_run_output" \
+  || fail "--no-scan did not clearly log an UNSCANNED deploy"
+grep -qF "extract the 7 APP_*_IMAGE references from" <<<"$dry_run_output" \
+  || fail "--no-scan did not describe extracting digests from the inspection report instead of record"
+grep -qF "manage-application-images.mjs record" <<<"$dry_run_output" \
+  && fail "--no-scan must never call the record step (it requires scan evidence)"
+
+# --- --scan (the default) still uses record, not the inspection report -----
+
+dry_run_output="$(REPO_ROOT="$fake_repo" "$script" --dry-run "$head_sha" 2>&1)" \
+  || fail "--scan dry run should succeed"
+grep -qF "manage-application-images.mjs record" <<<"$dry_run_output" \
+  || fail "the scanned path did not call record"
+grep -qF "extract the 7 APP_*_IMAGE references from" <<<"$dry_run_output" \
+  && fail "the scanned path should not fall back to the inspection report"
 
 # --- non-root without --dry-run is refused (this test never runs as root) --
 

@@ -94,6 +94,11 @@ fi
 
 # --- configuration -----------------------------------------------------------
 
+# This file is a standalone copy on purpose (the owner runs it from wherever
+# they last downloaded it, e.g. /tmp/redeploy-nuc.sh, not from inside a
+# checkout). Every path below is therefore either an absolute default or
+# derived from REPO_ROOT/BUILD_ROOT/etc — never from this script's own
+# location (no $0/BASH_SOURCE-relative paths anywhere in this file).
 repo_root="${REPO_ROOT:-/opt/learncoding}"
 build_root="${BUILD_ROOT:-/var/tmp/codestead-build}"
 compose_env_file="${COMPOSE_ENV_FILE:-/etc/learncoding/compose.env}"
@@ -274,6 +279,12 @@ echo "building images, this takes a few minutes..."
 build_step build
 build_step inspect
 
+# `record` (below) requires the scan step's security manifest evidence, so it
+# only runs on the scanned path. --no-scan instead reads the seven digests
+# straight from `inspect`'s own report, which needs neither trivy nor record.
+application_images_env=""
+extraction_temp=""
+
 if [[ "$scan" == true ]]; then
   echo "-- running trivy scan (use --no-scan to skip for a quick beta deploy) --"
   # Trivy isn't a host package here (everything else runs in Docker); run it
@@ -285,15 +296,28 @@ if [[ "$scan" == true ]]; then
   run trivy image --cache-dir "$trivy_cache_dir" --download-db-only
   run trivy image --cache-dir "$trivy_cache_dir" --download-java-db-only
   build_step scan
+  build_step record
+  application_images_env="$build_root/dist/application-images/application-images.env"
+  if [[ "$dry_run" != true ]]; then
+    [[ -f "$application_images_env" ]] || fatal "expected image record missing: $application_images_env"
+  fi
 else
-  echo "-- skipping trivy scan (--no-scan) --"
-fi
-
-build_step record
-
-application_images_env="$build_root/dist/application-images/application-images.env"
-if [[ "$dry_run" != true ]]; then
-  [[ -f "$application_images_env" ]] || fatal "expected image record missing: $application_images_env"
+  echo "-- skipping trivy scan (--no-scan): compose.env will be updated from UNSCANNED digests --"
+  inspection_report="$build_root/dist/application-images/application-inspection.json"
+  if [[ "$dry_run" == true ]]; then
+    echo "+ (extract the 7 APP_*_IMAGE references from $inspection_report)" >&2
+  else
+    [[ -f "$inspection_report" ]] || fatal "expected inspection report missing: $inspection_report"
+    extraction_temp="$(mktemp)"
+    node -e '
+      const fs = require("fs");
+      const report = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+      for (const record of report.records) {
+        process.stdout.write(`${record.variable}=${record.reference}\n`);
+      }
+    ' "$inspection_report" >"$extraction_temp"
+    application_images_env="$extraction_temp"
+  fi
 fi
 
 # --- step 3: back up compose.env and swap only the 7 image lines ------------
@@ -309,8 +333,9 @@ if [[ "$dry_run" == true ]]; then
     echo "  $var=<recorded digest>"
   done
 else
+  [[ "$scan" == true ]] || echo "-- UNSCANNED beta deploy: compose.env is being updated from inspect-only digests, no Trivy/record evidence --"
   new_env="$(mktemp)"
-  trap 'rm -f "$new_env"' EXIT
+  trap 'rm -f "$new_env" "$extraction_temp"' EXIT
 
   declare -A new_values=()
   for var in "${application_image_vars[@]}"; do
@@ -345,7 +370,7 @@ else
   fi
 
   install -m 0600 "$new_env" "$compose_env_file"
-  rm -f "$new_env"
+  rm -f "$new_env" "$extraction_temp"
   trap - EXIT
   echo "compose.env updated: 7 APP_*_IMAGE lines replaced, all other lines unchanged"
 fi
@@ -417,6 +442,7 @@ cat <<EOF
 == redeploy complete ==
 deployed commit:     $resolved_sha
 previous deployment: ${previous_sha:-unknown}
+image evidence:      $([[ "$scan" == true ]] && echo "scanned (Trivy + application-images record)" || echo "UNSCANNED beta deploy (--no-scan)")
 compose env backup:  $backup_file
 
 Rollback to the previous images (never reverses a migration):
