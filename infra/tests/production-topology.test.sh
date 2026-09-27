@@ -183,6 +183,10 @@ readonly secrets_dir="$workdir/secrets"
 readonly data_root="$workdir/data"
 readonly cloudflare_config="$workdir/cloudflared.yml"
 readonly postgres_socket_dir="$workdir/postgres-socket"
+# Production data root for the object store only (postgres and next-cache are
+# overridden by the fixture). Root-owned and prepared by the production
+# preparer, exactly as start-production-stack.sh does before the stack starts.
+readonly object_data_root="$workdir/object-data"
 mkdir -p "$secrets_dir" "$data_root/postgres" "$data_root/next-cache" "$data_root/app-data" "$postgres_socket_dir"
 chmod 0755 "$secrets_dir"
 chmod 0777 "$data_root/next-cache" "$data_root/app-data"
@@ -227,7 +231,7 @@ export COMPOSE_PROFILES=""
 SECRETS_GID="$(id -g)"
 export SECRETS_GID
 export SECRETS_DIR="$secrets_dir"
-export LEARN_DATA_ROOT="$data_root"
+export LEARN_DATA_ROOT="$object_data_root"
 export CLOUDFLARE_CONFIG_FILE="$cloudflare_config"
 export POSTGRES_DB=learncoding
 export POSTGRES_USER=learncoding
@@ -565,6 +569,22 @@ inspect_postgres_identity() {
   POSTGRES_GID="$passwd_gid"
   export POSTGRES_UID POSTGRES_GID
 }
+prepare_object_storage_root() {
+  # The object-store workers (file-erasure, lifecycle, scan) refuse an
+  # unprepared root (DurableObjectStoreSafetyError), so run the same preparer
+  # production runs rather than hand-building its identity contract here.
+  sudo -n install -d -o 0 -g 0 -m 0750 -- "$object_data_root"
+  sudo -n env -i PATH="$PATH" NODE_OPTIONS= UPLOADS_ENABLED="$UPLOADS_ENABLED" \
+    LEARN_DATA_ROOT="$object_data_root" \
+    "$(command -v node)" "$repo_root/infra/ops/prepare-object-storage.mjs" >/dev/null || {
+    echo "The production object storage preparer rejected the disposable data root." >&2
+    return 1
+  }
+  [[ "$(sudo -n stat -c '%u:%g %a' -- "$object_data_root/app-data/objects")" == "0:1000 1770" ]] || {
+    echo "The prepared object storage root has the wrong ownership or mode." >&2
+    return 1
+  }
+}
 prepare_postgres_bind_dirs() {
   sudo -n chown -- "$POSTGRES_UID:$POSTGRES_GID" "$data_root/postgres" "$postgres_socket_dir"
   sudo -n chmod 0700 "$data_root/postgres" "$postgres_socket_dir"
@@ -760,6 +780,7 @@ reserve_runner_client_network
 timeout 300 docker pull "$postgres_image" >/dev/null
 inspect_postgres_identity
 prepare_postgres_bind_dirs
+prepare_object_storage_root
 build_image runtime "$runtime_image"
 build_image tooling "$tooling_image"
 build_image worker "$worker_image"

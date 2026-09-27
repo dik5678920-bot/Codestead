@@ -924,8 +924,16 @@ describe("database role-boundary test launcher", () => {
       },
     );
     expect(result.error).toBeUndefined();
-    expect(result.status).toBe(0);
     const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
+    // On failure, name the failing lane and TAP assertion instead of only the
+    // exit status (CI otherwise shows nothing actionable). Only marker lines
+    // are echoed, never the raw child output.
+    const diagnostics = output
+      .split("\n")
+      .filter((line) => /database-role-boundary lane |^\s*not ok |^\s*# (fail|cancelled) /.test(line))
+      .map((line) => line.replaceAll(tokenCanary, "[canary]"))
+      .join("\n");
+    expect(result.status, diagnostics).toBe(0);
     expect(output).toContain(
       "publishes the exact migration-derived 0069 public and Drizzle inventory",
     );

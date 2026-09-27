@@ -37,7 +37,10 @@ docker run --detach --pull never --name "$postgres_container" --network "$networ
 
 ready=false
 for _ in $(seq 1 120); do
-  if docker exec "$postgres_container" pg_isready \
+  # Probe TCP, not the default Unix socket: first-boot initialization runs a
+  # temporary socket-only server, so a socket probe can pass before the real
+  # server listens on the network the harness container connects through.
+  if docker exec "$postgres_container" pg_isready --host 127.0.0.1 \
     --username legacy_bootstrap --dbname learncoding >/dev/null 2>&1; then
     ready=true
     break
