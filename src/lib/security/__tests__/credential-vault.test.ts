@@ -51,10 +51,12 @@ describe("credential vault", () => {
   it("rejects tampering and incorrect master keys", () => {
     const masterKey = randomBytes(32);
     const sealed = sealCredential("provider-test-secret-1234", context, masterKey);
-    const changed = {
-      ...sealed,
-      ciphertext: `${sealed.ciphertext.slice(0, -2)}AA`,
-    };
+    // Flip one decoded byte so the tamper can never be a no-op (rewriting the
+    // tail to a fixed string left it unchanged whenever it already matched).
+    const ciphertext = Buffer.from(sealed.ciphertext, "base64url");
+    ciphertext[0] ^= 0x01;
+    const changed = { ...sealed, ciphertext: ciphertext.toString("base64url") };
+    expect(changed.ciphertext).not.toBe(sealed.ciphertext);
     expect(() => openCredential(changed, context, masterKey)).toThrow();
     expect(() => openCredential(sealed, context, randomBytes(32))).toThrow();
   });

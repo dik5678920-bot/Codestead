@@ -143,7 +143,10 @@ test.describe("administrator credential ceremony", () => {
     await ceremony.getByLabel("Recorded reason").fill(reason);
     await ceremony.getByLabel(/replacement credential/i).fill(replacement);
     await ceremony.getByRole("button", { name: /Replace credential/i }).click();
-    await expect(page.getByText(/learner was notified/i)).toBeVisible();
+    // The reveal message also ends "the learner was notified", so wait for the
+    // replace-specific completion; otherwise the assertion below can run before
+    // the replace requests are sent.
+    await expect(page.getByText(/completed with status .*learner was notified/i)).toBeVisible();
     expect(calls.slice(-2)).toEqual([
       { url: "/api/security/fresh-mfa", method: "POST", body: { code: "654321" } },
       {
