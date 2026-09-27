@@ -275,6 +275,16 @@ export function DeviceSessionsPanel({
               </small>
             </span>
             <span className="pill">{item.state}</span>
+            {item.current && item.state === "active" && (
+              <button
+                className="button button-secondary"
+                disabled={busy || loadState !== "ready"}
+                onClick={() => void logout("all")}
+                type="button"
+              >
+                <LogOut size={15} /> Sign out this device
+              </button>
+            )}
           </div>
         )) : loadState === "ready" ? <p>No session history is available.</p> : null}
       </div>
