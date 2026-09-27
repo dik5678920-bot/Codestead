@@ -127,16 +127,28 @@ Next steps (owner):
 
      sudo docker compose -p glitchtip -f $compose_file exec web ./manage.py createsuperuser
 
-2. Publish it through the existing tunnel. Add this ingress rule to
-   /etc/cloudflared/config.yml ABOVE the catch-all "- service: http_status:404",
-   then route DNS and restart cloudflared:
+2. Open http://localhost:$host_port on the NUC (for example through
+   'ssh -L $host_port:localhost:$host_port homelab'), sign in, then:
+     a. Create an organization (e.g. "Codestead").
+     b. Create a project for the server + workers (platform: Node.js) and a
+        second one for the browser (platform: JavaScript).
+     c. Open each project's Settings > Client Keys (DSN) and copy the DSN.
+
+3. Put the DSNs in /etc/learncoding/compose.env, replacing the public host with
+   the internal one, so reports travel only over the internal
+   glitchtip-ingest network (no internet egress):
+
+     SENTRY_DSN=http://<server-key>@glitchtip-web:8000/<server-project-id>
+     SENTRY_BROWSER_DSN=http://<browser-key>@glitchtip-web:8000/<browser-project-id>
+     SENTRY_RELEASE=<deployed git SHA>
+
+   then redeploy Codestead so the app and workers pick them up. GlitchTip must
+   be running first: Codestead joins its glitchtip-ingest network.
+
+4. Optional public UI (needs owner approval before the shared cloudflared is
+   touched). The ingress rule to add ABOVE the catch-all in
+   /etc/cloudflared/config.yml would be:
 
      - hostname: $public_host
-       service: http://127.0.0.1:$host_port
-
-     sudo cloudflared tunnel route dns <your-tunnel-name> $public_host
-     sudo systemctl restart cloudflared
-
-3. Sign in at https://$public_host, create an organization and a project,
-   and copy its DSN for SENTRY_DSN / NEXT_PUBLIC_SENTRY_DSN.
+       service: http://localhost:$host_port
 EOF

@@ -65,7 +65,8 @@ if grep -qF "$password" <<<"$first_output" || grep -qF "$secret_key" <<<"$first_
 fi
 
 grep -qE "createsuperuser" <<<"$first_output" || fail "next steps omit createsuperuser"
-grep -qF "service: http://127.0.0.1:8210" <<<"$first_output" || fail "next steps omit the ingress line"
+grep -qF "service: http://localhost:8210" <<<"$first_output" || fail "next steps omit the ingress line"
+grep -qF "@glitchtip-web:8000/" <<<"$first_output" || fail "next steps omit the internal DSN host"
 
 # Every docker call targets only the glitchtip project and its compose file.
 while IFS= read -r call; do
@@ -96,6 +97,8 @@ grep -qE '"127\.0\.0\.1:\$\{GLITCHTIP_HOST_PORT:-8210\}:8000"' "$compose_file" \
 if grep -qE 'external: *true|network_mode|privileged|/var/run/docker.sock' "$compose_file"; then
   fail "compose file reaches outside its own stack"
 fi
+grep -qE '^  glitchtip-ingest:$' "$compose_file" || fail "ingest network is missing"
+grep -A2 -E '^  glitchtip-ingest:$' "$compose_file" | grep -qE 'internal: true' || fail "ingest network must be internal"
 image_count="$(grep -cE '^\s*image: ' "$compose_file")"
 pinned_count="$(grep -cE '^\s*image: [^ ]+@sha256:[0-9a-f]{64}$' "$compose_file")"
 [[ "$image_count" == "$pinned_count" ]] || fail "every image must be pinned by digest"

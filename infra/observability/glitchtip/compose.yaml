@@ -16,7 +16,7 @@ x-glitchtip-image: &glitchtip-image
 
 x-glitchtip-environment: &glitchtip-environment
   GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-https://errors.shivanshmishra.in}
-  ALLOWED_HOSTS: ${GLITCHTIP_ALLOWED_HOSTS:-errors.shivanshmishra.in,127.0.0.1,localhost}
+  ALLOWED_HOSTS: ${GLITCHTIP_ALLOWED_HOSTS:-errors.shivanshmishra.in,glitchtip-web,127.0.0.1,localhost}
   CSRF_TRUSTED_ORIGINS: ${GLITCHTIP_DOMAIN:-https://errors.shivanshmishra.in}
   VALKEY_URL: redis://valkey:6379/0
   # Invite-only: the first administrator is created with `manage.py
@@ -106,7 +106,12 @@ services:
       migrate: { condition: service_completed_successfully }
     ports:
       - "127.0.0.1:${GLITCHTIP_HOST_PORT:-8210}:8000"
-    networks: [glitchtip]
+    networks:
+      glitchtip: {}
+      # Codestead's app and workers report here as http://<key>@glitchtip-web:8000/<id>
+      # without any internet egress of their own.
+      glitchtip-ingest:
+        aliases: [glitchtip-web]
     mem_limit: 512m
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/_health/', timeout=4)"]
@@ -143,6 +148,14 @@ networks:
         # Unused on the NUC (checked 2026-09-27): other stacks use 172.17-31.x
         # and 192.168.0-63.x.
         - subnet: 10.203.0.0/24
+  # Internal (no route out) network that the Codestead stack joins as an
+  # external network. Only GlitchTip web is attached on this side.
+  glitchtip-ingest:
+    name: glitchtip-ingest
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.203.1.0/24
 
 volumes:
   postgres-data:
