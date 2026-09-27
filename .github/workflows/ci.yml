@@ -177,6 +177,9 @@ jobs:
       - run: bash infra/tests/runner-vm-provision.test.sh
       - run: sudo bash infra/tests/runner-guest-installer.test.sh
       - run: sudo bash infra/tests/runner-firewall.test.sh
+      # Runner images ship varying Docker Engines; the packet test uses
+      # interface_name, which needs Engine 28.1+, so pin the reviewed engine.
+      - run: bash infra/tests/install-reviewed-docker-engine.sh
       - run: sudo bash infra/tests/runner-firewall-packets.test.sh
       - run: python3 infra/tests/recovery-evidence-helper.test.py
       - run: python3 infra/tests/recovery-evidence-provenance.test.py

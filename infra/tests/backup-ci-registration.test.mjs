@@ -907,6 +907,7 @@ const expectedApplicationRuns = [
   "bash infra/tests/runner-vm-provision.test.sh",
   "sudo bash infra/tests/runner-guest-installer.test.sh",
   "sudo bash infra/tests/runner-firewall.test.sh",
+  "bash infra/tests/install-reviewed-docker-engine.sh",
   "sudo bash infra/tests/runner-firewall-packets.test.sh",
   "python3 infra/tests/recovery-evidence-helper.test.py",
   "python3 infra/tests/recovery-evidence-provenance.test.py",
@@ -2208,7 +2209,13 @@ function runAdversarialSelfTests(document) {
   );
   expectRejected(
     "production e2e without the reviewed Docker Engine",
-    replaceExactly(document, `${productionEngineStep}\n`, ""),
+    // Anchored on the job checkout: the application job runs the same installer,
+    // and only the production e2e job copy is removed here.
+    replaceExactly(
+      document,
+      `${productionCheckout}\n${productionEngineStep}\n`,
+      `${productionCheckout}\n`,
+    ),
   );
   expectRejected(
     "quoted production e2e command",
