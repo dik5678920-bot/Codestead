@@ -835,7 +835,7 @@ const requiredBackupRuns = [
   "bash infra/tests/systemd-backup.test.sh",
 ];
 const expectedApplicationRuns = [
-  'sudo ln -sf "$(command -v node)" /usr/bin/node',
+  'sudo install -o root -g root -m 0755 "$(command -v node)" /usr/bin/node',
   "npm ci",
   registrationRun,
   "npm run test:github-runner-context:registration",
