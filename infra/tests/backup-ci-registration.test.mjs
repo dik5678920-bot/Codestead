@@ -949,6 +949,10 @@ const checkoutProjection = [
   "        with:",
   "          persist-credentials: false",
 ];
+const applicationCheckoutProjection = [
+  ...checkoutProjection,
+  "          fetch-depth: 0",
+];
 const setupNodeProjection = [
   "      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0",
   "        with:",
@@ -1176,7 +1180,7 @@ const reviewedJobContracts = new Map([
       "    runs-on: ubuntu-24.04",
       "    timeout-minutes: 70",
       "    steps:",
-      ...checkoutProjection,
+      ...applicationCheckoutProjection,
       ...setupNodeProjection,
       ...expectedApplicationRuns.map((command) => `      - run: ${command}`),
     ],
