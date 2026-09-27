@@ -2235,6 +2235,7 @@ async function handleExamSessionDenial(controller: Controller, generation: numbe
   } catch {
     // The anonymous login gate retries cleanup before exposing credentials.
   }
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload drops in-memory state after session loss
   if (controller.boundaryCurrent) window.location.assign("/login");
 }
 
