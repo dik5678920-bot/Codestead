@@ -51,6 +51,14 @@ const NO_USER_OBJECT_OPERATIONS = new Map<string, Readonly<{ ownershipProof: str
     ownershipProof: "stateless interest-category preview",
     anchor: "inferInterestCategory(",
   }],
+  ["GET /api/monitoring/envelope", {
+    ownershipProof: "authenticated browser error-monitoring availability probe",
+    anchor: "enabled: browserTarget() !== null",
+  }],
+  ["POST /api/monitoring/envelope", {
+    ownershipProof: "authenticated browser error-event tunnel to the server-held DSN",
+    anchor: "rewriteEnvelope(await request.text(), target)",
+  }],
 ]);
 
 /**

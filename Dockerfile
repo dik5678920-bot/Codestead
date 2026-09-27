@@ -79,6 +79,7 @@ COPY --chown=node:node tsconfig.json ./tsconfig.json
 COPY --chown=node:node src ./src
 COPY --chown=node:node src/lib/notifications/mail-dispatch-hard-watchdog-child.mjs ./src/lib/notifications/mail-dispatch-hard-watchdog-child.mjs
 COPY --chown=node:node scripts/lib/worker-health.ts ./scripts/lib/worker-health.ts
+COPY --chown=node:node scripts/lib/worker-error-monitoring.ts ./scripts/lib/worker-error-monitoring.ts
 COPY --chown=node:node scripts/check-worker-health.ts ./scripts/check-worker-health.ts
 COPY --chown=node:node scripts/process-outbox.ts ./scripts/process-outbox.ts
 COPY --chown=node:node scripts/reconcile-gmail-outbox.ts ./scripts/reconcile-gmail-outbox.ts

@@ -16,6 +16,7 @@ import { isAbsolute, join } from "node:path";
 import {
   allowlistedOperationalErrorCode,
 } from "../../src/lib/security/operational-code";
+import { reportWorkerTerminalFailure } from "./worker-error-monitoring";
 
 const HEALTH_FILE_NAME = "status.json";
 const MAX_HEALTH_FILE_BYTES = 4_096;
@@ -221,6 +222,7 @@ export function createWorkerHealthReporter(options: ReporterOptions) {
         consecutiveFailures,
         code: workerHealthErrorCode(error),
       }));
+      void reportWorkerTerminalFailure(options.worker, workerHealthErrorCode(error), error);
       return record;
     },
   };

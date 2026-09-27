@@ -293,17 +293,17 @@ const expectedNetworks = {
   "backup-status-reporter": ["data"],
   "database-negative-probes": ["data"],
   "database-boundary-verifier": ["data"],
-  app: ["data", "frontend", "runner-client"],
-  "mail-worker": ["data", "mail-egress"],
-  "reward-worker": ["data"],
-  "regrade-worker": ["data", "runner-client"],
-  "exam-finalization-worker": ["data", "runner-client"],
-  "practice-runner-recovery-worker": ["data", "runner-client"],
+  app: ["data", "frontend", "runner-client", "glitchtip-ingest"],
+  "mail-worker": ["data", "mail-egress", "glitchtip-ingest"],
+  "reward-worker": ["data", "glitchtip-ingest"],
+  "regrade-worker": ["data", "runner-client", "glitchtip-ingest"],
+  "exam-finalization-worker": ["data", "runner-client", "glitchtip-ingest"],
+  "practice-runner-recovery-worker": ["data", "runner-client", "glitchtip-ingest"],
   "runner-egress-gateway": ["runner-client", "runner-egress"],
-  "project-review-correction-worker": ["data", "github-egress"],
+  "project-review-correction-worker": ["data", "github-egress", "glitchtip-ingest"],
   clamav: ["scanner", "signature-egress"],
-  "scan-worker": ["data", "scanner"],
-  "file-erasure-worker": ["data"],
+  "scan-worker": ["data", "scanner", "glitchtip-ingest"],
+  "file-erasure-worker": ["data", "glitchtip-ingest"],
   lifecycle: ["data"],
   "platform-seed": ["data"],
   "admin-bootstrap": ["data"],
@@ -317,6 +317,7 @@ expect(
     "data",
     "frontend",
     "github-egress",
+    "glitchtip-ingest",
     "mail-egress",
     "runner-client",
     "runner-egress",
@@ -326,6 +327,18 @@ expect(
   "Compose network inventory drifted",
 );
 expect(config.networks?.data?.internal === true, "database network must be internal");
+// Error reporting joins the GlitchTip stack's internal ingest network instead
+// of gaining internet egress; this stack must never create or own it.
+expect(
+  config.networks?.["glitchtip-ingest"]?.external === true
+    && config.networks?.["glitchtip-ingest"]?.name === "glitchtip-ingest"
+    && Object.entries(config.networks?.["glitchtip-ingest"] ?? {}).every(([key, value]) => (
+      ["external", "name"].includes(key)
+        // Compose renders an empty IPAM block for every external network.
+        || (key === "ipam" && Object.keys(value ?? {}).length === 0)
+    )),
+  "glitchtip-ingest must be the external network owned by the GlitchTip stack",
+);
 expect(config.networks?.scanner?.internal === true, "scanner network must be internal");
 expect(config.networks?.["runner-client"]?.internal === true, "runner client network must be internal");
 expect(

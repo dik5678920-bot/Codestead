@@ -316,6 +316,9 @@ services:
       MAIL_FROM: ${MAIL_FROM:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_BROWSER_DSN: ${SENTRY_BROWSER_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
     secrets:
       - source: database_url
         target: database_url
@@ -341,6 +344,7 @@ services:
       runner-egress-gateway:
         condition: service_healthy
     networks:
+      glitchtip-ingest: {}
       frontend:
         interface_name: frontend
         gw_priority: 100
@@ -423,6 +427,9 @@ services:
       GMAIL_REQUEST_TIMEOUT_MS: ${GMAIL_REQUEST_TIMEOUT_MS:-10000}
       OUTBOX_POLL_SECONDS: ${OUTBOX_POLL_SECONDS:-60}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       WORKER_HEALTH_ID: mail-worker
       WORKER_HEALTH_MAX_AGE_SECONDS: "600"
       WORKER_HEALTH_MAX_FAILURES: "2"
@@ -440,6 +447,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
+      - glitchtip-ingest
       - data
       - mail-egress
     <<: [*hardened, *codestead-managed]
@@ -471,6 +479,9 @@ services:
       REWARD_POLL_SECONDS: ${REWARD_POLL_SECONDS:-5}
       REWARD_BATCH_SIZE: ${REWARD_BATCH_SIZE:-20}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       WORKER_HEALTH_ID: reward-worker
       WORKER_HEALTH_MAX_AGE_SECONDS: "120"
       WORKER_HEALTH_MAX_FAILURES: "2"
@@ -483,6 +494,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
+      - glitchtip-ingest
       - data
     <<: [*hardened, *codestead-managed]
     tmpfs:
@@ -515,6 +527,9 @@ services:
       REGRADE_POLL_SECONDS: ${REGRADE_POLL_SECONDS:-10}
       REGRADE_BATCH_SIZE: ${REGRADE_BATCH_SIZE:-2}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       WORKER_HEALTH_ID: regrade-worker
       WORKER_HEALTH_MAX_AGE_SECONDS: "600"
       WORKER_HEALTH_MAX_FAILURES: "2"
@@ -528,6 +543,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
+      glitchtip-ingest: {}
       data:
         interface_name: data
       runner-client:
@@ -564,6 +580,9 @@ services:
       EXAM_FINALIZATION_POLL_SECONDS: ${EXAM_FINALIZATION_POLL_SECONDS:-5}
       EXAM_FINALIZATION_BATCH_SIZE: ${EXAM_FINALIZATION_BATCH_SIZE:-2}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       WORKER_HEALTH_ID: exam-finalization-worker
       WORKER_HEALTH_MAX_AGE_SECONDS: "600"
       WORKER_HEALTH_MAX_FAILURES: "2"
@@ -577,6 +596,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
+      glitchtip-ingest: {}
       data:
         interface_name: data
       runner-client:
@@ -612,6 +632,9 @@ services:
       PRACTICE_RECOVERY_POLL_SECONDS: ${PRACTICE_RECOVERY_POLL_SECONDS:-5}
       PRACTICE_RECOVERY_BATCH_SIZE: ${PRACTICE_RECOVERY_BATCH_SIZE:-2}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       WORKER_HEALTH_ID: practice-runner-recovery-worker
       WORKER_HEALTH_MAX_AGE_SECONDS: "600"
       WORKER_HEALTH_MAX_FAILURES: "2"
@@ -625,6 +648,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
+      glitchtip-ingest: {}
       data:
         interface_name: data
       runner-client:
@@ -657,6 +681,9 @@ services:
       PROJECT_REVIEW_CORRECTION_POLL_SECONDS: ${PROJECT_REVIEW_CORRECTION_POLL_SECONDS:-10}
       PROJECT_REVIEW_CORRECTION_BATCH_SIZE: ${PROJECT_REVIEW_CORRECTION_BATCH_SIZE:-2}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       WORKER_HEALTH_ID: project-review-correction-worker
       WORKER_HEALTH_MAX_AGE_SECONDS: "600"
       WORKER_HEALTH_MAX_FAILURES: "2"
@@ -669,6 +696,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
+      - glitchtip-ingest
       - data
       - github-egress
     <<: [*hardened, *codestead-managed]
@@ -756,6 +784,9 @@ services:
       UPLOAD_SCAN_RETRY_MAX_SECONDS: ${UPLOAD_SCAN_RETRY_MAX_SECONDS:-900}
 
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       WORKER_HEALTH_ID: scan-worker
       WORKER_HEALTH_MAX_AGE_SECONDS: "1800"
       WORKER_HEALTH_MAX_FAILURES: "2"
@@ -775,6 +806,7 @@ services:
       clamav:
         condition: service_healthy
     networks:
+      - glitchtip-ingest
       - data
       - scanner
     <<: [*hardened, *codestead-managed]
@@ -809,6 +841,9 @@ services:
       FILE_ERASURE_BATCH_SIZE: ${FILE_ERASURE_BATCH_SIZE:-25}
       FILE_ERASURE_LEASE_SECONDS: ${FILE_ERASURE_LEASE_SECONDS:-300}
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      SENTRY_RELEASE: ${SENTRY_RELEASE:-}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT:-}
       WORKER_HEALTH_ID: file-erasure-worker
       WORKER_HEALTH_MAX_AGE_SECONDS: "1800"
       WORKER_HEALTH_MAX_FAILURES: "2"
@@ -826,6 +861,7 @@ services:
       postgres:
         condition: service_healthy
     networks:
+      - glitchtip-ingest
       - data
     <<: [*hardened, *codestead-managed]
     tmpfs:
@@ -1018,6 +1054,12 @@ networks:
     internal: true
   signature-egress:
     driver: bridge
+  # Owned by the GlitchTip stack (infra/observability/glitchtip): internal, no
+  # route out. Error reports reach http://<key>@glitchtip-web:8000/<id> here
+  # instead of via internet egress. GlitchTip must be running before this stack.
+  glitchtip-ingest:
+    name: glitchtip-ingest
+    external: true
 
 volumes:
   clamav-signatures:

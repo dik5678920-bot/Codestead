@@ -359,6 +359,13 @@ assert_cloudflared_generation_changed_after_guarded_recovery() {
 cleanup_started=0
 readonly runner_client_network="${COMPOSE_PROJECT_NAME}_runner-client"
 runner_client_reserved=0
+# compose.yaml joins the GlitchTip stack's external glitchtip-ingest network.
+# The disposable host has no GlitchTip, so create the same internal network
+# (mirroring infra/observability/glitchtip/compose.yaml) and remove it again,
+# touching only a network this run created and labelled.
+readonly glitchtip_ingest_network=glitchtip-ingest
+readonly glitchtip_ingest_subnet=10.203.1.0/24
+glitchtip_ingest_created=0
 
 project_resources() {
   {
@@ -388,9 +395,27 @@ reserve_runner_client_network() {
   runner_client_reserved=1
 }
 
+reserve_glitchtip_ingest_network() {
+  if docker network inspect "$glitchtip_ingest_network" >/dev/null 2>&1; then
+    echo "Refusing to run beside an existing $glitchtip_ingest_network network; this test only uses one it creates." >&2
+    return 1
+  fi
+  if ! timeout 30 docker network create \
+    --driver bridge \
+    --internal \
+    --subnet "$glitchtip_ingest_subnet" \
+    --label "io.codestead.fixture=production-topology-glitchtip-ingest-v1" \
+    --label "io.codestead.fixture-run=$COMPOSE_PROJECT_NAME" \
+    "$glitchtip_ingest_network" >/dev/null; then
+    echo "Unable to create the disposable $glitchtip_ingest_network network." >&2
+    return 1
+  fi
+  glitchtip_ingest_created=1
+}
+
 cleanup() {
   status=$?
-  local cleanup_failed=0 diagnostic_log fixture_images image remnants runner_labels
+  local cleanup_failed=0 diagnostic_log fixture_images glitchtip_labels image remnants runner_labels
   trap - EXIT
   set +e
   if (( cleanup_started == 0 )); then
@@ -419,6 +444,18 @@ cleanup() {
           echo "Unable to remove fallback network: $runner_client_network" >&2
           cleanup_failed=1
         fi
+      fi
+    fi
+
+    if (( glitchtip_ingest_created == 1 )) \
+      && docker network inspect "$glitchtip_ingest_network" >/dev/null 2>&1; then
+      glitchtip_labels="$(docker network inspect --format '{{index .Labels "io.codestead.fixture"}} {{index .Labels "io.codestead.fixture-run"}}' "$glitchtip_ingest_network" 2>/dev/null)"
+      if [[ "$glitchtip_labels" != "production-topology-glitchtip-ingest-v1 $COMPOSE_PROJECT_NAME" ]]; then
+        echo "Refusing to remove an unowned network: $glitchtip_ingest_network" >&2
+        cleanup_failed=1
+      elif ! docker network rm "$glitchtip_ingest_network" >/dev/null 2>&1; then
+        echo "Unable to remove disposable network: $glitchtip_ingest_network" >&2
+        cleanup_failed=1
       fi
     fi
 
@@ -776,6 +813,7 @@ for image in "${images[@]}"; do
   fi
 done
 reserve_runner_client_network
+reserve_glitchtip_ingest_network
 
 timeout 300 docker pull "$postgres_image" >/dev/null
 inspect_postgres_identity

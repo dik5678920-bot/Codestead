@@ -121,7 +121,7 @@
     },
     {
       "path": "compose.yaml",
-      "sha256": "dab44bafc0ce00b811f0cfd53edc33371dcca9468333632669b37313bc2e601a"
+      "sha256": "1eeffc9703041ac1f844fb7b58666bdb48e0e23a7e15637cebb4520d06bf505a"
     },
     {
       "path": "drizzle/0065_backup_status_mail_authority.sql",
@@ -409,6 +409,11 @@
       "artifact": "infra/tests/backup-ci-registration.test.mjs",
       "priorDigest": "1da8b33f26364e812c8d80d8399f034e4b70cda436fa677138e770ba6ad9af18",
       "replacedAt": "2026-09-26T17:30:00.000Z"
+    },
+    {
+      "artifact": "compose.yaml",
+      "priorDigest": "dab44bafc0ce00b811f0cfd53edc33371dcca9468333632669b37313bc2e601a",
+      "replacedAt": "2026-09-27T16:00:00.000Z"
     },
     {
       "artifact": ".github/workflows/ci.yml",
