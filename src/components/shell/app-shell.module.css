@@ -10,7 +10,11 @@
   position: fixed;
   z-index: 30;
   inset: 0 auto 0 0;
-  width: 248px;
+  /* Set inline per-render from sidebarHidden (see app-shell.tsx): inline style
+     always wins the cascade, so the rest width can't lose to a stale/duplicated
+     copy of the old `.shellDrawer .sidebar { width: 72px }` rule from a route's
+     first cold dev-server compile. The 248px fallback only matters before hydration. */
+  width: var(--sidebar-rail-width, 248px);
   display: flex;
   flex-direction: column;
   padding: calc(22px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
@@ -248,7 +252,8 @@
   min-width: 0;
   min-height: 100vh;
   min-height: 100dvh;
-  padding-left: 248px;
+  /* Kept in sync with .sidebar's inline --sidebar-rail-width (see app-shell.tsx). */
+  padding-left: var(--sidebar-rail-width, 248px);
 }
 
 .topbar {
@@ -974,12 +979,7 @@
    focus, like browser vertical tabs. Every row keeps the same height in both
    states so nothing moves under the pointer. Narrow screens keep the drawer. */
 @media (min-width: 921px) {
-  .shellDrawer .contentColumn {
-    padding-left: 72px;
-  }
-
   .shellDrawer .sidebar {
-    width: 72px;
     padding-inline: 12px;
     overflow-x: hidden;
     white-space: nowrap;
@@ -991,6 +991,19 @@
   .shellDrawer .sidebar.railMenuOpen {
     width: 248px;
     box-shadow: var(--shadow);
+  }
+
+  /* The rail overlays the page while it expands (position: fixed), but that
+     must never cover interactive content: whatever expands it — hover,
+     keyboard focus, or the menu — also pushes .contentColumn out from under
+     it, same as the fully expanded (non-drawer) sidebar does.
+     (:has() is never nested inside :has(): that selector is invalid and one
+     invalid selector drops this whole list, silently disabling the push.) */
+  .shellDrawer:has(.sidebar:not(.railSuppressed):hover) .contentColumn,
+  .shellDrawer:has(.sidebar:not(.railSuppressed) :focus-visible) .contentColumn,
+  .shellDrawer:has(.sidebar.railMenuOpen) .contentColumn {
+    padding-left: 248px;
+    transition: padding-left var(--motion-base) var(--ease-out);
   }
 
   /* Icons sit at one fixed x position in both states (centred in the 48px rail),

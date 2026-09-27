@@ -26,6 +26,7 @@ import {
   X
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { TutorLessonProvider } from "@/components/lesson/tutor-context";
 import { TutorLauncherHost } from "@/components/lesson/tutor-panel";
@@ -63,6 +64,13 @@ function isActivePath(pathname: string, href: string) {
   return pathname === href || (href !== "/learn" && pathname.startsWith(`${href}/`));
 }
 
+// The lesson workspace wants more room, so the sidebar defaults to collapsed
+// there — but only until the viewer makes an explicit choice, which then
+// sticks everywhere (see hasStoredSidebarPreferenceRef below).
+function isLessonPath(pathname: string) {
+  return /^\/courses\/[^/]+\/skills\/[^/]+/.test(pathname);
+}
+
 export function AppShell({
   children,
   admin = false,
@@ -82,7 +90,12 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [narrowViewport, setNarrowViewport] = useState(false);
-  const [sidebarHidden, setSidebarHidden] = useState(false);
+  // Initialized from the pathname (available during SSR) so the lesson
+  // workspace never flashes an open sidebar and then collapses it a moment
+  // later — that post-mount shift moved primary lesson controls (e.g. the
+  // topic checkpoint's "Start checkpoint" button) while a click was landing.
+  const [sidebarHidden, setSidebarHidden] = useState(() => isLessonPath(pathname));
+  const hasStoredSidebarPreferenceRef = useRef(false);
   // After collapsing, the pointer is still over the rail; keep it collapsed until
   // the pointer leaves once, as browser vertical tabs do.
   const [railHoverSuppressed, setRailHoverSuppressed] = useState(false);
@@ -212,15 +225,28 @@ export function AppShell({
   useEffect(() => {
     try {
       // Read after mount on purpose: localStorage is unavailable during the server render.
+      const stored = window.localStorage.getItem(SIDEBAR_HIDDEN_KEY);
+      hasStoredSidebarPreferenceRef.current = stored !== null;
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSidebarHidden(window.localStorage.getItem(SIDEBAR_HIDDEN_KEY) === "true");
+      setSidebarHidden(stored !== null ? stored === "true" : isLessonPath(pathname));
     } catch {
       // Storage can be unavailable (private mode); the sidebar then stays visible.
     }
+    // Only the initial mount reads storage; later navigation is handled below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // No explicit choice yet: default to collapsed on the lesson workspace and
+  // open elsewhere, tracking navigation between the two.
+  useEffect(() => {
+    if (hasStoredSidebarPreferenceRef.current) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSidebarHidden(isLessonPath(pathname));
+  }, [pathname]);
 
   function toggleSidebarHidden() {
     const next = !sidebarHidden;
+    hasStoredSidebarPreferenceRef.current = true;
     setSidebarHidden(next);
     setRailHoverSuppressed(next);
     setOpen(false);
@@ -328,7 +354,19 @@ export function AppShell({
   return (
     <BrowserDurabilityNamespaceProvider namespace={browserDurabilityNamespace}>
     <TutorLessonProvider>
-    <div className={`${styles.shell} ${sidebarHidden ? styles.shellDrawer : ""}`}>
+    <div
+      className={`${styles.shell} ${sidebarHidden ? styles.shellDrawer : ""}`}
+      // Rest-state rail width is set inline, not solely via the `.shellDrawer
+      // .sidebar` / `.shellDrawer .contentColumn` selectors: Next dev's
+      // CSS-module chunking has been observed to serve a stale/incomplete copy
+      // of those rules on a route's first cold compile (e.g. the CI e2e run),
+      // leaving the sidebar at its full 248px width and covering primary
+      // content — including the lesson checkpoint's "Start checkpoint" button
+      // — even though `shellDrawer` is applied. Inline style always wins the
+      // cascade and inherits to both .sidebar and .contentColumn below, so
+      // this can't regress that way.
+      style={{ "--sidebar-rail-width": sidebarHidden ? "72px" : "248px" } as CSSProperties}
+    >
       {recoveryReady && (
         <ExamLockdownOverlay enabled={authenticatedSessionMonitoring} />
       )}

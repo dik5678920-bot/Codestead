@@ -54,7 +54,15 @@ export type InactivityScheduleResult = {
   paused: number;
   quietHours: number;
   adminUnavailable: number;
+  failed: number;
 };
+
+function databaseErrorCode(error: unknown) {
+  const code = (error as { code?: unknown } | null)?.code;
+  return typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)
+    ? code
+    : "UNKNOWN";
+}
 
 function addMilliseconds(value: Date, milliseconds: number) {
   return new Date(value.getTime() + milliseconds);
@@ -273,6 +281,7 @@ export async function scheduleInactivityReminders(
     paused: 0,
     quietHours: 0,
     adminUnavailable: 0,
+    failed: 0,
   };
   let schedulerLockHeld = false;
   try {
@@ -476,8 +485,19 @@ export async function scheduleInactivityReminders(
       }
         await client.query("commit");
       } catch (error) {
-        await client.query("rollback").catch(() => undefined);
-        throw error;
+        // A database rejection of one learner's rows (SQLSTATE error) must not
+        // stop the scheduler or the mail worker that hosts it: roll that
+        // learner back, record an id-only audit event, and continue. Anything
+        // else (configuration, receipt-shape, or a failed rollback meaning the
+        // connection is unusable) still escapes to the caller.
+        await client.query("rollback");
+        if (databaseErrorCode(error) === "UNKNOWN") throw error;
+        result.failed += 1;
+        console.warn(JSON.stringify({
+          event: "inactivity.candidate_failed",
+          userId,
+          code: databaseErrorCode(error),
+        }));
       }
     }
     return result;
