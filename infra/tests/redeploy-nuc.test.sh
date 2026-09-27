@@ -34,6 +34,7 @@ APP_OPERATIONS_IMAGE=ghcr.io/example/codestead-operations@sha256:old
 SOME_UNRELATED_SETTING=keep-me
 EOF
 export COMPOSE_ENV_FILE="$fake_compose_env"
+export DEPLOY_STATE_FILE="$work/deployed-revision"
 
 # --- a git SHA argument is required -----------------------------------------
 
@@ -53,16 +54,41 @@ dry_run_output="$(REPO_ROOT="$fake_repo" "$script" --dry-run "$head_sha" 2>&1)" 
   || fail "dry run against a clean checkout should succeed:
 $dry_run_output"
 
-grep -qF "current running commit: $head_sha" <<<"$dry_run_output" \
-  || fail "dry run did not report the current commit"
+grep -qF "$fake_repo is currently checked out to: $head_sha" <<<"$dry_run_output" \
+  || fail "dry run did not report the checked-out commit"
 grep -qF "target commit resolved to: $head_sha" <<<"$dry_run_output" \
   || fail "dry run did not resolve the target commit"
 grep -qF "+ git" <<<"$dry_run_output" \
   || fail "dry run did not print any planned git command"
+grep -qF "building images, this takes a few minutes" <<<"$dry_run_output" \
+  || fail "dry run did not print the long-build progress line"
+grep -qF "install a trivy shim" <<<"$dry_run_output" \
+  || fail "dry run did not describe installing the containerized trivy shim"
 grep -qF "dry run: would wait" <<<"$dry_run_output" \
   || fail "dry run did not describe the health-wait step"
 [[ "$(git -C "$fake_repo" rev-parse HEAD)" == "$head_sha" ]] \
   || fail "dry run mutated the fake repository's checked-out commit"
+
+# --- with no deploy-state record, the previous deployment is "unknown" and
+#     migration always runs, regardless of what /opt is checked out to -------
+
+grep -qF "no readable deploy-state record" <<<"$dry_run_output" \
+  || fail "dry run did not report a missing deploy-state record as unknown"
+grep -qF "previous deployment is unknown, running migrate to be safe" <<<"$dry_run_output" \
+  || fail "an unknown previous deployment did not force a migration run"
+
+# --- once a deploy-state record exists, it (not /opt's checked-out HEAD) is
+#     what the migration-diff decision is based on ---------------------------
+
+printf '%s\n' "$head_sha" >"$DEPLOY_STATE_FILE"
+dry_run_output="$(REPO_ROOT="$fake_repo" "$script" --dry-run "$head_sha" 2>&1)" \
+  || fail "dry run with a deploy-state record should succeed:
+$dry_run_output"
+grep -qF "last commit this script deployed" <<<"$dry_run_output" \
+  || fail "dry run did not report the recorded deploy-state commit"
+grep -qF "no migration files changed since $head_sha" <<<"$dry_run_output" \
+  || fail "a recorded deploy-state commit equal to the target should skip migration"
+rm -f "$DEPLOY_STATE_FILE"
 
 # --- an untracked compose.override.yml never blocks the dirty-tree check ---
 
