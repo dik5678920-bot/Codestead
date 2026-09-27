@@ -368,6 +368,29 @@ describe("device session controls", () => {
     expect(durability.close).toHaveBeenCalledOnce();
   });
 
+  it("signs out this device from its own row and returns to sign-in", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(json({ sessions: [activeSession], revocationRequests: [] }))
+      .mockResolvedValueOnce(json({ revokedCount: 1 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const navigate = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <BrowserDurabilityNamespaceProvider namespace="namespace-current">
+        <DeviceSessionsPanel navigate={navigate} />
+      </BrowserDurabilityNamespaceProvider>,
+    );
+    expect(await screen.findByText("Chrome on Windows")).toBeInTheDocument();
+    expect(screen.getByText(/last seen/)).toBeInTheDocument();
+    await clickAndConfirm(user, "Sign out this device");
+
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith("/login?reason=signed-out"));
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/sessions", expect.objectContaining({
+      method: "DELETE",
+      body: JSON.stringify({ scope: "all" }),
+    }));
+  });
+
   it("preserves browser recovery when revoke-all is rejected", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(json({ sessions: [activeSession], revocationRequests: [] }))
