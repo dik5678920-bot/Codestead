@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "files": 124,
-  "operations": 159,
-  "matrixRows": 159,
+  "files": 125,
+  "operations": 161,
+  "matrixRows": 161,
   "boundaryCounts": {
     "public": 6,
     "auth-handler": 2,
-    "authenticated": 88,
+    "authenticated": 90,
     "admin": 63
   },
   "objectAuthorizationCounts": {
@@ -14,7 +14,7 @@
     "administrator-scope": 63,
     "session-user": 84,
     "auth-provider": 2,
-    "no-user-object": 2,
+    "no-user-object": 4,
     "consent-projected-cohort": 2
   },
   "identifierOwnershipContracts": 36,
@@ -1815,6 +1815,32 @@
       "operationSourceSha256": "52d1c711a338a65cbd7da4f7846fd8816cf0addeb198f45b90bb0c61ddf50ae1"
     },
     {
+      "operation": "GET /api/monitoring/envelope",
+      "file": "src/app/api/monitoring/envelope/route.ts",
+      "route": "/api/monitoring/envelope",
+      "method": "GET",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "no-user-object",
+      "ownershipProof": "authenticated browser error-monitoring availability probe",
+      "operationSourceSha256": "cce2aa09e0ad4bd7ff7b700a5d0f205ab77e9290f5c214cb357e2e34d3a0261f"
+    },
+    {
+      "operation": "POST /api/monitoring/envelope",
+      "file": "src/app/api/monitoring/envelope/route.ts",
+      "route": "/api/monitoring/envelope",
+      "method": "POST",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "no-user-object",
+      "ownershipProof": "authenticated browser error-event tunnel to the server-held DSN",
+      "operationSourceSha256": "6f222337aa43c3caef97ec062cc5b426682fc4b9209e924989f4d2721486c11f"
+    },
+    {
       "operation": "GET /api/notifications/preferences",
       "file": "src/app/api/notifications/preferences/route.ts",
       "route": "/api/notifications/preferences",
@@ -2192,14 +2218,14 @@
       "operationSourceSha256": "b88f55f3a91e588c90d93419fbf944eba9e0f64f9fd6a5ab3e2f9a003ce2ccd8"
     }
   ],
-  "generatedAt": "2026-09-27T11:38:16.159Z",
+  "generatedAt": "2026-09-27T15:13:50.271Z",
   "scope": "Complete static role/object-authorization source inventory. The endpoint sweep verifies guard invocation, while authz.test.ts verifies real guard decisions and runtime-authorization.integration.test.ts behaviorally covers a representative owner-bound route set. This report alone is not runtime cross-user proof, deployed proxy/browser evidence, or PostgreSQL RLS evidence.",
   "runtimeVerification": {
     "guardInvocationTest": "src/lib/security/__tests__/endpoint-auth-boundaries.test.ts",
     "guardDecisionTest": "src/lib/http/__tests__/authz.test.ts",
     "representativeObjectAuthorizationTest": "integration/runtime-authorization.integration.test.ts",
     "protectedOperationInvocations": {
-      "anonymousAuthenticated": 88,
+      "anonymousAuthenticated": 90,
       "anonymousAdmin": 63,
       "learnerAdmin": 63
     },
