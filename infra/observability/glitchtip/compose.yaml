@@ -1,0 +1,168 @@
+# Self-hosted GlitchTip (Sentry-compatible error tracking) for the homelab NUC.
+#
+# Fully isolated from every other stack on the host: its own compose project,
+# network, volumes and secrets. The web UI/ingest API listens only on
+# 127.0.0.1:${GLITCHTIP_HOST_PORT}; the host's existing cloudflared tunnel is
+# the only public path (errors.shivanshmishra.in).
+#
+# Secrets live in /etc/glitchtip (root 0700) and are created by
+# setup-glitchtip.sh; nothing secret is stored in this file or the repository.
+# Bring up with:  sudo bash infra/observability/glitchtip/setup-glitchtip.sh
+name: glitchtip
+
+x-glitchtip-image: &glitchtip-image
+  # glitchtip/glitchtip:6.2.6 (multi-arch index), pinned 2026-09-27.
+  image: glitchtip/glitchtip:6.2.6@sha256:a3d8eb1b36c1e1603d55ab32711ea3dd8115874742a781a57391a62a16e0dff6
+
+x-glitchtip-environment: &glitchtip-environment
+  GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-https://errors.shivanshmishra.in}
+  ALLOWED_HOSTS: ${GLITCHTIP_ALLOWED_HOSTS:-errors.shivanshmishra.in,glitchtip-web,127.0.0.1,localhost}
+  CSRF_TRUSTED_ORIGINS: ${GLITCHTIP_DOMAIN:-https://errors.shivanshmishra.in}
+  VALKEY_URL: redis://valkey:6379/0
+  # Invite-only: the first administrator is created with `manage.py
+  # createsuperuser`; nobody can sign up through the web UI.
+  ENABLE_USER_REGISTRATION: "false"
+  ENABLE_OPEN_USER_REGISTRATION: "false"
+  ENABLE_SOCIAL_APPS_USER_REGISTRATION: "false"
+  # Keep 30 days of events, transactions and uptime data.
+  GLITCHTIP_RETENTION_DAYS: "30"
+  GLITCHTIP_EVENT_RETENTION_DAYS: "30"
+  GLITCHTIP_TRANSACTION_RETENTION_DAYS: "30"
+  GLITCHTIP_UPTIME_RETENTION_DAYS: "30"
+  # No outbound mail yet: notifications are written to the container log.
+  EMAIL_BACKEND: django.core.mail.backends.console.EmailBackend
+  DEFAULT_FROM_EMAIL: glitchtip@invalid.local
+  # Uploads (source maps / debug files / attachments) are not used; the
+  # request-size ceiling keeps the ingest path to ordinary error events.
+  DATA_UPLOAD_MAX_MEMORY_SIZE: "1048576"
+  ENABLE_TEST_API: "false"
+  ENABLE_OPENAPI: "false"
+  ENABLE_MCP: "false"
+  DEBUG: "false"
+  LOG_LEVEL: WARNING
+
+services:
+  postgres:
+    # postgres:17.11 (multi-arch index), pinned 2026-09-27.
+    image: postgres:17.11@sha256:d74eeac9a635390a49bc21bd49fccd973de707e2a53a76ac49b552b8712ec46f
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    command:
+      - postgres
+      - -c
+      - max_locks_per_transaction=512
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks: [glitchtip]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  valkey:
+    # valkey/valkey:8.1 (multi-arch index), pinned 2026-09-27.
+    image: valkey/valkey:8.1@sha256:640c5e62cea04b6d6f2084232651d0cc70362d31f4f805e7be94dbed6855e8f2
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "60", "1", "--maxmemory", "96mb", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - valkey-data:/data
+    networks: [glitchtip]
+    mem_limit: 128m
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    <<: *glitchtip-image
+    restart: "no"
+    command: ["./bin/run-migrate.sh"]
+    env_file: [/etc/glitchtip/glitchtip.env]
+    environment: *glitchtip-environment
+    depends_on:
+      postgres: { condition: service_healthy }
+      valkey: { condition: service_healthy }
+    networks: [glitchtip]
+    mem_limit: 512m
+
+  web:
+    <<: *glitchtip-image
+    restart: unless-stopped
+    command: ["./bin/start.sh"]
+    env_file: [/etc/glitchtip/glitchtip.env]
+    environment:
+      <<: *glitchtip-environment
+      SERVER_ROLE: web
+      GRANIAN_WORKERS: "2"
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    ports:
+      - "127.0.0.1:${GLITCHTIP_HOST_PORT:-8210}:8000"
+    networks:
+      glitchtip: {}
+      # Codestead's app and workers report here as http://<key>@glitchtip-web:8000/<id>
+      # without any internet egress of their own.
+      glitchtip-ingest:
+        aliases: [glitchtip-web]
+    mem_limit: 512m
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/_health/', timeout=4)"]
+      interval: 15s
+      timeout: 6s
+      retries: 10
+      start_period: 60s
+
+  worker:
+    <<: *glitchtip-image
+    restart: unless-stopped
+    command: ["./bin/start.sh"]
+    env_file: [/etc/glitchtip/glitchtip.env]
+    environment:
+      <<: *glitchtip-environment
+      SERVER_ROLE: worker
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    networks: [glitchtip]
+    mem_limit: 512m
+    healthcheck:
+      # The worker has no HTTP port; healthy means its process is running.
+      test: ["CMD", "python", "-c", "import os,sys; sys.exit(0 if any(b'runworker' in open(f'/proc/{p}/cmdline','rb').read() for p in os.listdir('/proc') if p.isdigit()) else 1)"]
+      interval: 30s
+      timeout: 6s
+      retries: 5
+      start_period: 60s
+
+networks:
+  glitchtip:
+    name: glitchtip
+    ipam:
+      config:
+        # Unused on the NUC (checked 2026-09-27): other stacks use 172.17-31.x
+        # and 192.168.0-63.x.
+        - subnet: 10.203.0.0/24
+  # Internal (no route out) network that the Codestead stack joins as an
+  # external network. Only GlitchTip web is attached on this side.
+  glitchtip-ingest:
+    name: glitchtip-ingest
+    internal: true
+    ipam:
+      config:
+        - subnet: 10.203.1.0/24
+
+volumes:
+  postgres-data:
+    name: glitchtip_postgres-data
+  valkey-data:
+    name: glitchtip_valkey-data
+
+secrets:
+  postgres_password:
+    file: /etc/glitchtip/postgres_password
