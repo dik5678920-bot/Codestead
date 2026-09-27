@@ -993,6 +993,17 @@
     box-shadow: var(--shadow);
   }
 
+  /* The rail overlays the page while it expands (position: fixed), but that
+     must never cover interactive content: whatever expands it — hover,
+     keyboard focus, or the menu — also pushes .contentColumn out from under
+     it, same as the fully expanded (non-drawer) sidebar does. */
+  .shellDrawer:has(.sidebar:not(.railSuppressed):hover) .contentColumn,
+  .shellDrawer:has(.sidebar:not(.railSuppressed):has(:focus-visible)) .contentColumn,
+  .shellDrawer:has(.sidebar.railMenuOpen) .contentColumn {
+    padding-left: 248px;
+    transition: padding-left var(--motion-base) var(--ease-out);
+  }
+
   /* Icons sit at one fixed x position in both states (centred in the 48px rail),
      so expanding only reveals labels to their right. */
   .shellDrawer .sidebarHeader {
