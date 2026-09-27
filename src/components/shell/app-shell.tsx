@@ -26,6 +26,7 @@ import {
   X
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import { BrandMark } from "@/components/brand-mark";
 import { TutorLessonProvider } from "@/components/lesson/tutor-context";
 import { TutorLauncherHost } from "@/components/lesson/tutor-panel";
@@ -353,7 +354,19 @@ export function AppShell({
   return (
     <BrowserDurabilityNamespaceProvider namespace={browserDurabilityNamespace}>
     <TutorLessonProvider>
-    <div className={`${styles.shell} ${sidebarHidden ? styles.shellDrawer : ""}`}>
+    <div
+      className={`${styles.shell} ${sidebarHidden ? styles.shellDrawer : ""}`}
+      // Rest-state rail width is set inline, not solely via the `.shellDrawer
+      // .sidebar` / `.shellDrawer .contentColumn` selectors: Next dev's
+      // CSS-module chunking has been observed to serve a stale/incomplete copy
+      // of those rules on a route's first cold compile (e.g. the CI e2e run),
+      // leaving the sidebar at its full 248px width and covering primary
+      // content — including the lesson checkpoint's "Start checkpoint" button
+      // — even though `shellDrawer` is applied. Inline style always wins the
+      // cascade and inherits to both .sidebar and .contentColumn below, so
+      // this can't regress that way.
+      style={{ "--sidebar-rail-width": sidebarHidden ? "72px" : "248px" } as CSSProperties}
+    >
       {recoveryReady && (
         <ExamLockdownOverlay enabled={authenticatedSessionMonitoring} />
       )}

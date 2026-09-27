@@ -10,7 +10,11 @@
   position: fixed;
   z-index: 30;
   inset: 0 auto 0 0;
-  width: 248px;
+  /* Set inline per-render from sidebarHidden (see app-shell.tsx): inline style
+     always wins the cascade, so the rest width can't lose to a stale/duplicated
+     copy of the old `.shellDrawer .sidebar { width: 72px }` rule from a route's
+     first cold dev-server compile. The 248px fallback only matters before hydration. */
+  width: var(--sidebar-rail-width, 248px);
   display: flex;
   flex-direction: column;
   padding: calc(22px + env(safe-area-inset-top)) 16px calc(18px + env(safe-area-inset-bottom));
@@ -248,7 +252,8 @@
   min-width: 0;
   min-height: 100vh;
   min-height: 100dvh;
-  padding-left: 248px;
+  /* Kept in sync with .sidebar's inline --sidebar-rail-width (see app-shell.tsx). */
+  padding-left: var(--sidebar-rail-width, 248px);
 }
 
 .topbar {
@@ -974,12 +979,7 @@
    focus, like browser vertical tabs. Every row keeps the same height in both
    states so nothing moves under the pointer. Narrow screens keep the drawer. */
 @media (min-width: 921px) {
-  .shellDrawer .contentColumn {
-    padding-left: 72px;
-  }
-
   .shellDrawer .sidebar {
-    width: 72px;
     padding-inline: 12px;
     overflow-x: hidden;
     white-space: nowrap;
