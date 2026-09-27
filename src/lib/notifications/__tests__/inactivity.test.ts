@@ -99,6 +99,7 @@ function fakeScheduler(input: {
   emailInsertConflicts?: string[];
   emailInsertErrors?: Partial<Record<string, Error>>;
   emailReleaseErrors?: Partial<Record<string, Error>>;
+  emailReleaseErrorsByUser?: Partial<Record<string, Error>>;
   emailReleaseRows?: Partial<Record<string, Array<{
     outbox_id: string;
     operation_id: string;
@@ -106,6 +107,7 @@ function fakeScheduler(input: {
 }) {
   const calls: Array<{ statement: string; values: unknown[] }> = [];
   let released = false;
+  let currentUserId: string | null = null;
   const query = vi.fn(async (statementInput: string, values: unknown[] = []) => {
     const statement = statementInput.replace(/\s+/g, " ").trim().toLowerCase();
     calls.push({ statement, values });
@@ -135,6 +137,7 @@ function fakeScheduler(input: {
       statement.includes("where u.id = $1")
     ) {
       const selected = input.candidates.find((row) => row.user_id === values[0]);
+      currentUserId = selected?.user_id ?? null;
       return { rows: selected ? [selected] : [], rowCount: selected ? 1 : 0 };
     }
     if (statement.includes("from \"user\" u") && statement.includes("join learner_profile")) {
@@ -169,7 +172,10 @@ function fakeScheduler(input: {
       const releaseEntry = Object.entries(OUTBOX_RELEASE_ROWS)
         .find(([, outbox]) => outbox.id === values[0]);
       if (!releaseEntry) throw new Error(`Missing outbox release fixture for ${String(values[0])}`);
-      const error = input.emailReleaseErrors?.[releaseEntry[0]];
+      const error = input.emailReleaseErrors?.[releaseEntry[0]]
+        ?? (currentUserId === null
+          ? undefined
+          : input.emailReleaseErrorsByUser?.[currentUserId]);
       if (error) throw error;
       const outbox = releaseEntry[1];
       const rows = input.emailReleaseRows?.[releaseEntry[0]] ?? [{
@@ -276,6 +282,7 @@ describe("inactivity scheduler transaction branches", () => {
       paused: 0,
       quietHours: 0,
       adminUnavailable: 0,
+      failed: 0,
     });
     const emailCalls = fake.calls.filter((call) => call.statement.startsWith("insert into email_outbox"));
     expect(emailCalls.map((call) => call.values[2])).toEqual(["inactivity-reminder", "inactivity-admin-notice"]);
@@ -511,20 +518,21 @@ describe("inactivity scheduler transaction branches", () => {
     },
   );
 
-  it("rolls back and propagates a delivery-release failure before marker update or commit", async () => {
+  it("rolls back, audits, and skips a learner whose delivery release is rejected", async () => {
     const releaseFailure = Object.assign(
-      new Error("mail delivery release identity is invalid"),
+      new Error("email outbox final immutable state is invalid"),
       { code: "23514" },
     );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const fake = fakeScheduler({
       administrator: null,
-      candidates: [candidate("release-failure")],
-      emailReleaseErrors: { "inactivity-reminder": releaseFailure },
+      candidates: [candidate("release-failure"), candidate("healthy-learner")],
+      emailReleaseErrorsByUser: { "release-failure": releaseFailure },
     });
 
     await expect(
       scheduleInactivityReminders(NOW, fake.pool as never),
-    ).rejects.toBe(releaseFailure);
+    ).resolves.toMatchObject({ failed: 1, learnerFirst: 1 });
 
     const insertIndex = fake.calls.findIndex(
       (call) => call.statement.startsWith("insert into email_outbox"),
@@ -533,16 +541,27 @@ describe("inactivity scheduler transaction branches", () => {
       (call) => call.statement.includes("from public.release_email_outbox_delivery("),
     );
     const rollbackIndex = fake.calls.findIndex((call) => call.statement === "rollback");
+    const markerIndex = fake.calls.findIndex(
+      (call) => call.statement.includes("set learner_first_queued_at"),
+    );
     expect(insertIndex).toBeLessThan(releaseIndex);
     expect(releaseIndex).toBeLessThan(rollbackIndex);
-    expect(fake.calls.some(
-      (call) => call.statement.includes("set learner_first_queued_at"),
-    )).toBe(false);
-    expect(fake.calls.some((call) => call.statement === "commit")).toBe(false);
+    // The poisoned learner is never marked sent; only the healthy one is.
+    expect(markerIndex).toBeGreaterThan(rollbackIndex);
+    expect(fake.calls.filter((call) => call.statement === "commit")).toHaveLength(1);
     expect(fake.released()).toBe(true);
+    expect(warn).toHaveBeenCalledTimes(1);
+    const audit = JSON.parse(String(warn.mock.calls[0]?.[0]));
+    expect(audit).toEqual({
+      event: "inactivity.candidate_failed",
+      userId: "release-failure",
+      code: "23514",
+    });
+    expect(String(warn.mock.calls[0]?.[0])).not.toContain("@");
+    warn.mockRestore();
   });
 
-  it("rolls back when durable authority rejects a payload conflict", async () => {
+  it("rolls back and skips when durable authority rejects a payload conflict", async () => {
     const conflict = Object.assign(
       new Error("email outbox idempotency event payload conflict"),
       {
@@ -550,16 +569,16 @@ describe("inactivity scheduler transaction branches", () => {
         constraint: "email_outbox_idempotency_authority_pkey",
       },
     );
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const fake = fakeScheduler({
       candidates: [candidate("payload-conflict")],
       emailInsertErrors: { "inactivity-reminder": conflict },
     });
     await expect(
       scheduleInactivityReminders(NOW, fake.pool as never),
-    ).rejects.toMatchObject({
-      code: "23505",
-      constraint: "email_outbox_idempotency_authority_pkey",
-    });
+    ).resolves.toMatchObject({ failed: 1 });
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
     expect(fake.calls.some((call) => call.statement === "rollback")).toBe(true);
     expect(fake.calls.some(
       (call) => call.statement.includes("set learner_first_queued_at"),

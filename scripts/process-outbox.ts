@@ -11,6 +11,7 @@ import {
 import { scheduleInactivityReminders } from
   "../src/lib/notifications/inactivity";
 import { resolveMailFrom } from "../src/lib/notifications/mail-from";
+import { SchedulerBackoff } from "../src/lib/notifications/scheduler-backoff";
 import {
   startMailDispatchHardWatchdog,
   type MailDispatchHardWatchdog,
@@ -538,35 +539,53 @@ async function main() {
 
   const once = process.argv.includes("--once");
   healthReporter = createWorkerHealthReporter({ worker: "mail-worker" });
-  let lastInactivityScheduleAt = 0;
-  let lastSmartReminderScheduleAt = 0;
+  const inactivitySchedule = new SchedulerBackoff(
+    inactivityScheduleSeconds * 1_000,
+  );
+  const smartReminderSchedule = new SchedulerBackoff(
+    inactivityScheduleSeconds * 1_000,
+  );
   do {
     if (stopping) break;
     const scheduleAt = Date.now();
-    if (
-      scheduleAt - lastInactivityScheduleAt
-      >= inactivityScheduleSeconds * 1_000
-    ) {
-      const schedule = await scheduleInactivityReminders(
-        new Date(scheduleAt),
-        resources.pool,
-      );
-      lastInactivityScheduleAt = scheduleAt;
-      console.info(JSON.stringify({ event: "inactivity.schedule", ...schedule }));
+    // Reminder schedulers are auxiliary: their failures are logged and backed
+    // off, never allowed to stop dispatch of verification/reset/invite mail.
+    if (inactivitySchedule.due(scheduleAt)) {
+      try {
+        const schedule = await scheduleInactivityReminders(
+          new Date(scheduleAt),
+          resources.pool,
+        );
+        inactivitySchedule.record(scheduleAt, schedule.failed === 0);
+        console.info(JSON.stringify({ event: "inactivity.schedule", ...schedule }));
+      } catch (error) {
+        inactivitySchedule.record(scheduleAt, false);
+        console.error(JSON.stringify({
+          event: "inactivity.schedule_failed",
+          code: mailWorkerErrorCode(error),
+          retryInMs: inactivitySchedule.currentDelayMs(),
+        }));
+      }
     }
     if (stopping) break;
-    if (
-      scheduleAt - lastSmartReminderScheduleAt
-      >= inactivityScheduleSeconds * 1_000
-    ) {
-      const schedule = await scheduleSmartRemindersWithDatabase(
-        resources.database,
-        new Date(scheduleAt),
-      );
-      lastSmartReminderScheduleAt = scheduleAt;
-      console.info(
-        JSON.stringify({ event: "smart_reminder.schedule", ...schedule }),
-      );
+    if (smartReminderSchedule.due(scheduleAt)) {
+      try {
+        const schedule = await scheduleSmartRemindersWithDatabase(
+          resources.database,
+          new Date(scheduleAt),
+        );
+        smartReminderSchedule.record(scheduleAt, true);
+        console.info(
+          JSON.stringify({ event: "smart_reminder.schedule", ...schedule }),
+        );
+      } catch (error) {
+        smartReminderSchedule.record(scheduleAt, false);
+        console.error(JSON.stringify({
+          event: "smart_reminder.schedule_failed",
+          code: mailWorkerErrorCode(error),
+          retryInMs: smartReminderSchedule.currentDelayMs(),
+        }));
+      }
     }
     if (stopping) break;
     const result = await processBatch({
