@@ -835,7 +835,7 @@ const requiredBackupRuns = [
   "bash infra/tests/systemd-backup.test.sh",
 ];
 const expectedApplicationRuns = [
-  'sudo ln -sf "$(command -v node)" /usr/bin/node',
+  'sudo install -o root -g root -m 0755 "$(command -v node)" /usr/bin/node',
   "npm ci",
   registrationRun,
   "npm run test:github-runner-context:registration",
@@ -907,6 +907,7 @@ const expectedApplicationRuns = [
   "bash infra/tests/runner-vm-provision.test.sh",
   "sudo bash infra/tests/runner-guest-installer.test.sh",
   "sudo bash infra/tests/runner-firewall.test.sh",
+  "bash infra/tests/install-reviewed-docker-engine.sh",
   "sudo bash infra/tests/runner-firewall-packets.test.sh",
   "python3 infra/tests/recovery-evidence-helper.test.py",
   "python3 infra/tests/recovery-evidence-provenance.test.py",
@@ -947,6 +948,10 @@ const checkoutProjection = [
   "      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0",
   "        with:",
   "          persist-credentials: false",
+];
+const applicationCheckoutProjection = [
+  ...checkoutProjection,
+  "          fetch-depth: 0",
 ];
 const setupNodeProjection = [
   "      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0",
@@ -1175,7 +1180,7 @@ const reviewedJobContracts = new Map([
       "    runs-on: ubuntu-24.04",
       "    timeout-minutes: 70",
       "    steps:",
-      ...checkoutProjection,
+      ...applicationCheckoutProjection,
       ...setupNodeProjection,
       ...expectedApplicationRuns.map((command) => `      - run: ${command}`),
     ],
@@ -2208,7 +2213,13 @@ function runAdversarialSelfTests(document) {
   );
   expectRejected(
     "production e2e without the reviewed Docker Engine",
-    replaceExactly(document, `${productionEngineStep}\n`, ""),
+    // Anchored on the job checkout: the application job runs the same installer,
+    // and only the production e2e job copy is removed here.
+    replaceExactly(
+      document,
+      `${productionCheckout}\n${productionEngineStep}\n`,
+      `${productionCheckout}\n`,
+    ),
   );
   expectRejected(
     "quoted production e2e command",
