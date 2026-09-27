@@ -996,9 +996,11 @@
   /* The rail overlays the page while it expands (position: fixed), but that
      must never cover interactive content: whatever expands it — hover,
      keyboard focus, or the menu — also pushes .contentColumn out from under
-     it, same as the fully expanded (non-drawer) sidebar does. */
+     it, same as the fully expanded (non-drawer) sidebar does.
+     (:has() is never nested inside :has(): that selector is invalid and one
+     invalid selector drops this whole list, silently disabling the push.) */
   .shellDrawer:has(.sidebar:not(.railSuppressed):hover) .contentColumn,
-  .shellDrawer:has(.sidebar:not(.railSuppressed):has(:focus-visible)) .contentColumn,
+  .shellDrawer:has(.sidebar:not(.railSuppressed) :focus-visible) .contentColumn,
   .shellDrawer:has(.sidebar.railMenuOpen) .contentColumn {
     padding-left: 248px;
     transition: padding-left var(--motion-base) var(--ease-out);
