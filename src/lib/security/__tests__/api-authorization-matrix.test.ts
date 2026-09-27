@@ -61,6 +61,8 @@ describe("API authorization and IDOR contract matrix", () => {
       .sort())
       .toEqual([
         "GET /api/code/run",
+        "GET /api/monitoring/envelope",
+        "POST /api/monitoring/envelope",
         "POST /api/onboarding/interests/preview",
       ]);
   });
