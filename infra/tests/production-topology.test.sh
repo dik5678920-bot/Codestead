@@ -183,6 +183,10 @@ readonly secrets_dir="$workdir/secrets"
 readonly data_root="$workdir/data"
 readonly cloudflare_config="$workdir/cloudflared.yml"
 readonly postgres_socket_dir="$workdir/postgres-socket"
+# Production data root for the object store only (postgres and next-cache are
+# overridden by the fixture). Root-owned and prepared by the production
+# preparer, exactly as start-production-stack.sh does before the stack starts.
+readonly object_data_root="$workdir/object-data"
 mkdir -p "$secrets_dir" "$data_root/postgres" "$data_root/next-cache" "$data_root/app-data" "$postgres_socket_dir"
 chmod 0755 "$secrets_dir"
 chmod 0777 "$data_root/next-cache" "$data_root/app-data"
@@ -227,7 +231,7 @@ export COMPOSE_PROFILES=""
 SECRETS_GID="$(id -g)"
 export SECRETS_GID
 export SECRETS_DIR="$secrets_dir"
-export LEARN_DATA_ROOT="$data_root"
+export LEARN_DATA_ROOT="$object_data_root"
 export CLOUDFLARE_CONFIG_FILE="$cloudflare_config"
 export POSTGRES_DB=learncoding
 export POSTGRES_USER=learncoding
@@ -355,6 +359,13 @@ assert_cloudflared_generation_changed_after_guarded_recovery() {
 cleanup_started=0
 readonly runner_client_network="${COMPOSE_PROJECT_NAME}_runner-client"
 runner_client_reserved=0
+# compose.yaml joins the GlitchTip stack's external glitchtip-ingest network.
+# The disposable host has no GlitchTip, so create the same internal network
+# (mirroring infra/observability/glitchtip/compose.yaml) and remove it again,
+# touching only a network this run created and labelled.
+readonly glitchtip_ingest_network=glitchtip-ingest
+readonly glitchtip_ingest_subnet=10.203.1.0/24
+glitchtip_ingest_created=0
 
 project_resources() {
   {
@@ -384,9 +395,27 @@ reserve_runner_client_network() {
   runner_client_reserved=1
 }
 
+reserve_glitchtip_ingest_network() {
+  if docker network inspect "$glitchtip_ingest_network" >/dev/null 2>&1; then
+    echo "Refusing to run beside an existing $glitchtip_ingest_network network; this test only uses one it creates." >&2
+    return 1
+  fi
+  if ! timeout 30 docker network create \
+    --driver bridge \
+    --internal \
+    --subnet "$glitchtip_ingest_subnet" \
+    --label "io.codestead.fixture=production-topology-glitchtip-ingest-v1" \
+    --label "io.codestead.fixture-run=$COMPOSE_PROJECT_NAME" \
+    "$glitchtip_ingest_network" >/dev/null; then
+    echo "Unable to create the disposable $glitchtip_ingest_network network." >&2
+    return 1
+  fi
+  glitchtip_ingest_created=1
+}
+
 cleanup() {
   status=$?
-  local cleanup_failed=0 diagnostic_log fixture_images image remnants runner_labels
+  local cleanup_failed=0 diagnostic_log fixture_images glitchtip_labels image remnants runner_labels
   trap - EXIT
   set +e
   if (( cleanup_started == 0 )); then
@@ -415,6 +444,18 @@ cleanup() {
           echo "Unable to remove fallback network: $runner_client_network" >&2
           cleanup_failed=1
         fi
+      fi
+    fi
+
+    if (( glitchtip_ingest_created == 1 )) \
+      && docker network inspect "$glitchtip_ingest_network" >/dev/null 2>&1; then
+      glitchtip_labels="$(docker network inspect --format '{{index .Labels "io.codestead.fixture"}} {{index .Labels "io.codestead.fixture-run"}}' "$glitchtip_ingest_network" 2>/dev/null)"
+      if [[ "$glitchtip_labels" != "production-topology-glitchtip-ingest-v1 $COMPOSE_PROJECT_NAME" ]]; then
+        echo "Refusing to remove an unowned network: $glitchtip_ingest_network" >&2
+        cleanup_failed=1
+      elif ! docker network rm "$glitchtip_ingest_network" >/dev/null 2>&1; then
+        echo "Unable to remove disposable network: $glitchtip_ingest_network" >&2
+        cleanup_failed=1
       fi
     fi
 
@@ -564,6 +605,22 @@ inspect_postgres_identity() {
   POSTGRES_UID="$passwd_uid"
   POSTGRES_GID="$passwd_gid"
   export POSTGRES_UID POSTGRES_GID
+}
+prepare_object_storage_root() {
+  # The object-store workers (file-erasure, lifecycle, scan) refuse an
+  # unprepared root (DurableObjectStoreSafetyError), so run the same preparer
+  # production runs rather than hand-building its identity contract here.
+  sudo -n install -d -o 0 -g 0 -m 0750 -- "$object_data_root"
+  sudo -n env -i PATH="$PATH" NODE_OPTIONS= UPLOADS_ENABLED="$UPLOADS_ENABLED" \
+    LEARN_DATA_ROOT="$object_data_root" \
+    "$(command -v node)" "$repo_root/infra/ops/prepare-object-storage.mjs" >/dev/null || {
+    echo "The production object storage preparer rejected the disposable data root." >&2
+    return 1
+  }
+  [[ "$(sudo -n stat -c '%u:%g %a' -- "$object_data_root/app-data/objects")" == "0:1000 1770" ]] || {
+    echo "The prepared object storage root has the wrong ownership or mode." >&2
+    return 1
+  }
 }
 prepare_postgres_bind_dirs() {
   sudo -n chown -- "$POSTGRES_UID:$POSTGRES_GID" "$data_root/postgres" "$postgres_socket_dir"
@@ -756,10 +813,12 @@ for image in "${images[@]}"; do
   fi
 done
 reserve_runner_client_network
+reserve_glitchtip_ingest_network
 
 timeout 300 docker pull "$postgres_image" >/dev/null
 inspect_postgres_identity
 prepare_postgres_bind_dirs
+prepare_object_storage_root
 build_image runtime "$runtime_image"
 build_image tooling "$tooling_image"
 build_image worker "$worker_image"
