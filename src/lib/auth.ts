@@ -47,6 +47,7 @@ import {
   sessionTakeoverRateLimitedError,
   wantsSessionTakeover,
 } from "@/lib/security/session-takeover";
+import { PERSISTENT_SESSION_LIFETIME } from "@/lib/security/session-lifetime";
 
 /** Account behind a password-verified sign-in that is waiting for its second factor. */
 async function pendingTwoFactorUserId(ctx: GenericEndpointContext) {
@@ -161,8 +162,7 @@ export const auth = betterAuth({
     },
   },
   session: {
-    expiresIn: 60 * 60 * 24 * 30,
-    updateAge: 60 * 60 * 24,
+    ...PERSISTENT_SESSION_LIFETIME,
     cookieCache: {
       // Twenty pilot users do not justify a stale authorization window.
       // Durable session deletion must take effect on the next request across
