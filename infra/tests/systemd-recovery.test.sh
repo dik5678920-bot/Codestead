@@ -702,7 +702,7 @@ expect_sequence \
   'PostgreSQL command must contain only the three durability and two private control-socket settings' \
   postgres_command \
   postgres -c fsync=on -c synchronous_commit=on -c full_page_writes=on \
-  -c unix_socket_directories=/run/learncoding-postgres \
+  -c unix_socket_directories=/run/learncoding-postgres,/var/run/postgresql \
   -c unix_socket_permissions=0700
 
 lifecycle_section="$(sed -n '/^  lifecycle:/,/^  platform-seed:/p' "$compose" | tr -d '\r')"
