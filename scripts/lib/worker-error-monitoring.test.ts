@@ -1,8 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+const sdkLoaded = vi.fn();
 const init = vi.fn();
 const captureException = vi.fn();
-vi.mock("@sentry/node", () => ({ init, captureException }));
+vi.mock("@sentry/node", () => {
+  sdkLoaded();
+  return { init, captureException };
+});
 
 const { reportWorkerTerminalFailure, resetWorkerErrorMonitoringForTests } = await import("./worker-error-monitoring");
 
@@ -14,19 +18,29 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe("reportWorkerTerminalFailure", () => {
-  it("is a no-op without SENTRY_DSN", () => {
+  it("never loads the SDK at module load (worker healthchecks import this module)", async () => {
+    vi.resetModules();
+    sdkLoaded.mockClear();
+    await import("./worker-health");
+    await import("./worker-error-monitoring");
+    expect(sdkLoaded).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op that never loads the SDK without SENTRY_DSN", async () => {
     vi.stubEnv("SENTRY_DSN", "");
-    reportWorkerTerminalFailure("mail-worker", "WORKER_OPERATION_FAILED", new Error("boom"));
+    sdkLoaded.mockClear();
+    await reportWorkerTerminalFailure("mail-worker", "WORKER_OPERATION_FAILED", new Error("boom"));
+    expect(sdkLoaded).not.toHaveBeenCalled();
     expect(init).not.toHaveBeenCalled();
     expect(captureException).not.toHaveBeenCalled();
   });
 
-  it("initializes once with scrubbing and reports with allow-listed tags", () => {
+  it("initializes once with scrubbing and reports with allow-listed tags", async () => {
     vi.stubEnv("SENTRY_DSN", "https://key@errors.example.test/2");
     vi.stubEnv("SENTRY_RELEASE", "abc1234");
     const error = new Error("boom");
-    reportWorkerTerminalFailure("mail-worker", "WORKER_OPERATION_FAILED", error);
-    reportWorkerTerminalFailure("mail-worker", "WORKER_OPERATION_FAILED", error);
+    await reportWorkerTerminalFailure("mail-worker", "WORKER_OPERATION_FAILED", error);
+    await reportWorkerTerminalFailure("mail-worker", "WORKER_OPERATION_FAILED", error);
     expect(init).toHaveBeenCalledOnce();
     expect(init.mock.calls[0]![0]).toMatchObject({
       dsn: "https://key@errors.example.test/2",
@@ -41,11 +55,11 @@ describe("reportWorkerTerminalFailure", () => {
     });
   });
 
-  it("never throws when the SDK fails", () => {
+  it("never throws or rejects when the SDK fails", async () => {
     vi.stubEnv("SENTRY_DSN", "https://key@errors.example.test/2");
     captureException.mockImplementation(() => {
       throw new Error("sdk down");
     });
-    expect(() => reportWorkerTerminalFailure("mail-worker", "X", new Error("boom"))).not.toThrow();
+    await expect(reportWorkerTerminalFailure("mail-worker", "X", new Error("boom"))).resolves.toBeUndefined();
   });
 });

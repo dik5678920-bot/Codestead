@@ -222,7 +222,7 @@ export function createWorkerHealthReporter(options: ReporterOptions) {
         consecutiveFailures,
         code: workerHealthErrorCode(error),
       }));
-      reportWorkerTerminalFailure(options.worker, workerHealthErrorCode(error), error);
+      void reportWorkerTerminalFailure(options.worker, workerHealthErrorCode(error), error);
       return record;
     },
   };
