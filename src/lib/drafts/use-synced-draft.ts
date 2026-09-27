@@ -306,6 +306,7 @@ export function useSyncedDraft({
     if (kind === "session"
       && runtimeRef.current === runtime
       && latestNamespaceRef.current === runtime.namespace) {
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload drops in-memory state after session loss
       window.location.assign("/login");
     }
   }, [retireRuntime]);
