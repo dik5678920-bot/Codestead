@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { AccessRequestQueue } from "@/components/admin/access-request-queue";
 
 export const metadata: Metadata = {
-  title: "Access queue · Codestead",
+  title: "Access queue",
 };
 
 export default function AdminAccessPage() {

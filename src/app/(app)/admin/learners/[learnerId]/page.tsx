@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import { LearnerDetail } from "@/components/admin/learner-detail";
 
 export const metadata: Metadata = {
-  title: "Learner mentor view · Codestead",
+  title: "Learner mentor view",
 };
 
 export default async function AdminLearnerPage({

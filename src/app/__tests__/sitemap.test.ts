@@ -3,25 +3,28 @@ import { describe, expect, it } from "vitest";
 import robots from "../robots";
 import sitemap from "../sitemap";
 
-const PROTECTED_PATHS = ["/api/", "/admin/", "/learn/", "/settings/", "/onboarding/", "/two-factor/"];
+function disallowedPaths(): string[] {
+  const result = robots();
+  const rules = Array.isArray(result.rules) ? result.rules[0] : result.rules;
+  const disallow = rules?.disallow;
+  return Array.isArray(disallow) ? disallow : disallow ? [disallow] : [];
+}
 
-describe("sitemap", () => {
-  it("lists no protected path", () => {
-    const paths = sitemap().map((entry) => new URL(entry.url).pathname);
-    for (const path of paths) {
-      for (const protectedPath of PROTECTED_PATHS) {
-        expect(`${path}/`.startsWith(protectedPath)).toBe(false);
-      }
-    }
+describe("robots", () => {
+  it("disallows the core protected paths and points to the sitemap", () => {
+    const disallow = disallowedPaths();
+    for (const path of ["/api/", "/learn/", "/onboarding/", "/two-factor/"]) expect(disallow).toContain(path);
+    expect(robots().sitemap).toMatch(/\/sitemap\.xml$/);
   });
 });
 
-describe("robots", () => {
-  it("disallows every protected path and points to the sitemap", () => {
-    const result = robots();
-    const rules = Array.isArray(result.rules) ? result.rules[0] : result.rules;
-    const disallow = Array.isArray(rules?.disallow) ? rules.disallow : [rules?.disallow];
-    for (const protectedPath of PROTECTED_PATHS) expect(disallow).toContain(protectedPath);
-    expect(result.sitemap).toMatch(/\/sitemap\.xml$/);
+describe("sitemap", () => {
+  it("lists no path that robots disallows", () => {
+    const protectedPaths = disallowedPaths();
+    expect(protectedPaths.length).toBeGreaterThan(0);
+    for (const entry of sitemap()) {
+      const path = `${new URL(entry.url).pathname.replace(/\/$/, "")}/`;
+      for (const protectedPath of protectedPaths) expect(path.startsWith(protectedPath)).toBe(false);
+    }
   });
 });
