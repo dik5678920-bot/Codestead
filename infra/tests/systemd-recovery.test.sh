@@ -18,6 +18,7 @@ ingress_recovery_service="$repo_root/infra/systemd/learncoding-ingress-recovery.
 ingress_recovery_timer="$repo_root/infra/systemd/learncoding-ingress-recovery.timer"
 ingress_control_tmpfiles="$repo_root/infra/tmpfiles.d/learncoding-ingress-control.conf"
 release_lock_tmpfiles="$repo_root/infra/tmpfiles.d/learncoding-release-lock.conf"
+postgres_socket_tmpfiles="$repo_root/infra/tmpfiles.d/learncoding-postgres.conf"
 firewall_service="$repo_root/infra/systemd/learncoding-runner-firewall.service"
 installer="$repo_root/infra/ops/install-systemd.sh"
 installer_shebang='#!/usr/bin/env bash'
@@ -819,6 +820,12 @@ if expect_required_file "$release_lock_tmpfiles"; then
     fail 'Release lock tmpfiles definition must provision exactly one root-private lock file'
   fi
 fi
+if expect_required_file "$postgres_socket_tmpfiles"; then
+  postgres_socket_definition="$(tr -d '\r' <"$postgres_socket_tmpfiles" | grep -v '^#')"
+  if [[ "$postgres_socket_definition" != 'd /run/learncoding-postgres 0700 999 999 -' ]]; then
+    fail 'PostgreSQL socket tmpfiles definition must recreate only the 999:999 0700 control-socket directory'
+  fi
+fi
 
 tmp_base="$(cd /tmp && pwd -P)"
 parser_work="$(mktemp -d "$tmp_base/systemd-recovery-parser.XXXXXX")"
@@ -928,7 +935,7 @@ artifact_source_is_exact() {
     tmpfiles)
       [[ "$source" == "$INSTALLER_ROOT/infra/tmpfiles.d/$name" &&
         ( "$name" == learncoding-production-load.conf || "$name" == learncoding-ingress-control.conf ||
-          "$name" == learncoding-release-lock.conf ) ]]
+          "$name" == learncoding-release-lock.conf || "$name" == learncoding-postgres.conf ) ]]
       ;;
     runtime) [[ "$source" == "$INSTALLER_ROOT/infra/runtime/production-load-network-attestation" && "$name" == production-load-network-attestation ]] ;;
     *) return 1 ;;
