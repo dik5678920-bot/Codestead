@@ -241,13 +241,6 @@ export async function POST(request: NextRequest) {
     return purpose ? isCurrentConsentAccepted(currentConsents, purpose) : false;
   });
 
-  if (ownCredentials.length === 0) {
-    return NextResponse.json(
-      { error: "Connect an AI key to enable the tutor.", code: "NO_AI_CREDENTIAL" },
-      { status: 409 },
-    );
-  }
-
   const policies = await db
     .select()
     .from(providerPolicy)
@@ -348,6 +341,15 @@ export async function POST(request: NextRequest) {
     fallbackDestinations.add(destination);
     dedupedFallbackRows.push(row);
     if (dedupedFallbackRows.length >= 16) break;
+  }
+  // A learner key that just failed (invalid/rate_limited) drops out of the
+  // active set, so an authorized fallback grant must still be considered
+  // before deciding there is no routing path.
+  if (ownCredentials.length === 0 && dedupedFallbackRows.length === 0) {
+    return NextResponse.json(
+      { error: "Connect an AI key to enable the tutor.", code: "NO_AI_CREDENTIAL" },
+      { status: 409 },
+    );
   }
   const credentialSnapshots = new Map<string, ProviderCredentialSnapshot>(
     [...ownCredentials, ...dedupedFallbackRows].map((credential) => [credential.id, {
