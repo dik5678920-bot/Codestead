@@ -124,7 +124,9 @@ export function evaluateAuthoredActivity(
       return { state: "unavailable", reason: "invalid_grader_specification" };
     }
     const matched = expectedEntries.filter(([gapId, accepted]) =>
-      (accepted as readonly unknown[]).some((value) =>
+      Object.prototype.hasOwnProperty.call(actualByGap, gapId)
+      && actualByGap[gapId] !== undefined
+      && (accepted as readonly unknown[]).some((value) =>
         canonical(value, caseSensitive, trim) === canonical(actualByGap[gapId], caseSensitive, trim),
       ),
     ).length;
