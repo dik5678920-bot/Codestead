@@ -1,12 +1,14 @@
 import type { PoolClient, QueryResult } from "pg";
 
 import { pool } from "@/lib/db/client";
+import { lockUserAuthorityOnPgClient } from "@/lib/security/user-authority-lock";
 
 import { DEFAULT_STORAGE_QUOTA_BYTES, uploadWouldExceedQuota } from "./policy";
 import { StorageQuotaExceededError } from "./quota-store";
 import {
   UploadCommitAmbiguousError,
   UploadIdempotencyConflictError,
+  UploadOwnerUnavailableError,
   type DurableUploadObject,
   type UploadReceipt,
   type UploadReceiptRepository,
@@ -133,7 +135,19 @@ export class PostgresUploadReceiptRepository implements UploadReceiptRepository 
     try {
       await client.query("begin");
       transactionStarted = true;
+      // Same lock and order as account deletion: user authority first, then
+      // the owner-scoped quota/receipt lock. Deletion snapshots stored
+      // objects under this lock, so a commit either lands before that
+      // snapshot or observes the non-active owner here and publishes nothing.
+      await lockUserAuthorityOnPgClient(client, input.ownerUserId);
       await client.query("select pg_advisory_xact_lock(hashtext($1))", [input.ownerUserId]);
+      const owner = await client.query<{ status: string }>(
+        `select status from "user" where id = $1 for share`,
+        [input.ownerUserId],
+      );
+      if (owner.rows[0]?.status !== "active") {
+        throw new UploadOwnerUnavailableError();
+      }
       const prior = await client.query<ReceiptRow>(RECEIPT_SELECT, [
         input.ownerUserId,
         input.idempotencyKey,
