@@ -1,8 +1,9 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { validateProviderCredential } from "@/lib/ai/credential-validation";
+import { providerCredentialUpdatedAtToken } from "@/lib/ai/provider-credential-outcome";
 import { notifyCredentialChanged } from "@/lib/credential-notifications";
 import { db } from "@/lib/db/client";
 import { providerCredential } from "@/lib/db/schema";
@@ -63,6 +64,7 @@ export async function PATCH(
           dataIv: providerCredential.dataIv,
           authTag: providerCredential.authTag,
           keyVersion: providerCredential.keyVersion,
+          updatedAtToken: providerCredentialUpdatedAtToken,
           lastFour: providerCredential.lastFour,
         })
         .from(providerCredential)
@@ -74,6 +76,19 @@ export async function PATCH(
         )
         .limit(1);
       if (!owned) return NextResponse.json({ error: "Credential not found." }, { status: 404 });
+      const snapshotCondition = and(
+        eq(providerCredential.id, owned.id),
+        eq(providerCredential.userId, owned.userId),
+        eq(providerCredential.keyVersion, owned.keyVersion),
+        eq(providerCredentialUpdatedAtToken, owned.updatedAtToken),
+      );
+      // Advance even for two mutations in the same millisecond. Reuse the
+      // microsecond-preserving timestamp as the existing mutation revision.
+      const nextRevision = sql`greatest(clock_timestamp(), ${providerCredential.updatedAt} + interval '1 microsecond')`;
+      const staleResult = () => NextResponse.json(
+        { error: "Credential changed. Retry using its current state.", code: "STALE_CREDENTIAL" },
+        { status: 409, headers: { "Cache-Control": "no-store" } },
+      );
       if (body.data.action !== "disable") {
         const purpose = consentPurposeForProvider(owned.provider);
         if (!purpose || !(await hasCurrentConsent(authz.session.user.id, purpose))) {
@@ -105,13 +120,16 @@ export async function PATCH(
             .where(eq(providerCredential.id, owned.id));
         });
       } else if (body.data.action === "disable" || body.data.action === "enable") {
-        await db
+        const updated = await db
           .update(providerCredential)
           .set({
             status: body.data.action === "disable" ? "disabled" : "pending_validation",
             disabledAt: body.data.action === "disable" ? new Date() : null,
+            updatedAt: nextRevision,
           })
-          .where(eq(providerCredential.id, owned.id));
+          .where(snapshotCondition)
+          .returning({ id: providerCredential.id });
+        if (updated.length !== 1) return staleResult();
       } else {
         let wrappingKey: Buffer;
         try {
@@ -166,7 +184,7 @@ export async function PATCH(
               },
               wrappingKey,
             );
-            await db
+            const updated = await db
               .update(providerCredential)
               .set({
                 ciphertext: sealed.ciphertext,
@@ -180,17 +198,23 @@ export async function PATCH(
                 failureCode: validation.failureCode,
                 lastValidatedAt: validation.model ? new Date() : null,
                 disabledAt: null,
+                updatedAt: nextRevision,
               })
-              .where(eq(providerCredential.id, owned.id));
+              .where(snapshotCondition)
+              .returning({ id: providerCredential.id });
+            if (updated.length !== 1) return staleResult();
           } else {
-            await db
+            const updated = await db
               .update(providerCredential)
               .set({
                 status: validation.status,
                 failureCode: validation.failureCode,
                 lastValidatedAt: validation.model ? new Date() : null,
+                updatedAt: nextRevision,
               })
-              .where(eq(providerCredential.id, owned.id));
+              .where(snapshotCondition)
+              .returning({ id: providerCredential.id });
+            if (updated.length !== 1) return staleResult();
           }
         } finally {
           wrappingKey.fill(0);
