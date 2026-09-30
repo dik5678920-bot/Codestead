@@ -28,6 +28,7 @@ type Reply = {
 type Post = {
   id: string; groupId: string; kind: string; title: string; body: string; rowVersion: number;
   createdAt: string; editedAt: string | null; authorAlias: string; own: boolean; replies: Reply[];
+  replyNextCursor?: string | null;
 };
 type DiscussionPayload = { groups: Group[]; posts: Post[]; nextCursor: string | null; moderation: boolean; privacy: string };
 type Battle = {
@@ -140,7 +141,10 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
   const [editing, setEditing] = useState<{ target: "post" | "reply"; id: string; version: number; title: string; body: string } | null>(null);
   const [replying, setReplying] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
+  const [loadingReplies, setLoadingReplies] = useState(false);
   const logicalRequestIds = useRef(new Map<string, { fingerprint: string; requestId: string }>());
+  const selectedGroupRef = useRef("");
+  const loadGeneration = useRef(0);
 
   function requestIdFor(key: string, payload: Record<string, unknown>) {
     const fingerprint = JSON.stringify(payload);
@@ -170,23 +174,39 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
   }
 
   const load = useCallback(async (groupId?: string, append = false, cursor?: string | null) => {
+    if (groupId && selectedGroupRef.current && groupId !== selectedGroupRef.current) return;
+    const generation = ++loadGeneration.current;
+    const isCurrent = () => generation === loadGeneration.current
+      && (!groupId || groupId === selectedGroupRef.current);
     setError(null);
+    setLoadingReplies(false);
     const query = new URLSearchParams();
     if (groupId) query.set("groupId", groupId);
     if (cursor) query.set("cursor", cursor);
-    const [nextDiscussion, nextBattles] = await Promise.all([
-      requestJson<DiscussionPayload>(`/api/community/discussions?${query}`),
-      requestJson<BattlePayload>("/api/battles"),
-    ]);
-    assertCommunityPayloads(nextDiscussion, nextBattles);
-    setDiscussion((current) => append && current
-      ? { ...nextDiscussion, posts: [...current.posts, ...nextDiscussion.posts] }
-      : nextDiscussion);
-    setBattles(nextBattles);
-    setSelectedGroup((current) => current || nextDiscussion.groups[0]?.id || "");
-    if (nextDiscussion.moderation) {
-      const moderation = await requestJson<{ reports: Report[] }>("/api/admin/community/moderation");
-      setReports(moderation.reports);
+    try {
+      const [nextDiscussion, nextBattles] = await Promise.all([
+        requestJson<DiscussionPayload>(`/api/community/discussions?${query}`),
+        requestJson<BattlePayload>("/api/battles"),
+      ]);
+      if (!isCurrent()) return;
+      assertCommunityPayloads(nextDiscussion, nextBattles);
+      setDiscussion((current) => {
+        if (!isCurrent()) return current;
+        if (!append || !current) return nextDiscussion;
+        const seen = new Set(current.posts.map((post) => post.id));
+        return { ...nextDiscussion, posts: [...current.posts, ...nextDiscussion.posts.filter((post) => !seen.has(post.id))] };
+      });
+      setBattles(nextBattles);
+      if (!selectedGroupRef.current) {
+        selectedGroupRef.current = nextDiscussion.groups[0]?.id ?? "";
+        setSelectedGroup(selectedGroupRef.current);
+      }
+      if (nextDiscussion.moderation) {
+        const moderation = await requestJson<{ reports: Report[] }>("/api/admin/community/moderation");
+        if (isCurrent()) setReports(moderation.reports);
+      }
+    } catch (cause) {
+      if (isCurrent()) throw cause;
     }
   }, []);
 
@@ -198,22 +218,25 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
 
   useEffect(() => {
     let active = true;
+    const generation = ++loadGeneration.current;
+    const isCurrent = () => active && generation === loadGeneration.current;
     void Promise.all([
       requestJson<DiscussionPayload>("/api/community/discussions"),
       requestJson<BattlePayload>("/api/battles"),
     ]).then(([nextDiscussion, nextBattles]) => {
-      if (!active) return;
+      if (!isCurrent()) return;
       assertCommunityPayloads(nextDiscussion, nextBattles);
       setDiscussion(nextDiscussion);
       setBattles(nextBattles);
-      setSelectedGroup(nextDiscussion.groups[0]?.id ?? "");
+      selectedGroupRef.current = nextDiscussion.groups[0]?.id ?? "";
+      setSelectedGroup(selectedGroupRef.current);
       if (nextDiscussion.moderation) {
         void requestJson<{ reports: Report[] }>("/api/admin/community/moderation")
-          .then((value) => { if (active) setReports(value.reports); })
-          .catch(() => { if (active) setError("The discussion loaded, but the moderation queue did not."); });
+          .then((value) => { if (isCurrent()) setReports(value.reports); })
+          .catch(() => { if (isCurrent()) setError("The discussion loaded, but the moderation queue did not."); });
       }
-    }).catch((cause: unknown) => { if (active) setError(cause instanceof Error ? cause.message : "Community spaces are unavailable."); });
-    return () => { active = false; };
+    }).catch((cause: unknown) => { if (isCurrent()) setError(cause instanceof Error ? cause.message : "Community spaces are unavailable."); });
+    return () => { active = false; loadGeneration.current += 1; };
   }, []);
 
   async function mutate(payload: Record<string, unknown>, success: string) {
@@ -232,6 +255,29 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
       return false;
     }
     finally { setBusy(false); }
+  }
+
+  async function loadReplies(post: Post) {
+    if (!post.replyNextCursor || loadingReplies) return;
+    const generation = loadGeneration.current;
+    const isCurrent = () => generation === loadGeneration.current && selectedGroupRef.current === post.groupId;
+    if (!isCurrent()) return;
+    setLoadingReplies(true);
+    try {
+      const query = new URLSearchParams({ groupId: post.groupId, postId: post.id, replyCursor: post.replyNextCursor });
+      const page = await requestJson<DiscussionPayload>(`/api/community/discussions?${query}`);
+      if (!isCurrent()) return;
+      const next = page.posts.find((candidate) => candidate.id === post.id);
+      if (!next) throw new Error("That conversation is no longer available.");
+      setDiscussion((current) => current && ({ ...current, posts: current.posts.map((candidate) => {
+        if (!isCurrent() || candidate.id !== post.id || candidate.replyNextCursor !== post.replyNextCursor) return candidate;
+        const seen = new Set(candidate.replies.map((reply) => reply.id));
+        return { ...candidate, replyNextCursor: next.replyNextCursor,
+          replies: [...candidate.replies, ...next.replies.filter((reply) => !seen.has(reply.id))] };
+      }) }));
+    } catch (cause) {
+      if (isCurrent()) setError(cause instanceof Error ? cause.message : "Replies could not be loaded.");
+    } finally { if (isCurrent()) setLoadingReplies(false); }
   }
 
   async function createGroup(event: FormEvent<HTMLFormElement>) {
@@ -411,7 +457,7 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
     {tab === "discuss" && <div className={styles.discussionGrid} id="community-panel-discuss" role="tabpanel" aria-labelledby="community-tab-discuss">
       <aside className={styles.rail}>
         <div className={styles.railTitle}><Users size={17} /><strong>Groups</strong></div>
-        {discussion.groups.length ? discussion.groups.map((group) => <button type="button" key={group.id} className={selectedGroup === group.id ? styles.groupActive : styles.group} onClick={() => { setSelectedGroup(group.id); loadSafely(group.id); }}>
+        {discussion.groups.length ? discussion.groups.map((group) => <button type="button" key={group.id} className={selectedGroup === group.id ? styles.groupActive : styles.group} onClick={() => { selectedGroupRef.current = group.id; setSelectedGroup(group.id); loadSafely(group.id); }}>
           <span><strong>{group.name}</strong><small>{group.memberCount} members · {group.visibility === "members" ? "private" : "cohort"}</small></span><ChevronDown size={14} />
         </button>) : <div className={styles.miniEmpty}><p>No groups yet.</p><small>Create the first focused study space.</small></div>}
         <details className={styles.createPanel}><summary><Plus size={15} /> New group</summary><form onSubmit={(event) => void createGroup(event)}>
@@ -440,6 +486,8 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
             {editing?.id === item.id ? <form className={styles.editForm} onSubmit={(event) => void saveEdit(event)}><label>Reply<textarea value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} /></label><div><button className="button button-primary">Save</button><button type="button" className="button button-secondary" onClick={() => setEditing(null)}>Cancel</button></div></form> : <p className={styles.body}>{item.body}</p>}
             <div className={styles.actions}>{item.own && <><button type="button" onClick={() => setEditing({ target: "reply", id: item.id, version: item.rowVersion, title: "", body: item.body })}><Pencil size={13} /> Edit</button><button type="button" onClick={() => void mutate({ action: "delete", target: "reply", targetId: item.id, expectedVersion: item.rowVersion }, "Reply removed from the cohort feed.")}><Trash2 size={13} /> Delete</button></>}<ReportControl target="reply" targetId={item.id} onDone={setNotice} /></div>
           </div>)}</div> : null}
+          {post.replyNextCursor && <button type="button" className="button button-secondary" disabled={loadingReplies}
+            onClick={() => void loadReplies(post)}>Load more replies</button>}
         </article>) : <div className={styles.state}><MessageCircle size={24} /><h3>No conversations in this group</h3><p>Start with one specific question, useful explanation, or project milestone.</p></div>}
         {discussion.nextCursor && <button type="button" className="button button-secondary" onClick={() => loadSafely(selectedGroup, true, discussion.nextCursor)}>Load older conversations</button>}
       </div>

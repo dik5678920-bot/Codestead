@@ -29,7 +29,7 @@
       "file": "src/lib/community/service.ts",
       "purpose": "closed-cohort group visibility and author-owned community mutations",
       "anchors": 4,
-      "sourceSha256": "747ae036466b3c626fd116ed97d35ffb20e95001b440e82b2432a700ef2ef050"
+      "sourceSha256": "1101b2cc6787fa860c6019f9395b52713d94c3b2b5e16f38f51cb5972e920c0e"
     },
     {
       "file": "src/app/api/exams/_lib/service.ts",
@@ -1175,7 +1175,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by actorUserId: authz.session.user.id",
-      "operationSourceSha256": "94d6ed5a83959a6b2fb6320186dad5d5e5839d31255f9a0209d7cc548f8159e9"
+      "operationSourceSha256": "e4fb0169adf045c86ea2c3ee83650c39cfdedbc46a5cc8ab6fa8b7d5e2ca845a"
     },
     {
       "operation": "POST /api/community/discussions",
@@ -2218,7 +2218,7 @@
       "operationSourceSha256": "b88f55f3a91e588c90d93419fbf944eba9e0f64f9fd6a5ab3e2f9a003ce2ccd8"
     }
   ],
-  "generatedAt": "2026-09-30T13:39:27.902Z",
+  "generatedAt": "2026-09-30T13:59:16.301Z",
   "scope": "Complete static role/object-authorization source inventory. The endpoint sweep verifies guard invocation, while authz.test.ts verifies real guard decisions and runtime-authorization.integration.test.ts behaviorally covers a representative owner-bound route set. This report alone is not runtime cross-user proof, deployed proxy/browser evidence, or PostgreSQL RLS evidence.",
   "runtimeVerification": {
     "guardInvocationTest": "src/lib/security/__tests__/endpoint-auth-boundaries.test.ts",
