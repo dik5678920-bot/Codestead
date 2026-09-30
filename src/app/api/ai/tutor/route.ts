@@ -241,13 +241,6 @@ export async function POST(request: NextRequest) {
     return purpose ? isCurrentConsentAccepted(currentConsents, purpose) : false;
   });
 
-  if (ownCredentials.length === 0) {
-    return NextResponse.json(
-      { error: "Connect an AI key to enable the tutor.", code: "NO_AI_CREDENTIAL" },
-      { status: 409 },
-    );
-  }
-
   const policies = await db
     .select()
     .from(providerPolicy)
@@ -349,6 +342,15 @@ export async function POST(request: NextRequest) {
     dedupedFallbackRows.push(row);
     if (dedupedFallbackRows.length >= 16) break;
   }
+  // A learner key that just failed (invalid/rate_limited) drops out of the
+  // active set, so an authorized fallback grant must still be considered
+  // before deciding there is no routing path.
+  if (ownCredentials.length === 0 && dedupedFallbackRows.length === 0) {
+    return NextResponse.json(
+      { error: "Connect an AI key to enable the tutor.", code: "NO_AI_CREDENTIAL" },
+      { status: 409 },
+    );
+  }
   const credentialSnapshots = new Map<string, ProviderCredentialSnapshot>(
     [...ownCredentials, ...dedupedFallbackRows].map((credential) => [credential.id, {
       id: credential.id,
@@ -413,10 +415,20 @@ export async function POST(request: NextRequest) {
         fallbackOutputPaisePerMillionTokens: row.outputPaisePerMillionTokens,
       });
     }
+    const preferredCredentialIds = new Set(
+      ownCredentials.filter((credential) => credential.isPreferred).map((credential) => credential.id),
+    );
     candidates.sort((left, right) => {
       const sourceOrder = Number(left.source === "admin_fallback") -
         Number(right.source === "admin_fallback");
       if (sourceOrder !== 0) return sourceOrder;
+      // Among eligible learner keys, "Prefer this provider when healthy" wins
+      // over admin policy priority; priority only breaks the remaining ties.
+      if (left.source === "learner") {
+        const preferredOrder = Number(preferredCredentialIds.has(right.credentialId)) -
+          Number(preferredCredentialIds.has(left.credentialId));
+        if (preferredOrder !== 0) return preferredOrder;
+      }
       const leftPriority = policyByProviderModel.get(`${left.provider}\u0000${left.model}`)?.priority ?? 999;
       const rightPriority = policyByProviderModel.get(`${right.provider}\u0000${right.model}`)?.priority ?? 999;
       return leftPriority - rightPriority;

@@ -1019,7 +1019,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by eq(chatThread.userId, authz.session.user.id)",
-      "operationSourceSha256": "950fc094118da458ba9cb539e2b77f3ba8d02ccabf50f7dfb9ee9cf20df400cb"
+      "operationSourceSha256": "52b44471728f8eef569f7f967342d1693b7a504fb3bad8427cb5582eb0397ed8"
     },
     {
       "operation": "GET /api/auth/[...all]",
@@ -2218,7 +2218,7 @@
       "operationSourceSha256": "b88f55f3a91e588c90d93419fbf944eba9e0f64f9fd6a5ab3e2f9a003ce2ccd8"
     }
   ],
-  "generatedAt": "2026-09-30T12:12:10.549Z",
+  "generatedAt": "2026-09-30T12:16:26.566Z",
   "scope": "Complete static role/object-authorization source inventory. The endpoint sweep verifies guard invocation, while authz.test.ts verifies real guard decisions and runtime-authorization.integration.test.ts behaviorally covers a representative owner-bound route set. This report alone is not runtime cross-user proof, deployed proxy/browser evidence, or PostgreSQL RLS evidence.",
   "runtimeVerification": {
     "guardInvocationTest": "src/lib/security/__tests__/endpoint-auth-boundaries.test.ts",

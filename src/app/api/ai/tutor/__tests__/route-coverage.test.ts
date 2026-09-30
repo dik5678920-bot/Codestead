@@ -465,6 +465,61 @@ describe("tutor route durable execution coverage", () => {
     }
   });
 
+  it("still evaluates an active fallback grant after the learner's only key became unhealthy", async () => {
+    state.acceptedPurposes.add("admin_fallback_ai");
+    const fallbackRow = {
+      ...credential,
+      id: FALLBACK_CREDENTIAL_ID,
+      userId: "admin-1",
+      grantId: "fallback-grant-1",
+      learnerId: "learner-1",
+      model: nimPolicy.model,
+      tokenBudget: 2_000,
+      tokensUsed: 0,
+      rupeeBudgetPaise: 10_000,
+      rupeesUsedPaise: 0,
+      inputPaisePerMillionTokens: 100_000,
+      outputPaisePerMillionTokens: 200_000,
+      startsAt: new Date("2026-07-11T00:00:00.000Z"),
+      expiresAt: new Date("2026-07-13T00:00:00.000Z"),
+      isPreferred: false,
+    };
+    // The learner's key was marked rate_limited by the previous request, so the
+    // active-credential query returns nothing.
+    queueExecution({ credentials: [], fallbackRows: [fallbackRow] });
+    mocks.routeTutorRequest.mockImplementationOnce(async (input) => {
+      expect(input.candidates.map((candidate: { source: string; credentialId: string }) =>
+        [candidate.source, candidate.credentialId])).toEqual([["admin_fallback", FALLBACK_CREDENTIAL_ID]]);
+      return providerSuccess(FALLBACK_CREDENTIAL_ID, "admin_fallback");
+    });
+
+    const response = await POST(tutorRequest());
+    expect(await response.json()).not.toMatchObject({ code: "NO_AI_CREDENTIAL" });
+    expect(mocks.routeTutorRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("tries the learner's preferred healthy provider before a lower policy priority number", async () => {
+    state.acceptedPurposes.add("provider:openai");
+    const preferredNim = { ...credential, isPreferred: true };
+    const otherOpenAi = { ...credential, id: "openai-credential", provider: "openai", isPreferred: false };
+    queueExecution({
+      credentials: [preferredNim, otherOpenAi],
+      policies: [
+        { ...nimPolicy, priority: 10 },
+        { ...nimPolicy, id: "policy-openai", provider: "openai", priority: 1 },
+      ],
+    });
+    let routedProviders: string[] = [];
+    mocks.routeTutorRequest.mockImplementationOnce(async (input) => {
+      routedProviders = input.candidates.map((candidate: { provider: string }) => candidate.provider);
+      return providerSuccess();
+    });
+
+    const response = await POST(tutorRequest());
+    expect(routedProviders).toEqual(["nvidia_nim", "openai"]);
+    expect(response.status).toBe(200);
+  });
+
   it("prefers an admin-configured Google policy model over the built-in default", async () => {
     state.acceptedPurposes.add("provider:google");
     mocks.consentPurposeForProvider.mockImplementation((provider) =>
