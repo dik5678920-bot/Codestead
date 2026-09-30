@@ -114,20 +114,25 @@ async function activeActor(client: PoolClient, userId: string): Promise<Actor> {
   return { id: row.id, role: row.role };
 }
 
-function parseCursor(cursor: string | null | undefined): { at: Date; id: string } | null {
+function parseCursor(cursor: string | null | undefined): { at: string; id: string } | null {
   if (!cursor) return null;
   try {
-    const [at, id] = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown[];
-    const date = new Date(String(at));
-    if (!Number.isFinite(date.getTime()) || !UUID.test(String(id))) throw new Error("bad cursor");
-    return { at: date, id: String(id) };
+    const value: unknown = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    if (!Array.isArray(value) || value.length !== 2) throw new Error("bad cursor");
+    const [at, id] = value as unknown[];
+    if (typeof at !== "string" || typeof id !== "string"
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:\d{3})?Z$/.test(at)
+      || !UUID.test(id)) throw new Error("bad cursor");
+    const date = new Date(at);
+    if (!Number.isFinite(date.getTime()) || date.toISOString() !== `${at.slice(0, 23)}Z`) throw new Error("bad cursor");
+    return { at, id };
   } catch {
     throw new CommunityError("INVALID_INPUT");
   }
 }
 
-function cursorFor(at: Date, id: string) {
-  return Buffer.from(JSON.stringify([at.toISOString(), id]), "utf8").toString("base64url");
+function cursorFor(at: string, id: string) {
+  return Buffer.from(JSON.stringify([at, id]), "utf8").toString("base64url");
 }
 
 async function accessibleGroup(client: PoolClient, actor: Actor, groupId: string, lock = false) {
@@ -174,9 +179,10 @@ export async function listCommunity(input: {
     const posts = await client.query<{
       id: string; group_id: string; kind: string; title: string; body: string; state: string;
       row_version: string | number; created_at: Date; edited_at: Date | null; author_alias: string;
-      own: boolean;
+      own: boolean; created_at_token: string;
     }>(
       `select p.id,p.group_id,p.kind,p.title,p.body,p.state,p.row_version,p.created_at,p.edited_at,
+              to_char(p.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as created_at_token,
               case
                 when p.author_user_id = $1 then 'You'
                 when profile.is_published and consent.decision = 'accepted' and consent.policy_version = $7 then profile.alias
@@ -264,7 +270,7 @@ export async function listCommunity(input: {
         })),
       })),
       nextCursor: posts.rows.length > limit && page.at(-1)
-        ? cursorFor(page.at(-1)!.created_at, page.at(-1)!.id)
+        ? cursorFor(page.at(-1)!.created_at_token, page.at(-1)!.id)
         : null,
       moderation: actor.role === "admin",
       privacy: "Posts expose only plain text and an eligible cohort alias. Learning evidence, real names, email, activity, and AI history are never joined.",
