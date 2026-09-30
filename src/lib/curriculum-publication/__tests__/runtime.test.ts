@@ -1,10 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { ContentRepository, type CourseManifest } from "@/lib/content";
+import { REVIEW_DIMENSIONS } from "../contracts";
+import * as curriculumHash from "../hash";
 
 const mocks = vi.hoisted(() => ({ query: vi.fn() }));
 
 vi.mock("@/lib/db/client", () => ({ pool: { query: mocks.query } }));
 
-import { listPublishedExamCourses } from "../runtime";
+import { listPublishedCourseStages, listPublishedExamCourses, loadPublishedExamModule } from "../runtime";
 
 function pointerRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -31,11 +35,60 @@ function pointerRow(overrides: Record<string, unknown> = {}) {
   };
 }
 
+async function reviewedRows(suffix: string) {
+  const repository = new ContentRepository();
+  const original = (await repository.getCourse("programming-foundations"))!;
+  const courseModule = original.modules.find((entry) => entry.id === "pf.computing")!;
+  const skill = courseModule.skills.find((entry) => entry.id === "pf.computing.program")!;
+  const course: CourseManifest = {
+    ...original, id: `reviewed-${suffix}`, status: "beta", modules: [{ ...courseModule, skills: [skill] }],
+    coverage_summary: { required_skills: 1, elective_skills: 0, total_skills: 1, covered: 1, partial: 0, planned: 0 },
+  };
+  const authored = await repository.getAuthoredContentSet();
+  const originalBank = authored.assessmentBanks.find((entry) => entry.skillId === skill.id)!;
+  const bank = {
+    ...originalBank, courseId: course.id,
+    publication: { ...originalBank.publication, stage: "approved" as const, reviewer: {
+      id: "test-human", displayName: "Test Human", kind: "human" as const,
+      reviewedAt: "2026-07-12T07:00:00.000Z", reviewVersion: "1.0.0",
+    } },
+    items: originalBank.items.filter((item) => item.kind === "mcq").map((item) => ({
+      ...item, examEligibility: { eligible: true, rationale: "Independently reviewed deterministic oracle for the runtime fixture." },
+    })),
+  };
+  const artifacts = [
+    { key: `course.${course.id}`, type: "course_manifest", content: course, skillKey: null, itemIds: [`course.${course.id}`] },
+    { key: bank.id, type: "assessment_bank", content: bank, skillKey: skill.id, itemIds: bank.items.map((item) => item.id) },
+  ];
+  const versionHash = curriculumHash.aggregateArtifactHash(artifacts.map((artifact) => ({
+    artifactKey: artifact.key, artifactType: artifact.type, contentHash: curriculumHash.hashCurriculumValue(artifact.content),
+  })));
+  return artifacts.map((artifact) => {
+    const hash = curriculumHash.hashCurriculumValue(artifact.content);
+    return pointerRow({
+      pointer_course_id: `course-${suffix}`, version_course_id: `course-${suffix}`,
+      course_slug: course.id, course_version_id: `version-${suffix}`, course_version: course.version,
+      version_content_hash: versionHash, artifact_key: artifact.key, artifact_type: artifact.type,
+      skill_key: artifact.skillKey, content: artifact.content, content_hash: hash,
+      publication_stage: "draft", review_status: "approved",
+      latest_review: {
+        reviewer_kind: "human", decision: "approved", content_hash: hash, reviewed_item_ids: artifact.itemIds,
+        checklist: Object.fromEntries(REVIEW_DIMENSIONS.map((dimension) => [dimension, {
+          passed: true, evidenceRef: `runtime-test:${dimension}:evidence`,
+          note: `Independent ${dimension} review passed for this fixture.`,
+        }])),
+      },
+    });
+  });
+}
+
 describe("published curriculum runtime fail-closed boundary", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.spyOn(console, "error").mockImplementation(() => undefined);
   });
+
+  afterEach(() => vi.restoreAllMocks());
 
   it("returns no reviewed publications only when no publication pointer exists", async () => {
     mocks.query.mockResolvedValue({ rows: [] });
@@ -72,5 +125,56 @@ describe("published curriculum runtime fail-closed boundary", () => {
     expect(sql).toContain("limit 1");
     expect(sql).not.toMatch(/decision\s*=\s*'approved'/);
     expect(sql).not.toMatch(/reviewer_kind\s*=\s*'human'/);
+  });
+
+  it("skips only the invalid course and preserves both healthy publications and their immutable artifacts", async () => {
+    const first = await reviewedRows("first");
+    const second = await reviewedRows("second");
+    const rows = [...first, pointerRow(), ...second];
+    const before = structuredClone(rows);
+    mocks.query.mockResolvedValue({ rows });
+    const publications = await listPublishedExamCourses();
+    expect(publications.map((entry) => entry.course.id)).toEqual(["reviewed-first", "reviewed-second"]);
+    expect(publications.map((entry) => entry.courseVersionId)).toEqual(["version-first", "version-second"]);
+    expect(publications.every((entry) => entry.assessmentBanks.length === 1)).toBe(true);
+    expect(rows).toEqual(before);
+    expect(console.error).toHaveBeenCalledExactlyOnceWith("Curriculum publication excluded from exams", {
+      courseId: pointerRow().pointer_course_id, courseVersionId: pointerRow().course_version_id,
+      code: "PUBLICATION_POINTER_INVALID",
+    });
+  });
+
+  it("rethrows an unexpected hashing error instead of treating it as a bad publication", async () => {
+    const rows = await reviewedRows("unexpected-error");
+    mocks.query.mockResolvedValue({ rows });
+    const unexpected = new TypeError("Unexpected hashing dependency failure");
+    vi.spyOn(curriculumHash, "hashCurriculumValue").mockImplementationOnce(() => { throw unexpected; });
+    await expect(listPublishedExamCourses()).rejects.toBe(unexpected);
+    expect(console.error).not.toHaveBeenCalled();
+  });
+
+  it("loads the reviewed module with its version-bound course and bank", async () => {
+    const rows = await reviewedRows("module");
+    mocks.query.mockResolvedValue({ rows });
+    await expect(loadPublishedExamModule("pf.computing")).resolves.toMatchObject({
+      courseVersionId: "version-module", course: { id: "reviewed-module" },
+      module: { id: "pf.computing" }, assessmentBanks: [{ courseId: "reviewed-module" }],
+    });
+  });
+
+  it("returns no published module when the requested ID is absent", async () => {
+    mocks.query.mockResolvedValue({ rows: await reviewedRows("missing-module") });
+    await expect(loadPublishedExamModule("pf.missing")).resolves.toBeNull();
+  });
+
+  it("maps pointer-selected beta and verified course stages", async () => {
+    mocks.query.mockResolvedValue({ rows: [{ slug: "beta-course", stage: "beta" }, { slug: "verified-course", stage: "verified" }] });
+    expect(await listPublishedCourseStages()).toEqual(new Map([["beta-course", "beta"], ["verified-course", "verified"]]));
+    expect(mocks.query).toHaveBeenCalledWith(expect.stringContaining("where cv.stage in ('beta', 'verified')"));
+  });
+
+  it("returns an empty stage map when no publication pointers exist", async () => {
+    mocks.query.mockResolvedValue({ rows: [] });
+    expect(await listPublishedCourseStages()).toEqual(new Map());
   });
 });

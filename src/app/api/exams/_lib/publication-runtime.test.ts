@@ -141,7 +141,7 @@ async function stagedPublication(stage: "beta" | "verified" = "beta") {
     }
     if (sql.startsWith("update curriculum_artifact")) { const artifact = artifacts.find((entry) => entry.id === args[0])!; artifact.review_status = "approved"; artifact.row_version++; return result([], 1); }
     if (sql.startsWith("select course_id")) return result([{ course_id: courseId, content_hash: contentHash, stage: currentStage, publication_revision: publicationRevision }]);
-    if (sql.startsWith("select cre.submitted_by") || sql.startsWith("select actor_user_id")) return result();
+    if (sql.startsWith("select cre.submitted_by") || sql.startsWith("select actor_user_id") || sql.startsWith("select course_version_id, actor_user_id")) return result();
     if (sql.startsWith("select coalesce(max(evidence_version)")) return result([{ version: 1 }]);
     if (sql.startsWith("insert into curriculum_release_evidence")) { release = { evidence_version: Number(args[3]), content_hash: String(args[4]), evidence: JSON.parse(String(args[5])), evidence_hash: String(args[6]) }; return result([], 1); }
     if (sql.startsWith("update course_version")) { publicationRevision++; if (sql.includes("set stage")) currentStage = String(args[1]); return result([], 1); }
