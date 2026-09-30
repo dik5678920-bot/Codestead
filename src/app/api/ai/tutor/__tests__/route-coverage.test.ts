@@ -498,6 +498,28 @@ describe("tutor route durable execution coverage", () => {
     expect(mocks.routeTutorRequest).toHaveBeenCalledTimes(1);
   });
 
+  it("tries the learner's preferred healthy provider before a lower policy priority number", async () => {
+    state.acceptedPurposes.add("provider:openai");
+    const preferredNim = { ...credential, isPreferred: true };
+    const otherOpenAi = { ...credential, id: "openai-credential", provider: "openai", isPreferred: false };
+    queueExecution({
+      credentials: [preferredNim, otherOpenAi],
+      policies: [
+        { ...nimPolicy, priority: 10 },
+        { ...nimPolicy, id: "policy-openai", provider: "openai", priority: 1 },
+      ],
+    });
+    let routedProviders: string[] = [];
+    mocks.routeTutorRequest.mockImplementationOnce(async (input) => {
+      routedProviders = input.candidates.map((candidate: { provider: string }) => candidate.provider);
+      return providerSuccess();
+    });
+
+    const response = await POST(tutorRequest());
+    expect(routedProviders).toEqual(["nvidia_nim", "openai"]);
+    expect(response.status).toBe(200);
+  });
+
   it("prefers an admin-configured Google policy model over the built-in default", async () => {
     state.acceptedPurposes.add("provider:google");
     mocks.consentPurposeForProvider.mockImplementation((provider) =>

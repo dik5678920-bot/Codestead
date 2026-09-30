@@ -415,10 +415,20 @@ export async function POST(request: NextRequest) {
         fallbackOutputPaisePerMillionTokens: row.outputPaisePerMillionTokens,
       });
     }
+    const preferredCredentialIds = new Set(
+      ownCredentials.filter((credential) => credential.isPreferred).map((credential) => credential.id),
+    );
     candidates.sort((left, right) => {
       const sourceOrder = Number(left.source === "admin_fallback") -
         Number(right.source === "admin_fallback");
       if (sourceOrder !== 0) return sourceOrder;
+      // Among eligible learner keys, "Prefer this provider when healthy" wins
+      // over admin policy priority; priority only breaks the remaining ties.
+      if (left.source === "learner") {
+        const preferredOrder = Number(preferredCredentialIds.has(right.credentialId)) -
+          Number(preferredCredentialIds.has(left.credentialId));
+        if (preferredOrder !== 0) return preferredOrder;
+      }
       const leftPriority = policyByProviderModel.get(`${left.provider}\u0000${left.model}`)?.priority ?? 999;
       const rightPriority = policyByProviderModel.get(`${right.provider}\u0000${right.model}`)?.priority ?? 999;
       return leftPriority - rightPriority;
