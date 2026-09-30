@@ -3,6 +3,7 @@ import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 import test from "node:test";
 
 import {
@@ -2924,6 +2925,7 @@ function makePoolHarness(options = {}) {
         async connect() {
           generation += 1;
           events.push(`connect:${role}:${generation}`);
+          options.onConnect?.(role, generation);
           if (
             options.connectFailureRole === role
             && (
@@ -3412,18 +3414,47 @@ test("rejects credentials that fail only during post-lock authentication", async
   assert.equal(harness.pools.every((pool) => pool.ended), true);
 });
 
-test("bounds post-lock authentication and destroys a checkout that resolves late", async () => {
+function controlledLateCheckout(context) {
+  context.mock.timers.enable({ apis: ["Date", "setTimeout"], now: 0 });
+  context.mock.method(performance, "now", () => Date.now());
+  let signalCheckoutStarted;
+  const checkoutStarted = new Promise((resolve) => {
+    signalCheckoutStarted = resolve;
+  });
   let releaseConnection = () => undefined;
   const delayedConnection = new Promise((resolve) => {
     releaseConnection = resolve;
   });
+  setTimeout(releaseConnection, 20);
+  return {
+    delayedConnection,
+    onConnect(role, generation) {
+      if (role === "learncoding_worker" && generation === 1) {
+        signalCheckoutStarted();
+      }
+    },
+    async advance() {
+      await checkoutStarted;
+      // Drain setup promises before advancing either clock. The other role
+      // checkouts must finish before the worker's authentication deadline.
+      await new Promise(setImmediate);
+      context.mock.timers.tick(10);
+      // Let authentication fail and cleanup begin before the late checkout.
+      await new Promise(setImmediate);
+      context.mock.timers.tick(10);
+    },
+  };
+}
+
+test("bounds post-lock authentication and destroys a checkout that resolves late", async (context) => {
+  const checkout = controlledLateCheckout(context);
   const harness = makePoolHarness({
+    onConnect: checkout.onConnect,
     connectDeferredByRoleGeneration: new Map([
-      ["learncoding_worker:1", delayedConnection],
+      ["learncoding_worker:1", checkout.delayedConnection],
     ]),
   });
-  setTimeout(releaseConnection, 20);
-  await assert.rejects(
+  const rejection = assert.rejects(
     verifyDatabaseRoleBoundaries({
       ...validInput(),
       authenticationTimeoutMs: 10,
@@ -3435,6 +3466,8 @@ test("bounds post-lock authentication and destroys a checkout that resolves late
       message: /post-lock-authentication-timeout/u,
     },
   );
+  await checkout.advance();
+  await rejection;
   assert.equal(
     harness.events.some((event) => event.startsWith("role-probe:")),
     false,
@@ -3447,22 +3480,19 @@ test("bounds post-lock authentication and destroys a checkout that resolves late
   assert.equal(harness.pools.every((pool) => pool.ended), true);
 });
 
-test("preserves the authentication timeout and reports late checkout cleanup failure", async () => {
-  let releaseConnection = () => undefined;
-  const delayedConnection = new Promise((resolve) => {
-    releaseConnection = resolve;
-  });
+test("preserves the authentication timeout and reports late checkout cleanup failure", async (context) => {
+  const checkout = controlledLateCheckout(context);
   const lateReleaseFailure = new Error("late checkout release failure");
   const harness = makePoolHarness({
+    onConnect: checkout.onConnect,
     connectDeferredByRoleGeneration: new Map([
-      ["learncoding_worker:1", delayedConnection],
+      ["learncoding_worker:1", checkout.delayedConnection],
     ]),
     releaseFailureByRole: new Map([
       ["learncoding_worker", lateReleaseFailure],
     ]),
   });
-  setTimeout(releaseConnection, 20);
-  const outcome = await captureRejection(() =>
+  const outcomePromise = captureRejection(() =>
     verifyDatabaseRoleBoundaries({
       ...validInput(),
       authenticationTimeoutMs: 10,
@@ -3470,6 +3500,8 @@ test("preserves the authentication timeout and reports late checkout cleanup fai
       lockTimeoutMs: 50,
     })
   );
+  await checkout.advance();
+  const outcome = await outcomePromise;
   assert.equal(outcome.rejected, true);
   assert.ok(outcome.reason instanceof DatabaseRoleBoundaryError);
   assert.match(outcome.reason.message, /post-lock-authentication-timeout/u);
