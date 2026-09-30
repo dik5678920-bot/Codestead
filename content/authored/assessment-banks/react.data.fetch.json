@@ -191,7 +191,7 @@
           "id": "react.data.fetch.browser.hidden",
           "visibility": "hidden",
           "category": "boundary",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"latest mounted request commits success\",\n      \"expression\": \"document.querySelector('article h2').textContent\",\n      \"expected\": \"Async JavaScript\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 50\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"latest mounted request commits success\",\n      \"expression\": \"document.querySelector('article h2').textContent\",\n      \"expected\": \"Async JavaScript\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"document.querySelector('article h2')!==null\",\n      \"milliseconds\": 5000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true

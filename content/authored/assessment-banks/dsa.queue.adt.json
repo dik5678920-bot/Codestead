@@ -325,7 +325,7 @@
         "engine": "isolated-runner",
         "language": "java",
         "version": "openjdk version \"21.0.11\" 2026-04-21 LTS",
-        "imageDigest": "sha256:5c4f1258ef57aa5c120834e00b3af1b019c05a1f8bdf67a3b5e66c5747bf95b4",
+        "imageDigest": "sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9",
         "entrypoint": "Main.java",
         "timeLimitMs": 3000,
         "memoryLimitMb": 128

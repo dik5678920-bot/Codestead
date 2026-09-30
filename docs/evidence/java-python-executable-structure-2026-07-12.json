@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-24T13:32:17.750Z",
+  "generatedAt": "2026-09-30T15:10:26.754Z",
   "scope": "Programming Foundations, Java 21 and Python 3.14 authored code-task pinned-runtime evidence",
   "status": "structure-only",
   "counts": {
@@ -18,7 +18,7 @@
   "imageEvidence": {
     "java": {
       "tag": "learncoding/runtime-java:local",
-      "manifestDigest": "sha256:5c4f1258ef57aa5c120834e00b3af1b019c05a1f8bdf67a3b5e66c5747bf95b4",
+      "manifestDigest": "sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9",
       "configDigest": null,
       "immutableReference": null,
       "tagDescriptorDigest": null,

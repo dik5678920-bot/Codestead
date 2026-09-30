@@ -183,7 +183,7 @@
           "id": "react.testing.queries.browser.visible",
           "visibility": "visible",
           "category": "normal",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"test entrypoint records accessible role/name query evidence\",\n      \"expression\": \"globalThis.__testError===undefined && globalThis.__testResults?.includes('role-name-query') && globalThis.__testResults?.includes('realistic-click')\",\n      \"expected\": true\n    }\n  ],\n  \"entrypoint\": \"test\",\n  \"actions\": [\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 500\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"test entrypoint records accessible role/name query evidence\",\n      \"expression\": \"globalThis.__testError===undefined && globalThis.__testResults?.includes('role-name-query') && globalThis.__testResults?.includes('realistic-click')\",\n      \"expected\": true\n    }\n  ],\n  \"entrypoint\": \"test\",\n  \"actions\": [\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"globalThis.__testResults!==undefined || globalThis.__testError!==undefined\",\n      \"milliseconds\": 10000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true
@@ -192,7 +192,7 @@
           "id": "react.testing.queries.browser.hidden",
           "visibility": "hidden",
           "category": "boundary",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"query evidence remains deterministic on a second isolated run\",\n      \"expression\": \"globalThis.__testError===undefined && globalThis.__testResults?.filter(value=>value==='role-name-query').length===1\",\n      \"expected\": true\n    }\n  ],\n  \"entrypoint\": \"test\",\n  \"actions\": [\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 500\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"query evidence remains deterministic on a second isolated run\",\n      \"expression\": \"globalThis.__testError===undefined && globalThis.__testResults?.filter(value=>value==='role-name-query').length===1\",\n      \"expected\": true\n    }\n  ],\n  \"entrypoint\": \"test\",\n  \"actions\": [\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"globalThis.__testResults!==undefined || globalThis.__testError!==undefined\",\n      \"milliseconds\": 10000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true

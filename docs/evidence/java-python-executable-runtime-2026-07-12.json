@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-25T12:35:35.485Z",
+  "generatedAt": "2026-09-30T14:52:22.633Z",
   "scope": "Programming Foundations, Java 21 and Python 3.14 authored code-task pinned-runtime evidence",
   "status": "verified",
   "counts": {
@@ -18,13 +18,13 @@
   "imageEvidence": {
     "java": {
       "tag": "learncoding/runtime-java:local",
-      "manifestDigest": "sha256:5c4f1258ef57aa5c120834e00b3af1b019c05a1f8bdf67a3b5e66c5747bf95b4",
-      "configDigest": "sha256:4fc9633318c3542c2a1af2907248db4bd022182f40937890a677e603ed34d901",
-      "immutableReference": "learncoding/runtime-java@sha256:5c4f1258ef57aa5c120834e00b3af1b019c05a1f8bdf67a3b5e66c5747bf95b4",
-      "tagDescriptorDigest": "sha256:5c4f1258ef57aa5c120834e00b3af1b019c05a1f8bdf67a3b5e66c5747bf95b4",
-      "tagImageId": "sha256:5c4f1258ef57aa5c120834e00b3af1b019c05a1f8bdf67a3b5e66c5747bf95b4",
-      "exactReferenceDescriptorDigest": "sha256:5c4f1258ef57aa5c120834e00b3af1b019c05a1f8bdf67a3b5e66c5747bf95b4",
-      "exactReferenceImageId": "sha256:5c4f1258ef57aa5c120834e00b3af1b019c05a1f8bdf67a3b5e66c5747bf95b4",
+      "manifestDigest": "sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9",
+      "configDigest": "sha256:d5580ba4f6008da7176c2deb93c6d4ad6f79f3ee536967cbd2bb4ae3fa519f5d",
+      "immutableReference": "learncoding/runtime-java@sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9",
+      "tagDescriptorDigest": "sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9",
+      "tagImageId": "sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9",
+      "exactReferenceDescriptorDigest": "sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9",
+      "exactReferenceImageId": "sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9",
       "independentlyValidated": true
     },
     "python": {

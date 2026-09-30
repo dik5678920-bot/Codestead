@@ -107,23 +107,23 @@
         "reports": [
           {
             "path": "docs/evidence/dsa-parity-runtime-2026-07-12.json",
-            "sha256": "ec0678d22d8ce891f908355c39ab183dc9d31c439faabb7858e069d5685bc004"
+            "sha256": "51c68217a4ebac8cca598f3fc217541ae8eb0c2389203e73fccf7a30391bf731"
           },
           {
             "path": "docs/evidence/c-cpp-executable-runtime-2026-07-12.json",
-            "sha256": "dd627c80bb43c5a7006b70594e2cc3e5416ea76f723b82287c089d0286943bd1"
+            "sha256": "6b06b8097b7a76b83f9624372bc8723886202d7dc7615bb6f007688b3bf5e64e"
           },
           {
             "path": "docs/evidence/java-python-executable-runtime-2026-07-12.json",
-            "sha256": "42d3dd421fffccc7ecb2550a0c6e7b1107b7395a2d0dac928bcf113cc6055719"
+            "sha256": "c7bd35567e4eae3276c4c479f514f1185fb3c1c158ba84c3ce3c5ce68277558a"
           },
           {
             "path": "docs/evidence/ai-code-executable-runtime-2026-07-12.json",
-            "sha256": "8059b412d64e987ad2d3a8ec85b2daeaf8e30483e9da4f103c4f5e8253bb78a6"
+            "sha256": "bfee38b92e8d9ca95a9d8f3e670b0ec7c7885a05dfd364110fc0682b0bfc30f1"
           },
           {
             "path": "docs/evidence/web-executable-runtime-2026-07-12.json",
-            "sha256": "411c878eab31f871897b398364c592d5d4804c6d703661c5dce7ff042c9d8283"
+            "sha256": "217b935c3c6c5626f95a3fa46a1ddcfbaead926c1ef43a6bb8a9a7ac6eb962ab"
           }
         ]
       }

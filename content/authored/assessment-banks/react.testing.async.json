@@ -182,7 +182,7 @@
           "id": "react.testing.async.browser.visible",
           "visibility": "visible",
           "category": "normal",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"test suite waits for success, failure and empty async states\",\n      \"expression\": \"globalThis.__testError===undefined && ['async-state','async-error','async-empty'].every(value=>globalThis.__testResults?.includes(value))\",\n      \"expected\": true\n    }\n  ],\n  \"entrypoint\": \"test\",\n  \"actions\": [\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 500\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"test suite waits for success, failure and empty async states\",\n      \"expression\": \"globalThis.__testError===undefined && ['async-state','async-error','async-empty'].every(value=>globalThis.__testResults?.includes(value))\",\n      \"expected\": true\n    }\n  ],\n  \"entrypoint\": \"test\",\n  \"actions\": [\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"globalThis.__testResults!==undefined || globalThis.__testError!==undefined\",\n      \"milliseconds\": 10000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true
@@ -191,7 +191,7 @@
           "id": "react.testing.async.browser.hidden",
           "visibility": "hidden",
           "category": "boundary",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"async success completes before route assertion publication\",\n      \"expression\": \"globalThis.__testResults?.indexOf('async-state') < globalThis.__testResults?.indexOf('route-param')\",\n      \"expected\": true\n    }\n  ],\n  \"entrypoint\": \"test\",\n  \"actions\": [\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 500\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"async success completes before route assertion publication\",\n      \"expression\": \"globalThis.__testResults?.indexOf('async-state') < globalThis.__testResults?.indexOf('route-param')\",\n      \"expected\": true\n    }\n  ],\n  \"entrypoint\": \"test\",\n  \"actions\": [\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"globalThis.__testResults!==undefined || globalThis.__testError!==undefined\",\n      \"milliseconds\": 10000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true

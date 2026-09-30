@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-24T13:32:15.954Z",
+  "generatedAt": "2026-09-30T15:10:24.904Z",
   "structure": {
     "skillCount": 60,
     "itemCount": 240,
@@ -9,7 +9,7 @@
     "imageDigests": {
       "c": "sha256:d7c380a5503525ee45c36dc7fc8d68552ab0de218ff7cdc0fb974f4b718f67ad",
       "cpp": "sha256:a2e77836bf601f9940e267957521b78c0997d0eef21c12c49c888eb665dbe7dc",
-      "java": "sha256:5c4f1258ef57aa5c120834e00b3af1b019c05a1f8bdf67a3b5e66c5747bf95b4",
+      "java": "sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9",
       "python": "sha256:88f730d23862355b931c7784f8b98e794de49807828785bfef08de70dc6b27cb"
     }
   },
@@ -45,7 +45,7 @@
     },
     "java": {
       "tag": "learncoding/runtime-java:local",
-      "manifestDigest": "sha256:5c4f1258ef57aa5c120834e00b3af1b019c05a1f8bdf67a3b5e66c5747bf95b4",
+      "manifestDigest": "sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9",
       "configDigest": null,
       "immutableReference": null,
       "tagDescriptorDigest": null,

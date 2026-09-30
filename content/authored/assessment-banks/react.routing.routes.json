@@ -183,7 +183,7 @@
           "id": "react.routing.routes.browser.visible",
           "visibility": "visible",
           "category": "normal",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"Projects link changes the browser path and rendered route\",\n      \"expression\": \"location.pathname==='/projects' && document.querySelector('main h1')?.textContent==='Projects'\",\n      \"expected\": true\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"click\",\n      \"selector\": \"a[href='/projects']\"\n    },\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 50\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"Projects link changes the browser path and rendered route\",\n      \"expression\": \"location.pathname==='/projects' && document.querySelector('main h1')?.textContent==='Projects'\",\n      \"expected\": true\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"click\",\n      \"selector\": \"a[href='/projects']\"\n    },\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"location.pathname==='/projects' && document.querySelector('main h1')!==null && !document.body.textContent.includes('Loading')\",\n      \"milliseconds\": 5000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true
@@ -192,7 +192,7 @@
           "id": "react.routing.routes.browser.hidden",
           "visibility": "hidden",
           "category": "boundary",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"direct nested route renders through the same route tree\",\n      \"expression\": \"location.pathname==='/projects/compiler-visualizer' && document.body.textContent.includes('Project compiler-visualizer')\",\n      \"expected\": true\n    }\n  ],\n  \"url\": \"https://learncoding.test/projects/compiler-visualizer\",\n  \"actions\": [\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 30\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"direct nested route renders through the same route tree\",\n      \"expression\": \"location.pathname==='/projects/compiler-visualizer' && document.body.textContent.includes('Project compiler-visualizer')\",\n      \"expected\": true\n    }\n  ],\n  \"url\": \"https://learncoding.test/projects/compiler-visualizer\",\n  \"actions\": [\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"document.querySelector('main h1')!==null && !document.body.textContent.includes('Loading')\",\n      \"milliseconds\": 5000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true

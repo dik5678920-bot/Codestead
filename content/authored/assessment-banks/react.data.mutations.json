@@ -192,7 +192,7 @@
           "id": "react.data.mutations.browser.hidden",
           "visibility": "hidden",
           "category": "boundary",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"completed mutation restores action and announces result\",\n      \"expression\": \"document.querySelector('button').disabled===false && document.querySelector('output').textContent==='Saved'\",\n      \"expected\": true\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"click\",\n      \"selector\": \"button\"\n    },\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 5\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"completed mutation restores action and announces result\",\n      \"expression\": \"document.querySelector('button').disabled===false && document.querySelector('output').textContent==='Saved'\",\n      \"expected\": true\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"click\",\n      \"selector\": \"button\"\n    },\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"document.querySelector('button').textContent==='Save' && document.querySelector('output').textContent!==''\",\n      \"milliseconds\": 5000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true
