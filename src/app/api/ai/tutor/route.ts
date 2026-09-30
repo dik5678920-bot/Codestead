@@ -20,6 +20,7 @@ import { routeTutorRequest, type ProviderCandidate } from "@/lib/ai/router";
 import {
   loadMentorRecommendation,
   loadTutorStructuredMemory,
+  loadTutorThreadTail,
   sanitizeTutorMemoryText,
 } from "@/lib/ai/tutor-memory";
 import {
@@ -501,9 +502,14 @@ export async function POST(request: NextRequest) {
         learnerGoals: profile?.learningGoals ?? [],
         selectedTracks: profile?.selectedTracks ?? [],
         learningPreferences,
+        // Same bounded owner-active tail as lesson chat; the thread was
+        // ownership-checked above, and the query re-binds the owner.
+        selectedThreadTail: requestedThreadId
+          ? await loadTutorThreadTail({ userId: authz.session.user.id, threadId: requestedThreadId })
+          : null,
       };
       messages = buildGeneralTutorMessages(generalContext, learnerMessage.text);
-      tutorContextManifest = generalContextManifest();
+      tutorContextManifest = generalContextManifest(generalContext);
     }
     const routed = await routeTutorRequest({
       learnerId: authz.session.user.id,

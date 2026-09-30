@@ -29,7 +29,7 @@
       "file": "src/lib/community/service.ts",
       "purpose": "closed-cohort group visibility and author-owned community mutations",
       "anchors": 4,
-      "sourceSha256": "747ae036466b3c626fd116ed97d35ffb20e95001b440e82b2432a700ef2ef050"
+      "sourceSha256": "1101b2cc6787fa860c6019f9395b52713d94c3b2b5e16f38f51cb5972e920c0e"
     },
     {
       "file": "src/app/api/exams/_lib/service.ts",
@@ -113,7 +113,7 @@
       "file": "src/lib/ai/tutor-memory.ts",
       "purpose": "bounded learner-owned tutor structured memory",
       "anchors": 4,
-      "sourceSha256": "234e6755cebad6ea78a237fae4058ece4a9c78de0a133b4af0b19c3771bd8032"
+      "sourceSha256": "2966e051c1a7a6773fd8b4d43e93fe2e41d70e28d50c96e00d28b66cf2d37548"
     },
     {
       "file": "src/lib/ai/provider-credential-outcome.ts",
@@ -1019,7 +1019,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by eq(chatThread.userId, authz.session.user.id)",
-      "operationSourceSha256": "52b44471728f8eef569f7f967342d1693b7a504fb3bad8427cb5582eb0397ed8"
+      "operationSourceSha256": "fae9e2f9eb6993fb4a4e6d92f4cb0b04536d46cb91826ae57a69b129bb9c9b19"
     },
     {
       "operation": "GET /api/auth/[...all]",
@@ -1175,7 +1175,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by actorUserId: authz.session.user.id",
-      "operationSourceSha256": "94d6ed5a83959a6b2fb6320186dad5d5e5839d31255f9a0209d7cc548f8159e9"
+      "operationSourceSha256": "e4fb0169adf045c86ea2c3ee83650c39cfdedbc46a5cc8ab6fa8b7d5e2ca845a"
     },
     {
       "operation": "POST /api/community/discussions",
@@ -2218,7 +2218,7 @@
       "operationSourceSha256": "b88f55f3a91e588c90d93419fbf944eba9e0f64f9fd6a5ab3e2f9a003ce2ccd8"
     }
   ],
-  "generatedAt": "2026-09-30T13:31:18.783Z",
+  "generatedAt": "2026-09-30T14:47:46.667Z",
   "scope": "Complete static role/object-authorization source inventory. The endpoint sweep verifies guard invocation, while authz.test.ts verifies real guard decisions and runtime-authorization.integration.test.ts behaviorally covers a representative owner-bound route set. This report alone is not runtime cross-user proof, deployed proxy/browser evidence, or PostgreSQL RLS evidence.",
   "runtimeVerification": {
     "guardInvocationTest": "src/lib/security/__tests__/endpoint-auth-boundaries.test.ts",

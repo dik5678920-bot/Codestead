@@ -56,8 +56,12 @@ export async function GET(request: NextRequest) {
     async () => {
       const groupId = request.nextUrl.searchParams.get("groupId");
       const cursor = request.nextUrl.searchParams.get("cursor");
+      const postId = request.nextUrl.searchParams.get("postId");
+      const replyCursor = request.nextUrl.searchParams.get("replyCursor");
       const parsedLimit = Number(request.nextUrl.searchParams.get("limit") ?? 20);
-      if ((groupId && !z.uuid().safeParse(groupId).success) || !Number.isSafeInteger(parsedLimit)) {
+      if ((groupId && !z.uuid().safeParse(groupId).success)
+        || (postId && !z.uuid().safeParse(postId).success)
+        || (replyCursor && !postId) || !Number.isSafeInteger(parsedLimit)) {
         return NextResponse.json({ error: "Invalid community page." }, { status: 400, headers });
       }
       try {
@@ -65,6 +69,8 @@ export async function GET(request: NextRequest) {
           actorUserId: authz.session.user.id,
           groupId,
           cursor,
+          postId,
+          replyCursor,
           limit: parsedLimit,
         }), { headers });
       } catch (error) {

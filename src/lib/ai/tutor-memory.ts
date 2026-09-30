@@ -208,6 +208,40 @@ function projectTail(threadId: string, rows: readonly TailRow[]) {
   };
 }
 
+/** Newest-first bounded tail of one thread, readable only by its owner while active. */
+function queryOwnerActiveTail(userId: string, threadId: string) {
+  return pool.query<TailRow>(
+    `select m.id,m.role,left(m.content,$3) content,
+            char_length(m.content)::integer content_length,m.created_at
+       from chat_message m
+       join chat_thread t on t.id = m.thread_id
+      where t.id = $1 and t.user_id = $2 and t.status = 'active'
+        and m.role in ('user','assistant')
+      order by m.created_at desc,m.id desc
+      limit $4`,
+    [
+      threadId,
+      userId,
+      TUTOR_MEMORY_LIMITS.threadMessageChars + 1,
+      TUTOR_MEMORY_LIMITS.threadMessages + 1,
+    ],
+  );
+}
+
+/**
+ * The same bounded, sanitized owner-active tail the lesson tutor receives, for
+ * general (no-lesson) chat, so the model sees the turns the learner sees.
+ */
+export async function loadTutorThreadTail(input: {
+  readonly userId: string;
+  readonly threadId: string;
+}): Promise<TutorStructuredMemory["selectedThreadTail"]> {
+  if (!input.userId || input.userId.length > 200) throw new Error("Tutor memory request is invalid.");
+  if (!UUID_PATTERN.test(input.threadId)) throw new Error("Tutor memory thread is invalid.");
+  const result = await queryOwnerActiveTail(input.userId, input.threadId);
+  return result.rows.length > 0 ? projectTail(input.threadId, result.rows) : null;
+}
+
 export async function loadTutorStructuredMemory(input: {
   readonly userId: string;
   readonly skillId: string;
@@ -251,22 +285,7 @@ export async function loadTutorStructuredMemory(input: {
       [input.userId],
     ),
     input.selectedThreadId
-      ? pool.query<TailRow>(
-          `select m.id,m.role,left(m.content,$3) content,
-                  char_length(m.content)::integer content_length,m.created_at
-             from chat_message m
-             join chat_thread t on t.id = m.thread_id
-            where t.id = $1 and t.user_id = $2 and t.status = 'active'
-              and m.role in ('user','assistant')
-            order by m.created_at desc,m.id desc
-            limit $4`,
-          [
-            input.selectedThreadId,
-            input.userId,
-            TUTOR_MEMORY_LIMITS.threadMessageChars + 1,
-            TUTOR_MEMORY_LIMITS.threadMessages + 1,
-          ],
-        )
+      ? queryOwnerActiveTail(input.userId, input.selectedThreadId)
       : Promise.resolve({ rows: [] as TailRow[] }),
   ]);
 

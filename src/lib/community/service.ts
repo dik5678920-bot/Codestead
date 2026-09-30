@@ -27,6 +27,7 @@ type Actor = { id: string; role: "admin" | "learner" };
 type CommunityReplyRow = {
   id: string; post_id: string; body: string; state: string; row_version: string | number;
   created_at: Date; edited_at: Date | null; author_alias: string; own: boolean;
+  created_at_token: string;
 };
 
 function plainText(value: string, minimum: number, maximum: number): string {
@@ -114,20 +115,26 @@ async function activeActor(client: PoolClient, userId: string): Promise<Actor> {
   return { id: row.id, role: row.role };
 }
 
-function parseCursor(cursor: string | null | undefined): { at: Date; id: string } | null {
+function parseCursor(cursor: string | null | undefined, postId?: string): { at: string; id: string } | null {
   if (!cursor) return null;
   try {
-    const [at, id] = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown[];
-    const date = new Date(String(at));
-    if (!Number.isFinite(date.getTime()) || !UUID.test(String(id))) throw new Error("bad cursor");
-    return { at: date, id: String(id) };
+    const value: unknown = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    if (!Array.isArray(value) || value.length !== (postId ? 3 : 2)
+      || (postId && value[2] !== postId)) throw new Error("bad cursor");
+    const [at, id] = value as unknown[];
+    if (typeof at !== "string" || typeof id !== "string"
+      || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:\d{3})?Z$/.test(at)
+      || !UUID.test(id)) throw new Error("bad cursor");
+    const date = new Date(at);
+    if (!Number.isFinite(date.getTime()) || date.toISOString() !== `${at.slice(0, 23)}Z`) throw new Error("bad cursor");
+    return { at, id };
   } catch {
     throw new CommunityError("INVALID_INPUT");
   }
 }
 
-function cursorFor(at: Date, id: string) {
-  return Buffer.from(JSON.stringify([at.toISOString(), id]), "utf8").toString("base64url");
+function cursorFor(at: string, id: string, postId?: string) {
+  return Buffer.from(JSON.stringify(postId ? [at, id, postId] : [at, id]), "utf8").toString("base64url");
 }
 
 async function accessibleGroup(client: PoolClient, actor: Actor, groupId: string, lock = false) {
@@ -152,9 +159,14 @@ export async function listCommunity(input: {
   groupId?: string | null;
   cursor?: string | null;
   limit?: number;
+  postId?: string | null;
+  replyCursor?: string | null;
 }) {
   const limit = Math.min(50, Math.max(1, Math.trunc(input.limit ?? 20)));
   const cursor = parseCursor(input.cursor);
+  if (input.postId && !UUID.test(input.postId)) throw new CommunityError("INVALID_INPUT");
+  if (input.replyCursor && !input.postId) throw new CommunityError("INVALID_INPUT");
+  const replyCursor = parseCursor(input.replyCursor, input.postId ?? undefined);
   const client = await pool.connect();
   try {
     const actor = await activeActor(client, input.actorUserId);
@@ -174,9 +186,10 @@ export async function listCommunity(input: {
     const posts = await client.query<{
       id: string; group_id: string; kind: string; title: string; body: string; state: string;
       row_version: string | number; created_at: Date; edited_at: Date | null; author_alias: string;
-      own: boolean;
+      own: boolean; created_at_token: string;
     }>(
       `select p.id,p.group_id,p.kind,p.title,p.body,p.state,p.row_version,p.created_at,p.edited_at,
+              to_char(p.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as created_at_token,
               case
                 when p.author_user_id = $1 then 'You'
                 when profile.is_published and consent.decision = 'accepted' and consent.policy_version = $7 then profile.alias
@@ -193,11 +206,12 @@ export async function listCommunity(input: {
             order by c.occurred_at desc,c.created_at desc,c.id desc limit 1
          ) consent on true
         where ($2::uuid is null or p.group_id = $2)
+          and ($8::uuid is null or p.id = $8)
           and ($3 = 'admin' or g.visibility = 'cohort' or member.user_id is not null)
           and ($3 = 'admin' or p.state = 'active')
           and ($4::timestamptz is null or (p.created_at,p.id) < ($4,$5::uuid))
         order by p.created_at desc,p.id desc limit $6`,
-      [actor.id, input.groupId ?? null, actor.role, cursor?.at ?? null, cursor?.id ?? null, limit + 1, ENROLLMENT_DISCLOSURE_VERSION],
+      [actor.id, input.groupId ?? null, actor.role, cursor?.at ?? null, cursor?.id ?? null, limit + 1, ENROLLMENT_DISCLOSURE_VERSION, input.postId ?? null],
     );
     const page = posts.rows.slice(0, limit);
     const postIds = page.map((row) => row.id);
@@ -205,6 +219,7 @@ export async function listCommunity(input: {
       ? (await client.query<CommunityReplyRow>(
           `select * from (
              select r.id,r.post_id,r.body,r.state,r.row_version,r.created_at,r.edited_at,
+                    to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as created_at_token,
                     case
                       when r.author_user_id = $1 then 'You'
                       when profile.is_published and consent.decision = 'accepted' and consent.policy_version = $4 then profile.alias
@@ -220,8 +235,9 @@ export async function listCommunity(input: {
                   order by c.occurred_at desc,c.created_at desc,c.id desc limit 1
                ) consent on true
               where r.post_id = any($2::uuid[]) and ($3 = 'admin' or r.state = 'active')
-           ) ranked where reply_rank <= 20 order by post_id,created_at,id`,
-          [actor.id, postIds, actor.role, ENROLLMENT_DISCLOSURE_VERSION],
+                and ($5::timestamptz is null or (r.created_at,r.id) > ($5,$6::uuid))
+           ) ranked where reply_rank <= 21 order by post_id,created_at,id`,
+          [actor.id, postIds, actor.role, ENROLLMENT_DISCLOSURE_VERSION, replyCursor?.at ?? null, replyCursor?.id ?? null],
         )).rows
       : [];
     const repliesByPost = new Map<string, CommunityReplyRow[]>();
@@ -252,7 +268,10 @@ export async function listCommunity(input: {
         editedAt: post.edited_at?.toISOString() ?? null,
         authorAlias: post.author_alias,
         own: post.own,
-        replies: (repliesByPost.get(post.id) ?? []).map((reply) => ({
+        replyNextCursor: (repliesByPost.get(post.id)?.length ?? 0) > 20
+          ? cursorFor(repliesByPost.get(post.id)![19].created_at_token, repliesByPost.get(post.id)![19].id, post.id)
+          : null,
+        replies: (repliesByPost.get(post.id) ?? []).slice(0, 20).map((reply) => ({
           id: reply.id,
           body: reply.body,
           state: reply.state,
@@ -264,7 +283,7 @@ export async function listCommunity(input: {
         })),
       })),
       nextCursor: posts.rows.length > limit && page.at(-1)
-        ? cursorFor(page.at(-1)!.created_at, page.at(-1)!.id)
+        ? cursorFor(page.at(-1)!.created_at_token, page.at(-1)!.id)
         : null,
       moderation: actor.role === "admin",
       privacy: "Posts expose only plain text and an eligible cohort alias. Learning evidence, real names, email, activity, and AI history are never joined.",
