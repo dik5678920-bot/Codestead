@@ -182,7 +182,7 @@
           "id": "react.effects.cleanup.browser.visible",
           "visibility": "visible",
           "category": "normal",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"mounted listener responds once\",\n      \"expression\": \"(window.dispatchEvent(new Event('course-refresh')),true)\",\n      \"expected\": true\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 1\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"mounted listener responds once\",\n      \"expression\": \"(window.dispatchEvent(new Event('course-refresh')),true)\",\n      \"expected\": true\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"document.querySelector('output')!==null\",\n      \"milliseconds\": 5000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true

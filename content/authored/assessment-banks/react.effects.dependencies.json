@@ -182,7 +182,7 @@
           "id": "react.effects.dependencies.browser.visible",
           "visibility": "visible",
           "category": "normal",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"initial dependency synchronizes document title\",\n      \"expression\": \"document.title\",\n      \"expected\": \"Topic: HTML\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 20\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"initial dependency synchronizes document title\",\n      \"expression\": \"document.title\",\n      \"expected\": \"Topic: HTML\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"document.title.startsWith('Topic: ')\",\n      \"milliseconds\": 5000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true
@@ -191,7 +191,7 @@
           "id": "react.effects.dependencies.browser.hidden",
           "visibility": "hidden",
           "category": "boundary",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"changed dependency synchronizes new title\",\n      \"expression\": \"document.title\",\n      \"expected\": \"Topic: CSS\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"fill\",\n      \"selector\": \"input\",\n      \"value\": \"CSS\"\n    },\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 20\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"changed dependency synchronizes new title\",\n      \"expression\": \"document.title\",\n      \"expected\": \"Topic: CSS\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"fill\",\n      \"selector\": \"input\",\n      \"value\": \"CSS\"\n    },\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"document.title.startsWith('Topic: ') && document.title!=='Topic: HTML'\",\n      \"milliseconds\": 5000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true

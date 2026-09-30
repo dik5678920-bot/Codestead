@@ -453,6 +453,15 @@ async function executeBrowser(args: {
       const bundle = await bundleReact(item.answer.referenceSolution, reactBundles, testCase.entrypoint ?? "app");
       if (bundle.css) await page.addStyleTag({ content: bundle.css });
       await page.addScriptTag({ content: bundle.script });
+      if ((testCase.entrypoint ?? "app") === "app") {
+        // createRoot().render() commits asynchronously; wait (bounded) for the
+        // first commit so no assertion or action races the initial render.
+        await page.waitForFunction(
+          () => (document.getElementById("root")?.childElementCount ?? 1) > 0,
+          undefined,
+          { timeout: 5_000 },
+        );
+      }
     }
     await page.waitForTimeout(1);
     await applyActions(page, testCase);
