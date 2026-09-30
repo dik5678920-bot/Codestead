@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -110,6 +110,63 @@ describe("community spaces UI boundaries", () => {
     vi.restoreAllMocks();
     installMatchMedia(false);
     installFetch();
+  });
+
+  it.each(["feed", "append", "error"] as const)("ignores a late group A %s after selecting group B", async (kind) => {
+    const user = userEvent.setup();
+    const otherGroup = { ...discussion.groups[0]!, id: "cc000000-0000-4000-8000-000000000007", name: "Group B" };
+    const groups = [...discussion.groups, otherGroup];
+    const initial = { ...discussion, groups, nextCursor: "cursor-A" };
+    const groupB = { ...initial, posts: [{ ...discussion.posts[0]!, id: "post-B", groupId: otherGroup.id, title: "Group B conversation" }], nextCursor: "cursor-B" };
+    let resolveA!: (response: Response) => void;
+    const requested: URL[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(String(input), "https://learn.test");
+      if (url.pathname === "/api/battles") return Response.json(battles);
+      if (url.pathname === "/api/community/discussions") {
+        requested.push(url);
+        if (!url.searchParams.has("groupId")) return Response.json(initial);
+        if (url.searchParams.get("groupId") === groupId) return new Promise<Response>((resolve) => { resolveA = resolve; });
+        return Response.json(groupB);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+    render(<CommunitySpaces people={[]} />);
+    await screen.findByText("Why does assignment point left?");
+    if (kind === "append") await user.click(screen.getByRole("button", { name: "Load older conversations" }));
+    else await user.click(screen.getByRole("button", { name: /Python pod/ }));
+    await user.click(screen.getByRole("button", { name: /Group B/ }));
+    await screen.findByText("Group B conversation");
+    await act(async () => {
+      resolveA(kind === "error" ? Response.json({ error: "Old group error" }, { status: 503 })
+        : Response.json({ ...initial, nextCursor: "late-A-cursor" }));
+    });
+    expect(screen.getByText("Group B conversation")).toBeInTheDocument();
+    expect(screen.queryByText("Old group error")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Load older conversations" }));
+    expect(requested.at(-1)?.searchParams.get("groupId")).toBe(otherGroup.id);
+    expect(requested.at(-1)?.searchParams.get("cursor")).toBe("cursor-B");
+  });
+
+  it("does not append the same page twice after repeated load-older clicks", async () => {
+    const user = userEvent.setup();
+    const responses: Array<(response: Response) => void> = [];
+    const older = { ...discussion, posts: [{ ...discussion.posts[0]!, id: "older-post", title: "Unique older post" }] };
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/battles") return Response.json(battles);
+      if (url.startsWith("/api/community/discussions")) {
+        if (url.includes("cursor=")) return new Promise<Response>((resolve) => { responses.push(resolve); });
+        return Response.json({ ...discussion, nextCursor: "older-page" });
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+    render(<CommunitySpaces people={[]} />);
+    await screen.findByText("Why does assignment point left?");
+    await user.dblClick(screen.getByRole("button", { name: "Load older conversations" }));
+    expect(responses.length).toBeGreaterThan(0);
+    await act(async () => { for (const resolve of responses) resolve(Response.json(older)); });
+    expect(screen.getAllByText("Unique older post")).toHaveLength(1);
   });
 
   it("loads the remaining five replies after the oldest twenty", async () => {
