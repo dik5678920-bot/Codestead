@@ -118,7 +118,7 @@ async function main() {
       itemCount += parityItems.length;
     }
   }
-  const declaration = { generatedAt: new Date().toISOString(), courseId: "dsa", courseVersion: course.version, skillCount: 60, languages, parityItemCount: itemCount, visibleTests: itemCount, hiddenTests: itemCount, examEligibleItems: 0, runtimeDigests: Object.fromEntries(languages.map((language) => [language, digestByLanguage.get(language)])), limitation: "AI-assisted module-scoped numeric kernels require independent skill-fit, idiom, oracle, safety, pedagogy, and accessibility review; this artifact is not publication approval." };
+  const declaration = { courseId: "dsa", courseVersion: course.version, skillCount: 60, languages, parityItemCount: itemCount, visibleTests: itemCount, hiddenTests: itemCount, examEligibleItems: 0, runtimeDigests: Object.fromEntries(languages.map((language) => [language, digestByLanguage.get(language)])), limitation: "AI-assisted module-scoped numeric kernels require independent skill-fit, idiom, oracle, safety, pedagogy, and accessibility review; this artifact is not publication approval." };
   if (process.argv.includes("--apply")) await writeFile(path.join(root, "docs", "evidence", "dsa-parity-declaration-2026-07-12.json"), `${JSON.stringify(declaration, null, 2)}\n`);
   console.log(`DSA parity ${process.argv.includes("--apply") ? "generated" : "validated"}: ${itemCount} draft code items across 60 skills and 4 languages; 0 exam eligible.`);
 }

@@ -97,12 +97,9 @@ async function main() {
       return { file, import: specifier, reason };
     });
   const passed = violations.length === 0 && staleExceptions.length === 0;
-  const buildEvidence = (generatedAt: string) => ({
+  const buildEvidence = () => ({
     schemaVersion: 1,
-    generatedAt,
     scope: "TypeScript architectural import boundaries",
-    filesChecked: files.length,
-    importsChecked: importCount,
     violations,
     documentedExceptions: usedExceptions,
     staleExceptions,

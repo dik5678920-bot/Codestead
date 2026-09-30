@@ -212,8 +212,7 @@ async function main(): Promise<void> {
   if (!structureOnly) await Promise.all([worker(), worker()]);
   const failures = results.filter((result) => result.status === "failed");
   const fullRuntimeRun = !structureOnly && selected.length === items.length;
-  const buildEvidence = (generatedAt: string) => ({
-    generatedAt,
+  const buildEvidence = () => ({
     structure,
     selectedItems: selected.length,
     declaredItems: items.length,

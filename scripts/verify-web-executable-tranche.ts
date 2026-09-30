@@ -725,9 +725,8 @@ async function main(): Promise<void> {
   const browserItems = codeItems.filter((item) => item.runtime.engine === "browser-verifier");
   const nodeItems = codeItems.filter((item) => item.runtime.engine === "isolated-runner");
   const totalCases = codeItems.reduce((sum, item) => sum + item.tests.length, 0);
-  const buildEvidence = (generatedAt: string) => ({
+  const buildEvidence = () => ({
     schemaVersion: "1.0.0",
-    generatedAt,
     scope: "Launch-1 HTML, accessible/responsive CSS, JavaScript, and intermediate React authoring evidence",
     status: structureOnly ? "structure-only" : failures.length === 0 && results.length === totalCases ? "verified" : "failed-or-partial",
     counts: {
@@ -778,7 +777,6 @@ async function main(): Promise<void> {
         reactRouterNodeEngine: reactRouterPackage.engines?.node ?? null,
         testingLibraryReactVersion: testingReactPackage.version,
         testingLibraryUserEventVersion: userEventPackage.version,
-        authoringHostNodeVersion: process.version,
         productionNodeBaseline: "22.23.1",
         productionNodeMeetsRouterEngine: true,
       },

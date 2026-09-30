@@ -1,9 +1,6 @@
 {
   "schemaVersion": 1,
-  "generatedAt": "2026-09-30T14:47:48.065Z",
   "scope": "TypeScript architectural import boundaries",
-  "filesChecked": 910,
-  "importsChecked": 3800,
   "violations": [],
   "documentedExceptions": [
     {

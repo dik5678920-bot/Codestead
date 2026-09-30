@@ -10,8 +10,7 @@ import { verifyOrApplyDeterministicEvidence } from "./deterministic-evidence";
 
 const repositoryRoot = process.cwd();
 const temporaryDirectories: string[] = [];
-const timestamp = "2026-07-22T05:00:00.000Z";
-const laterTimestamp = "2026-07-22T06:00:00.000Z";
+let currentInput = "current";
 const relativePath = "docs/evidence/deterministic-evidence-test.json";
 const verifierScripts = [
   "scripts/verify-api-auth-surface.ts",
@@ -23,12 +22,12 @@ const verifierScripts = [
   "scripts/verify-web-executable-tranche.ts",
 ] as const;
 
-function buildEvidence(generatedAt: string) {
-  return { schemaVersion: 1, generatedAt, value: "current" };
+function buildEvidence() {
+  return { schemaVersion: 1, value: currentInput };
 }
 
-function bytes(generatedAt: string): string {
-  return `${JSON.stringify(buildEvidence(generatedAt), null, 2)}\n`;
+function bytes(): string {
+  return `${JSON.stringify(buildEvidence(), null, 2)}\n`;
 }
 
 async function fixture() {
@@ -68,7 +67,7 @@ describe("deterministic evidence check/apply contract", () => {
     { argv: ["--check"] as readonly string[] },
   ])("keeps matching evidence bytes and mtime unchanged for argv=$argv", async ({ argv }) => {
     const setup = await fixture();
-    const original = bytes(timestamp);
+    const original = bytes();
     await writeFile(setup.target, original, "utf8");
     const fixedTime = new Date("2026-07-22T04:00:00.000Z");
     await utimes(setup.target, fixedTime, fixedTime);
@@ -82,12 +81,16 @@ describe("deterministic evidence check/apply contract", () => {
     expect(after.mtimeMs).toBe(before.mtimeMs);
   });
 
-  it("fails closed without modifying stale, malformed, invalid-timestamp, or missing evidence", async () => {
+  it("fails closed without modifying stale, malformed, legacy-timestamped, or missing evidence", async () => {
     const setup = await fixture();
     const cases = [
-      { name: "stale", value: `${JSON.stringify({ ...buildEvidence(timestamp), value: "old" }, null, 2)}\n`, error: /stale evidence artifact.*--apply/is },
+      { name: "stale", value: `${JSON.stringify({ ...buildEvidence(), value: "old" }, null, 2)}\n`, error: /stale evidence artifact.*--apply/is },
       { name: "malformed", value: "{not-json\n", error: /malformed evidence artifact.*--apply/is },
-      { name: "invalid timestamp", value: `${JSON.stringify(buildEvidence("2026-07-22"), null, 2)}\n`, error: /invalid generatedAt.*--apply/is },
+      {
+        name: "legacy generatedAt",
+        value: `${JSON.stringify({ schemaVersion: 1, generatedAt: "2026-07-22T05:00:00.000Z", value: currentInput }, null, 2)}\n`,
+        error: /stale evidence artifact.*--apply/is,
+      },
     ];
     for (const testCase of cases) {
       await writeFile(setup.target, testCase.value, "utf8");
@@ -102,31 +105,42 @@ describe("deterministic evidence check/apply contract", () => {
 
   it("requires the caller to assert an exclusive trusted evidence directory before apply", async () => {
     const setup = await fixture();
-    await writeFile(setup.target, bytes(timestamp), "utf8");
+    await writeFile(setup.target, bytes(), "utf8");
     await expect(verifyOrApplyDeterministicEvidence({
       ...options(setup.root, ["--apply"]),
       trustedDirectory: undefined as never,
     })).rejects.toThrow(/exclusive trusted evidence directory/i);
   });
 
-  it("writes atomically only in apply mode and changes the timestamp only on an intentional apply", async () => {
+  it("makes apply a no-op for unchanged inputs and rewrites atomically when an input changes", async () => {
     const setup = await fixture();
-    await writeFile(setup.target, bytes(timestamp), "utf8");
+    await writeFile(setup.target, bytes(), "utf8");
+    const fixedTime = new Date("2026-07-22T04:00:00.000Z");
+    await utimes(setup.target, fixedTime, fixedTime);
+    const before = await stat(setup.target);
 
-    const first = await verifyOrApplyDeterministicEvidence({
-      ...options(setup.root, ["--apply"]),
-      now: () => new Date(laterTimestamp),
-    });
+    const unchanged = await verifyOrApplyDeterministicEvidence(options(setup.root, ["--apply"]));
 
-    expect(first).toEqual({ mode: "apply", target: setup.target });
-    expect(await readFile(setup.target, "utf8")).toBe(bytes(laterTimestamp));
-    expect((await readdir(setup.evidenceRoot)).filter((file) => file.includes(".staging-"))).toEqual([]);
-    await verifyOrApplyDeterministicEvidence(options(setup.root, ["--check"]));
+    expect(unchanged).toEqual({ mode: "apply", target: setup.target, changed: false });
+    expect((await stat(setup.target)).mtimeMs).toBe(before.mtimeMs);
+
+    currentInput = "changed-input";
+    try {
+      await expect(verifyOrApplyDeterministicEvidence(options(setup.root, ["--check"])))
+        .rejects.toThrow(/stale evidence artifact/i);
+      const changed = await verifyOrApplyDeterministicEvidence(options(setup.root, ["--apply"]));
+      expect(changed).toEqual({ mode: "apply", target: setup.target, changed: true });
+      expect(await readFile(setup.target, "utf8")).toBe(bytes());
+      expect((await readdir(setup.evidenceRoot)).filter((file) => file.includes(".staging-"))).toEqual([]);
+      await verifyOrApplyDeterministicEvidence(options(setup.root, ["--check"]));
+    } finally {
+      currentInput = "current";
+    }
   });
 
   it("rejects ambiguous, duplicate, unknown, and unsafe output arguments", async () => {
     const setup = await fixture();
-    await writeFile(setup.target, bytes(timestamp), "utf8");
+    await writeFile(setup.target, bytes(), "utf8");
     const invalid = [
       ["--apply", "--check"],
       ["--apply", "--apply"],
@@ -148,14 +162,13 @@ describe("deterministic evidence check/apply contract", () => {
     await verifyOrApplyDeterministicEvidence({
       ...options(setup.root, ["--apply", `--output=${output}`]),
       allowOutputOverride: true,
-      now: () => new Date(timestamp),
     });
-    expect(await readFile(path.join(setup.root, output), "utf8")).toBe(bytes(timestamp));
+    expect(await readFile(path.join(setup.root, output), "utf8")).toBe(bytes());
   });
 
   it("rejects hard-linked evidence targets", async () => {
     const setup = await fixture();
-    await writeFile(setup.target, bytes(timestamp), "utf8");
+    await writeFile(setup.target, bytes(), "utf8");
     await link(setup.target, path.join(setup.evidenceRoot, "alias.json"));
 
     await expect(verifyOrApplyDeterministicEvidence(options(setup.root))).rejects.toThrow(/single-link regular file/i);
@@ -163,7 +176,7 @@ describe("deterministic evidence check/apply contract", () => {
 
   it("rejects an evidence-directory swap before apply without writing through it", async () => {
     const setup = await fixture();
-    await writeFile(setup.target, bytes(timestamp), "utf8");
+    await writeFile(setup.target, bytes(), "utf8");
     const originalEvidenceRoot = `${setup.evidenceRoot}-original`;
     const outside = path.join(setup.root, "outside");
     await mkdir(outside);
@@ -171,13 +184,12 @@ describe("deterministic evidence check/apply contract", () => {
     try {
       await expect(verifyOrApplyDeterministicEvidence({
         ...options(setup.root, ["--apply"]),
-        buildEvidence: (generatedAt) => {
+        buildEvidence: () => {
           renameSync(setup.evidenceRoot, originalEvidenceRoot);
           symlinkSync(outside, setup.evidenceRoot, "junction");
           swapped = true;
-          return buildEvidence(generatedAt);
+          return buildEvidence();
         },
-        now: () => new Date(laterTimestamp),
       })).rejects.toThrow(/evidence directory changed/i);
       await expect(stat(path.join(outside, path.basename(setup.target)))).rejects.toMatchObject({ code: "ENOENT" });
     } finally {
@@ -190,7 +202,7 @@ describe("deterministic evidence check/apply contract", () => {
 
   it("permits only explicitly delegated verifier-specific arguments", async () => {
     const setup = await fixture();
-    await writeFile(setup.target, bytes(timestamp), "utf8");
+    await writeFile(setup.target, bytes(), "utf8");
     await verifyOrApplyDeterministicEvidence({
       ...options(setup.root, ["--check", "--structure-only", "--limit=2"]),
       allowArgument: (argument) => argument === "--structure-only" || /^--limit=[1-9]\d*$/.test(argument),
@@ -208,6 +220,9 @@ describe("deterministic evidence check/apply contract", () => {
       const source = await readFile(path.join(repositoryRoot, relative), "utf8");
       expect(source.match(/verifyOrApplyDeterministicEvidence/g)?.length, relative).toBeGreaterThanOrEqual(2);
       expect(source, relative).not.toMatch(/generatedAt:\s*new Date\(\)\.toISOString\(\)/);
+      // Committed evidence carries no timestamps or host-specific values.
+      expect(source, relative).not.toMatch(/\bgeneratedAt\b/);
+      expect(source, relative).not.toMatch(/process\.version\b/);
       expect(source, relative).not.toMatch(/await writeFile\(reportPath/);
       expect(source, relative).not.toMatch(/argument\.startsWith\("--(?:limit|workers)="\)/);
       expect(source, relative).toContain('trustedDirectory: "exclusive-writer"');

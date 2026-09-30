@@ -11,9 +11,8 @@ async function main() {
     root,
     trustedDirectory: "exclusive-writer",
     relativePath: path.join("docs", "evidence", "api-authorization-matrix-2026-07-12.json"),
-    buildEvidence: (generatedAt) => ({
+    buildEvidence: () => ({
       ...report,
-      generatedAt,
       scope: "Complete static role/object-authorization source inventory. The endpoint sweep verifies guard invocation, while authz.test.ts verifies real guard decisions and runtime-authorization.integration.test.ts behaviorally covers a representative owner-bound route set. This report alone is not runtime cross-user proof, deployed proxy/browser evidence, or PostgreSQL RLS evidence.",
       runtimeVerification: {
         guardInvocationTest: "src/lib/security/__tests__/endpoint-auth-boundaries.test.ts",
