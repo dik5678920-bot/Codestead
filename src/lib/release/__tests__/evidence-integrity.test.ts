@@ -1,13 +1,32 @@
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
+import { DSA_PARITY_LANGUAGES } from "@/lib/content/dsa-parity";
 import { verifyEvidenceIntegrity } from "../../../../scripts/lib/evidence-integrity";
 
 const fixtures: string[] = [];
+const dsaDeclarationPath = "docs/evidence/dsa-parity-declaration-2026-07-12.json";
+const runtimePinsPath = "scripts/curriculum-runtime-pins.json";
+const dsaDigests = Object.fromEntries(DSA_PARITY_LANGUAGES.map((language, index) =>
+  [language, `sha256:${String(index + 1).repeat(64)}`],
+));
+
+async function dsaFixture(overrides: Record<string, unknown> = {}) {
+  const root = await fixture();
+  await write(root, runtimePinsPath, JSON.stringify({
+    schemaVersion: 1,
+    records: Object.entries({ ...dsaDigests, javascript: `sha256:${"5".repeat(64)}` })
+      .map(([language, digest]) => ({ language, digest })),
+  }));
+  await write(root, dsaDeclarationPath, JSON.stringify({
+    courseId: "dsa", languages: DSA_PARITY_LANGUAGES, runtimeDigests: dsaDigests, ...overrides,
+  }));
+  return root;
+}
 
 async function fixture() {
   const root = await mkdtemp(path.join(os.tmpdir(), "evidence-integrity-"));
@@ -161,5 +180,66 @@ describe("evidence integrity verifier", () => {
     expect(report.issues).toEqual([
       expect.objectContaining({ kind: "INVALID_JSON", source: "docs/evidence/bad.json" }),
     ]);
+  });
+
+  it("accepts a DSA declaration bound to all four current runtime pins", async () => {
+    const root = await dsaFixture();
+    const before = await readFile(path.join(root, dsaDeclarationPath), "utf8");
+    expect((await verifyEvidenceIntegrity({ root, markdownRoots: [] })).issues).toEqual([]);
+    expect(await readFile(path.join(root, dsaDeclarationPath), "utf8")).toBe(before);
+  });
+
+  it.each(DSA_PARITY_LANGUAGES)("rejects a stale %s runtime digest without rewriting the declaration", async (language) => {
+    const stale = `sha256:${"f".repeat(64)}`;
+    const root = await dsaFixture({ runtimeDigests: { ...dsaDigests, [language]: stale } });
+    const before = await readFile(path.join(root, dsaDeclarationPath), "utf8");
+    const report = await verifyEvidenceIntegrity({ root, markdownRoots: [] });
+    expect(report.issues).toEqual([
+      expect.objectContaining({
+        kind: "STALE_RUNTIME_DIGEST", source: dsaDeclarationPath,
+        detail: expect.stringContaining(`${language} declared=${stale} pinned=${dsaDigests[language]}`),
+      }),
+    ]);
+    expect(await readFile(path.join(root, dsaDeclarationPath), "utf8")).toBe(before);
+  });
+
+  it.each([
+    ["missing map", { runtimeDigests: undefined }],
+    ["array map", { runtimeDigests: Object.values(dsaDigests) }],
+    ["missing language", { runtimeDigests: { ...dsaDigests, java: undefined } }],
+    ["invalid digest", { runtimeDigests: { ...dsaDigests, c: "latest" } }],
+    ["extra language", { runtimeDigests: { ...dsaDigests, ruby: dsaDigests.c } }],
+    ["missing language list", { languages: undefined }],
+    ["incomplete language list", { languages: ["c", "cpp", "java"] }],
+    ["duplicate language", { languages: ["c", "cpp", "java", "java"] }],
+  ])("rejects a DSA declaration with %s", async (_label, overrides) => {
+    const root = await dsaFixture(overrides);
+    expect((await verifyEvidenceIntegrity({ root, markdownRoots: [] })).issues).toEqual([
+      expect.objectContaining({ kind: "INVALID_RUNTIME_DECLARATION", source: dsaDeclarationPath }),
+    ]);
+  });
+
+  it.each([
+    ["missing pin", Object.entries(dsaDigests).filter(([language]) => language !== "python").map(([language, digest]) => ({ language, digest }))],
+    ["duplicate pin", [...Object.entries(dsaDigests).map(([language, digest]) => ({ language, digest })), { language: "c", digest: dsaDigests.c }]],
+    ["invalid pin", Object.entries(dsaDigests).map(([language, digest]) => ({ language, digest: language === "java" ? "latest" : digest }))],
+  ])("fails closed with a %s in the canonical pins", async (_label, records) => {
+    const root = await dsaFixture();
+    await write(root, runtimePinsPath, JSON.stringify({ schemaVersion: 1, records }));
+    expect((await verifyEvidenceIntegrity({ root, markdownRoots: [] })).issues).toEqual([
+      expect.objectContaining({ kind: "INVALID_RUNTIME_DECLARATION", source: dsaDeclarationPath }),
+    ]);
+  });
+
+  it("reports a missing canonical pins file while still checking other evidence", async () => {
+    const root = await dsaFixture();
+    await rm(path.join(root, runtimePinsPath));
+    await write(root, "docs/evidence/bad.json", "{not-json");
+    const report = await verifyEvidenceIntegrity({ root, markdownRoots: [] });
+    expect(report.issues).toHaveLength(2);
+    expect(report.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "INVALID_RUNTIME_DECLARATION", source: dsaDeclarationPath }),
+      expect.objectContaining({ kind: "INVALID_JSON", source: "docs/evidence/bad.json" }),
+    ]));
   });
 });
