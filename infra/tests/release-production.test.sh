@@ -2820,12 +2820,21 @@ run_release repeated-signal-late-cleanup
 echo "ok - release rejects unsafe lock object types, links, ownership, and mode"
 echo "ok - release arms fail-closed signal and EXIT traps before initial quarantine"
 
+# The unprivileged user cannot traverse the private checkout or $work (both
+# owner-only on CI runners), so bash would fail with "Permission denied" before
+# the script's own root check runs. Run a byte-identical copy from a directory
+# uid 65534 can traverse so the assertion exercises the real rejection.
+non_root_dir="$(mktemp -d)"
+chmod 0755 "$non_root_dir"
+install -m 0755 "$release_script" "$non_root_dir/release-production.sh"
+cmp -s "$release_script" "$non_root_dir/release-production.sh" || fail "non-root script copy differs"
 set +e
-/usr/bin/setpriv --reuid=65534 --regid=65534 --clear-groups \
-  bash "$release_script" --lock-timeout 1 --stage-timeout 5 --startup-wait 3 \
+(cd / && /usr/bin/setpriv --reuid=65534 --regid=65534 --clear-groups \
+  bash "$non_root_dir/release-production.sh" --lock-timeout 1 --stage-timeout 5 --startup-wait 3) \
   >"$work/non-root.stdout" 2>"$work/non-root.stderr"
 non_root_status=$?
 set -e
+rm -rf -- "$non_root_dir"
 show_non_root_result() {
   echo "non-root release exit status: $non_root_status" >&2
   echo "non-root release stderr:" >&2
