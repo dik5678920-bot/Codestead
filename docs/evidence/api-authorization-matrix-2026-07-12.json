@@ -113,7 +113,7 @@
       "file": "src/lib/ai/tutor-memory.ts",
       "purpose": "bounded learner-owned tutor structured memory",
       "anchors": 4,
-      "sourceSha256": "234e6755cebad6ea78a237fae4058ece4a9c78de0a133b4af0b19c3771bd8032"
+      "sourceSha256": "2966e051c1a7a6773fd8b4d43e93fe2e41d70e28d50c96e00d28b66cf2d37548"
     },
     {
       "file": "src/lib/ai/provider-credential-outcome.ts",
@@ -1019,7 +1019,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by eq(chatThread.userId, authz.session.user.id)",
-      "operationSourceSha256": "52b44471728f8eef569f7f967342d1693b7a504fb3bad8427cb5582eb0397ed8"
+      "operationSourceSha256": "fae9e2f9eb6993fb4a4e6d92f4cb0b04536d46cb91826ae57a69b129bb9c9b19"
     },
     {
       "operation": "GET /api/auth/[...all]",
@@ -2218,7 +2218,7 @@
       "operationSourceSha256": "b88f55f3a91e588c90d93419fbf944eba9e0f64f9fd6a5ab3e2f9a003ce2ccd8"
     }
   ],
-  "generatedAt": "2026-09-30T13:25:09.070Z",
+  "generatedAt": "2026-09-30T13:59:16.301Z",
   "scope": "Complete static role/object-authorization source inventory. The endpoint sweep verifies guard invocation, while authz.test.ts verifies real guard decisions and runtime-authorization.integration.test.ts behaviorally covers a representative owner-bound route set. This report alone is not runtime cross-user proof, deployed proxy/browser evidence, or PostgreSQL RLS evidence.",
   "runtimeVerification": {
     "guardInvocationTest": "src/lib/security/__tests__/endpoint-auth-boundaries.test.ts",

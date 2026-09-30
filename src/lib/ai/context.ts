@@ -77,6 +77,22 @@ export interface LearnerTutorContext {
   evidenceRowsCapped?: boolean;
 }
 
+/** Bounded, re-sanitized thread tail for the untrusted context block. */
+function untrustedThreadTail(tail: LearnerTutorContext["selectedThreadTail"]) {
+  return tail ? {
+    threadId: tail.threadId,
+    source: tail.source,
+    truncated: tail.truncated,
+    messages: tail.messages.slice(0, TUTOR_MEMORY_LIMITS.threadMessages).map((message) => ({
+      id: message.id,
+      role: message.role,
+      content: sanitizeTutorMemoryText(message.content, TUTOR_MEMORY_LIMITS.threadMessageChars).text,
+      createdAt: message.createdAt,
+      truncated: message.truncated,
+    })),
+  } : null;
+}
+
 function recentSummary(context: LearnerTutorContext) {
   if (!context.recentRelevantSummary) return null;
   if (typeof context.recentRelevantSummary === "string") {
@@ -155,18 +171,7 @@ export function buildTutorMessages(
       capped: context.evidenceRowsCapped ?? false,
     },
     relevantPriorSummary: recentSummary(context),
-    selectedThreadTail: context.selectedThreadTail ? {
-      threadId: context.selectedThreadTail.threadId,
-      source: context.selectedThreadTail.source,
-      truncated: context.selectedThreadTail.truncated,
-      messages: context.selectedThreadTail.messages.slice(0, TUTOR_MEMORY_LIMITS.threadMessages).map((message) => ({
-        id: message.id,
-        role: message.role,
-        content: sanitizeTutorMemoryText(message.content, TUTOR_MEMORY_LIMITS.threadMessageChars).text,
-        createdAt: message.createdAt,
-        truncated: message.truncated,
-      })),
-    } : null,
+    selectedThreadTail: untrustedThreadTail(context.selectedThreadTail),
   });
 
   return [
@@ -192,6 +197,7 @@ export interface GeneralTutorContext {
     preferredSessionMinutes?: number;
     weeklyGoalMinutes?: number;
   };
+  selectedThreadTail?: LearnerTutorContext["selectedThreadTail"];
 }
 
 export function buildGeneralTutorMessages(
@@ -232,6 +238,7 @@ export function buildGeneralTutorMessages(
         confirmedInterests: sanitizeTutorMemoryList(context.confirmedInterests, 5, 160),
       },
     },
+    selectedThreadTail: untrustedThreadTail(context.selectedThreadTail),
   });
 
   return [
@@ -244,7 +251,9 @@ export function buildGeneralTutorMessages(
   ];
 }
 
-export function generalContextManifest() {
+export function generalContextManifest(context?: Pick<GeneralTutorContext, "selectedThreadTail">) {
+  const included: TutorContextCategory[] = ["learner_profile.goals_preferences"];
+  if (context?.selectedThreadTail?.messages.length) included.push("chat_message.selected_thread_tail");
   return {
     promptVersion: BUDDY_TUTOR_PROMPT_VERSION,
     contextPolicyVersion: TUTOR_CONTEXT_POLICY_VERSION,
@@ -252,11 +261,14 @@ export function generalContextManifest() {
     lesson: null,
     concepts: [],
     implementationLanguage: null,
-    included: ["learner_profile.goals_preferences"] as TutorContextCategory[],
+    included,
     provenance: TUTOR_CONTEXT_PROVENANCE,
     caps: {
       goals: TUTOR_MEMORY_LIMITS.goals,
       selectedTracks: TUTOR_MEMORY_LIMITS.selectedTracks,
+      selectedThreadMessages: TUTOR_MEMORY_LIMITS.threadMessages,
+      selectedThreadMessageChars: TUTOR_MEMORY_LIMITS.threadMessageChars,
+      selectedThreadTotalChars: TUTOR_MEMORY_LIMITS.threadTotalChars,
     },
     explicitlyExcluded: [
       "email",

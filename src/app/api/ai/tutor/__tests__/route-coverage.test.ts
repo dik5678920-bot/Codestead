@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   openCredential: vi.fn(),
   loadMentorRecommendation: vi.fn(),
   loadTutorStructuredMemory: vi.fn(),
+  loadTutorThreadTail: vi.fn(),
   sanitizeTutorMemoryText: vi.fn(),
   recordProviderCredentialOutcome: vi.fn(),
   reserveFallbackBudget: vi.fn(),
@@ -95,6 +96,7 @@ vi.mock("@/lib/ai/tutor-memory", () => ({
   },
   loadMentorRecommendation: mocks.loadMentorRecommendation,
   loadTutorStructuredMemory: mocks.loadTutorStructuredMemory,
+  loadTutorThreadTail: mocks.loadTutorThreadTail,
   sanitizeTutorMemoryText: mocks.sanitizeTutorMemoryText,
   sanitizeTutorMemoryList: (value: unknown, limit: number, maximum: number) =>
     Array.isArray(value)
@@ -423,6 +425,43 @@ describe("tutor route durable execution coverage", () => {
     expect(body.contextManifest.course).toBeNull();
     expect(body.contextManifest.included).not.toContain("curriculum.current_course_lesson");
     expect(state.persistedValues.some((value) => isRecord(value) && value.title === "General chat")).toBe(true);
+  });
+
+  it("sends the owned general thread's earlier exchange to the provider on the next turn", async () => {
+    queueExecution({});
+    mocks.loadTutorThreadTail.mockResolvedValueOnce({
+      threadId: THREAD_ID,
+      source: "chat_thread+chat_message.owner-active-tail",
+      truncated: false,
+      messages: [
+        { id: "m1", role: "user", content: "What is a closure in JavaScript?", createdAt: "2026-07-12T10:00:00.000Z", truncated: false },
+        { id: "m2", role: "assistant", content: "A closure keeps access to its outer scope.", createdAt: "2026-07-12T10:00:05.000Z", truncated: false },
+      ],
+    });
+    mocks.routeTutorRequest.mockImplementationOnce(async (input) => {
+      const sent = JSON.stringify(input.messages);
+      expect(sent).toContain("What is a closure in JavaScript?");
+      expect(sent).toContain("A closure keeps access to its outer scope.");
+      return providerSuccess();
+    });
+
+    const response = await POST(tutorRequest({ courseId: undefined, skillId: undefined, message: "Show me an example of that." }));
+    expect(response.status).toBe(200);
+    expect(mocks.routeTutorRequest).toHaveBeenCalledTimes(1);
+    // Only the requesting learner's own, already ownership-checked thread is read.
+    expect(mocks.loadTutorThreadTail).toHaveBeenCalledWith({ userId: "learner-1", threadId: THREAD_ID });
+    const body = await response.json();
+    expect(body.contextManifest.included).toContain("chat_message.selected_thread_tail");
+  });
+
+  it("does not read any thread history for a general chat that has no thread yet or another owner's thread", async () => {
+    queueExecution({ threadId: undefined });
+    mocks.routeTutorRequest.mockResolvedValueOnce(providerSuccess());
+    expect((await POST(tutorRequest({ threadId: undefined, courseId: undefined, skillId: undefined }))).status).toBe(200);
+
+    queueExecution({ ownedStatus: "missing" });
+    expect((await POST(tutorRequest({ courseId: undefined, skillId: undefined }))).status).toBe(404);
+    expect(mocks.loadTutorThreadTail).not.toHaveBeenCalled();
   });
 
   it("rejects a request with only one of courseId/skillId", async () => {
