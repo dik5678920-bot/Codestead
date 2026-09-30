@@ -1351,6 +1351,45 @@ describe("runProductionMigrationWithRetry", () => {
     expect(createOptions).toHaveBeenCalledTimes(1);
   });
 
+  it("retries when the bootstrap password fence rejects a reconnect before the lock is held", async () => {
+    // Role bootstrap sets login roles to `password null` while it rebuilds
+    // them, so a reconnect after its 57P01 termination fails SCRAM with
+    // 28P01 ("User ... has no password assigned") until passwords are restored.
+    const terminated = attemptOptions(async () => {
+      throw sqlError("57P01");
+    });
+    const passwordFenced = {
+      ...attemptOptions(async () => ({ rows: [{ acquired: true }] })).options,
+      pool: {
+        connect: vi.fn(async () => {
+          throw sqlError("28P01");
+        }),
+        end: vi.fn(async () => undefined),
+      },
+    };
+    const succeeding = attemptOptions(async () => ({ rows: [{ acquired: true }] }));
+    const attempts = [terminated.options, passwordFenced, succeeding.options];
+    const sleep = vi.fn(async () => undefined);
+
+    await runProductionMigrationWithRetry(() => attempts.shift()!, { sleep, backoffMs: 1 });
+
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect(succeeding.migrate).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retry a first-attempt password authentication failure", async () => {
+    const attempt = attemptOptions(async () => ({ rows: [{ acquired: true }] }));
+    attempt.options.pool.connect = vi.fn(async () => {
+      throw sqlError("28P01");
+    });
+    const createOptions = vi.fn(() => attempt.options);
+
+    await expect(
+      runProductionMigrationWithRetry(createOptions, { sleep: async () => undefined }),
+    ).rejects.toMatchObject({ code: "28P01" });
+    expect(createOptions).toHaveBeenCalledTimes(1);
+  });
+
   it("does not retry a first-attempt authorization failure", async () => {
     const attempt = attemptOptions(async () => ({ rows: [{ acquired: true }] }));
     attempt.options.pool.connect = vi.fn(async () => {
