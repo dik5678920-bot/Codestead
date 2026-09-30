@@ -63,7 +63,8 @@ async function claimFinalizationJob(workerId: string, now: Date): Promise<Claime
          select j.id,es.id as session_id,es.user_id
            from exam_finalization_job j
            join exam_session es on es.id = j.exam_session_id
-          where j.status in ('scheduled','failed') and j.due_at <= $1
+          -- 'failed' is terminal (dead-lettered); only scheduled jobs are claimable.
+          where j.status in ('scheduled') and j.due_at <= $1
             and j.runner_request_generation <= 10
             and not exists (
               select 1 from response r where r.attempt_id = es.attempt_id and r.item_key = $4

@@ -14,7 +14,7 @@
     "runnerGenerationMigration": "drizzle/0036_late_tony_stark.sql",
     "runnerGenerationMigrationSha256": "7dcb3eb39070f03ab03a082d6f26ce3acb70a39bf07dad729d48b25c1a205c09",
     "worker": "src/app/api/exams/_lib/finalization-worker.ts",
-    "workerSha256": "5a56bce1b838855df3fd489e98de213bd5fa84eeae9b5736fa1a594d712c5c5a",
+    "workerSha256": "930ae6e900a4b33f79cf99d69c94560f023698d8d262ecf8b718dc7e8b60b483",
     "workerPolicy": "src/app/api/exams/_lib/finalization-worker-policy.ts",
     "workerPolicySha256": "59e8071ce14a5f0bf9a045c64e2ddc4c1ccf6ed08cb85ec1376f412b46bc1df4",
     "runnerReplayPolicy": "src/app/api/exams/_lib/runner-replay-policy.ts",
@@ -42,7 +42,7 @@
     "artifactSha256": {
       "drizzle/0029_slow_bulldozer.sql": "48a771007e079397b253fa9b5586828f98cdeeea2f8ce02d0c9ea9d0faeff024",
       "drizzle/0036_late_tony_stark.sql": "7dcb3eb39070f03ab03a082d6f26ce3acb70a39bf07dad729d48b25c1a205c09",
-      "src/app/api/exams/_lib/finalization-worker.ts": "5a56bce1b838855df3fd489e98de213bd5fa84eeae9b5736fa1a594d712c5c5a",
+      "src/app/api/exams/_lib/finalization-worker.ts": "930ae6e900a4b33f79cf99d69c94560f023698d8d262ecf8b718dc7e8b60b483",
       "src/app/api/exams/_lib/finalization-worker-policy.ts": "59e8071ce14a5f0bf9a045c64e2ddc4c1ccf6ed08cb85ec1376f412b46bc1df4",
       "src/app/api/exams/_lib/runner-replay-policy.ts": "4b48f4df04e5e68361c861c9e411a454f517292f10570d06dc1af45dcd897184",
       "src/app/api/exams/_lib/blueprint.ts": "35a6a07deec76955b8eaf0ff308e95b1fbf05408912527e112ce1f64477c9e07",

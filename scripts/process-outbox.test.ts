@@ -744,4 +744,15 @@ describe("mail worker production composition", () => {
     expect(source).not.toContain("createStoreBoundPreparedDispatchChannel");
     expect(source).not.toContain("createMailDispatchDatabaseResources");
   });
+
+  it("counts partial scheduler failures toward backoff for both schedulers", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts", "process-outbox.ts"),
+      "utf8",
+    );
+    // SchedulerBackoff's contract: failed candidates count as a failure.
+    expect(source).toContain("inactivitySchedule.record(scheduleAt, schedule.failed === 0)");
+    expect(source).toContain("smartReminderSchedule.record(scheduleAt, schedule.failed === 0)");
+    expect(source).not.toContain("smartReminderSchedule.record(scheduleAt, true)");
+  });
 });

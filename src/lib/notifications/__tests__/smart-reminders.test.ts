@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { afterEach, beforeEach, vi } from "vitest";
 
 import { dueKinds, insideQuietHours, localClock } from "../smart-reminders";
-import { scheduleSmartReminders } from "../smart-reminders";
+import { scheduleSmartReminders, scheduleSmartRemindersWithDatabase } from "../smart-reminders";
 
 const mocks = vi.hoisted(() => ({
   databaseExecute: vi.fn(),
@@ -48,6 +48,8 @@ const base = {
 describe("smart reminder policy", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Candidate paging asks for the next page after a full one; default to empty.
+    mocks.databaseExecute.mockResolvedValue({ rows: [] });
   });
 
   afterEach(() => {
@@ -273,5 +275,59 @@ describe("smart reminder policy", () => {
 
   it("waits through quiet hours", () => {
     expect(dueKinds(base, new Date("2026-07-14T20:00:00.000Z"))).toEqual([]);
+  });
+});
+
+describe("smart reminder candidate paging", () => {
+  it("reaches every eligible account in one run instead of only the first page", async () => {
+    // Flattens a drizzle `sql` template into text with $n placeholders.
+    type Chunk = { value?: unknown; queryChunks?: unknown[] } | string | number | boolean | null | Date;
+    function render(query: unknown) {
+      const params: unknown[] = [];
+      const walk = (chunk: Chunk): string => {
+        if (chunk && typeof chunk === "object" && !(chunk instanceof Date)) {
+          if (Array.isArray(chunk.queryChunks)) return chunk.queryChunks.map((part) => walk(part as Chunk)).join("");
+          if (Array.isArray(chunk.value)) return chunk.value.join("");
+        }
+        params.push(chunk);
+        return `$${params.length}`;
+      };
+      return { text: walk(query as Chunk), params };
+    }
+    // Eligible accounts with nothing due right now (weekly-only, not Sunday),
+    // so the run only has to page through them without dispatching.
+    const accounts = Array.from({ length: 250 }, (_, index) => ({
+      ...base,
+      id: `learner-${String(index).padStart(4, "0")}`,
+      daily_study_enabled: false,
+      revision_enabled: false,
+      goal_enabled: false,
+      challenge_enabled: false,
+      weekly_summary_enabled: true,
+    }));
+    const seen: string[] = [];
+    const database = {
+      execute: vi.fn(async (query: unknown) => {
+        const { text, params } = render(query);
+        const limit = Number(params.at(-1));
+        const cursorMatch = /u\.id > \$(\d+)/u.exec(text);
+        const after = cursorMatch ? String(params[Number(cursorMatch[1]) - 1]) : null;
+        const rows = accounts.filter((account) => after === null || account.id > after).slice(0, limit);
+        seen.push(...rows.map((row) => row.id));
+        return { rows };
+      }),
+      transaction: vi.fn(),
+    };
+
+    const result = await scheduleSmartRemindersWithDatabase(
+      database as never,
+      new Date("2026-07-15T12:00:00.000Z"),
+      100,
+    );
+
+    expect(result.candidates).toBe(250);
+    expect(new Set(seen).size).toBe(250);
+    expect(seen).toHaveLength(250);
+    expect(database.transaction).not.toHaveBeenCalled();
   });
 });

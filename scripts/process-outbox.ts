@@ -574,7 +574,7 @@ async function main() {
           resources.database,
           new Date(scheduleAt),
         );
-        smartReminderSchedule.record(scheduleAt, true);
+        smartReminderSchedule.record(scheduleAt, schedule.failed === 0);
         console.info(
           JSON.stringify({ event: "smart_reminder.schedule", ...schedule }),
         );

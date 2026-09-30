@@ -2124,7 +2124,7 @@
       "admin": "allowed",
       "objectAuthorization": "public-input",
       "ownershipProof": "validated public request",
-      "operationSourceSha256": "f5095ab1a3c2ae866b54d34954ab0ffcffd527528b3fa2a0f34f91f56d94f3e1"
+      "operationSourceSha256": "4b7975155012227355059fb29c38f5ad5fab364a23384e6290fbf26d3609d0f2"
     },
     {
       "operation": "POST /api/security/verify-backup-code",
@@ -2218,7 +2218,7 @@
       "operationSourceSha256": "b88f55f3a91e588c90d93419fbf944eba9e0f64f9fd6a5ab3e2f9a003ce2ccd8"
     }
   ],
-  "generatedAt": "2026-09-30T13:03:51.189Z",
+  "generatedAt": "2026-09-30T13:25:09.070Z",
   "scope": "Complete static role/object-authorization source inventory. The endpoint sweep verifies guard invocation, while authz.test.ts verifies real guard decisions and runtime-authorization.integration.test.ts behaviorally covers a representative owner-bound route set. This report alone is not runtime cross-user proof, deployed proxy/browser evidence, or PostgreSQL RLS evidence.",
   "runtimeVerification": {
     "guardInvocationTest": "src/lib/security/__tests__/endpoint-auth-boundaries.test.ts",
