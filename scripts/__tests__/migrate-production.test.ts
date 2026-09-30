@@ -195,7 +195,6 @@ it("keeps imported targeted-PG18 harnesses version-neutral by default", async ()
   );
 });
 
-
   it("uses the shared administration lock and migrates only as the owner role", async () => {
     const query = vi.fn(async (sql: string, parameters?: unknown[]) => {
       if (sql.includes("pg_try_advisory_lock")) {
@@ -243,6 +242,19 @@ it("keeps imported targeted-PG18 harnesses version-neutral by default", async ()
     expect(setRoleCall).toBeLessThan(migrate.mock.invocationCallOrder[0] ?? 0);
     expect(statements.at(-1)).toContain("pg_advisory_unlock");
   });
+
+async function withMigrationClock(run: () => Promise<void>): Promise<void> {
+  vi.useFakeTimers();
+  const epoch = Date.now();
+  const clock = vi.spyOn(nodePerformance, "now").mockImplementation(() => Date.now() - epoch);
+  try {
+    await run();
+  } finally {
+    vi.clearAllTimers();
+    clock.mockRestore();
+    vi.useRealTimers();
+  }
+}
 
 describe("production migration", () => {
   it("preserves the exact primary migration Error when cleanup also fails", async () => {
@@ -488,7 +500,7 @@ describe("production migration", () => {
     },
   );
 
-  it("destroys the session when a lock query does not resolve", async () => {
+  it("destroys the session when a lock query does not resolve", () => withMigrationClock(async () => {
     const client = {
       query: vi.fn(() => new Promise<never>(() => undefined)),
       release: vi.fn(),
@@ -506,7 +518,7 @@ describe("production migration", () => {
       lockOptions: { timeoutMs: 10 },
     });
     let watchdog: ReturnType<typeof setTimeout> | undefined;
-    const outcome = await Promise.race([
+    const outcomePromise = Promise.race([
       migration.then(
         () => "resolved",
         (error: unknown) => (error instanceof Error ? error.name : "unknown"),
@@ -515,6 +527,8 @@ describe("production migration", () => {
         watchdog = setTimeout(() => resolve("still pending"), 100);
       }),
     ]);
+    await vi.advanceTimersByTimeAsync(10);
+    const outcome = await outcomePromise;
     if (watchdog) clearTimeout(watchdog);
 
     expect(outcome).toBe("MigrationLockTimeoutError");
@@ -522,9 +536,9 @@ describe("production migration", () => {
     expect(client.release).toHaveBeenCalledWith(true);
     expect(pool.end).toHaveBeenCalledOnce();
     expect(migrate).not.toHaveBeenCalled();
-  });
+  }));
 
-  it("destroys the active session when migration exceeds its operation deadline", async () => {
+  it("destroys the active session when migration exceeds its operation deadline", () => withMigrationClock(async () => {
     const client = {
       query: roleAwareQuery(),
       release: vi.fn(),
@@ -543,7 +557,7 @@ describe("production migration", () => {
       cleanupTimeoutMs: 10,
     });
     let watchdog: ReturnType<typeof setTimeout> | undefined;
-    const outcome = await Promise.race([
+    const outcomePromise = Promise.race([
       migration.then(
         () => "resolved",
         (error: unknown) => (error instanceof Error ? error.name : "unknown"),
@@ -552,6 +566,8 @@ describe("production migration", () => {
         watchdog = setTimeout(() => resolve("still pending"), 100);
       }),
     ]);
+    await vi.advanceTimersByTimeAsync(20);
+    const outcome = await outcomePromise;
     if (watchdog) clearTimeout(watchdog);
 
     expect(outcome).toBe("MigrationOperationTimeoutError");
@@ -569,9 +585,9 @@ describe("production migration", () => {
     expect(client.release.mock.invocationCallOrder[0]).toBeLessThan(
       pool.end.mock.invocationCallOrder[0] ?? 0,
     );
-  });
+  }));
 
-  it("keeps migration timeout primary when forced release and pool shutdown fail", async () => {
+  it("keeps migration timeout primary when forced release and pool shutdown fail", () => withMigrationClock(async () => {
     const releaseError = new Error("forced release failed");
     const shutdownError = new Error("pool shutdown failed");
     const client = {
@@ -595,7 +611,7 @@ describe("production migration", () => {
       cleanupTimeoutMs: 10,
     });
     let watchdog: ReturnType<typeof setTimeout> | undefined;
-    const outcome = await Promise.race([
+    const outcomePromise = Promise.race([
       migration.then(
         () => undefined,
         (error: unknown) => error,
@@ -604,6 +620,8 @@ describe("production migration", () => {
         watchdog = setTimeout(() => resolve("still pending"), 100);
       }),
     ]);
+    await vi.advanceTimersByTimeAsync(20);
+    const outcome = await outcomePromise;
     if (watchdog) clearTimeout(watchdog);
 
     expect(outcome).toBeInstanceOf(Error);
@@ -620,7 +638,7 @@ describe("production migration", () => {
     ]);
     expect(client.release).toHaveBeenCalledWith(true);
     expect(pool.end).toHaveBeenCalledOnce();
-  });
+  }));
 
   it("unlocks and closes resources after migration failure", async () => {
     const client = {
@@ -658,7 +676,7 @@ describe("production migration", () => {
     expect(pool.end).toHaveBeenCalledOnce();
   });
 
-  it("destroys the session when the unlock query does not resolve", async () => {
+  it("destroys the session when the unlock query does not resolve", () => withMigrationClock(async () => {
     const client = {
       query: roleAwareQuery(
         () => new Promise<never>(() => undefined),
@@ -677,7 +695,7 @@ describe("production migration", () => {
       unlockTimeoutMs: 10,
     });
     let watchdog: ReturnType<typeof setTimeout> | undefined;
-    const outcome = await Promise.race([
+    const outcomePromise = Promise.race([
       migration.then(
         () => "resolved",
         (error: unknown) => (error instanceof Error ? error.name : "unknown"),
@@ -686,13 +704,15 @@ describe("production migration", () => {
         watchdog = setTimeout(() => resolve("still pending"), 100);
       }),
     ]);
+    await vi.advanceTimersByTimeAsync(10);
+    const outcome = await outcomePromise;
     if (watchdog) clearTimeout(watchdog);
 
     expect(outcome).toBe("MigrationUnlockTimeoutError");
     expect(client.query).toHaveBeenCalledTimes(7);
     expect(client.release).toHaveBeenCalledWith(true);
     expect(pool.end).toHaveBeenCalledOnce();
-  });
+  }));
 
   it("does not allow an unlock timeout override to widen the five-second bound", async () => {
     vi.useFakeTimers();
@@ -798,7 +818,7 @@ describe("production migration", () => {
     expect(pool.end).toHaveBeenCalledOnce();
   });
 
-  it("bounds RESET ROLE cleanup and destroys a session that stops responding", async () => {
+  it("bounds RESET ROLE cleanup and destroys a session that stops responding", () => withMigrationClock(async () => {
     let ownerRoleAssumed = false;
     const query = vi.fn(async (sql: string) => {
       if (sql.includes("pg_try_advisory_lock")) return { rows: [{ acquired: true }] };
@@ -823,7 +843,7 @@ describe("production migration", () => {
       end: vi.fn(async () => undefined),
     };
 
-    await expect(
+    const rejection = expect(
       runProductionMigration({
         connectionString: "postgresql://test",
         pool,
@@ -832,13 +852,15 @@ describe("production migration", () => {
         cleanupTimeoutMs: 10,
       }),
     ).rejects.toMatchObject({ name: "MigrationCleanupTimeoutError" });
+    await vi.advanceTimersByTimeAsync(10);
+    await rejection;
 
     expect(client.release).toHaveBeenCalledWith(true);
     expect(query.mock.calls.some(([sql]) => String(sql).includes("pg_advisory_unlock"))).toBe(false);
     expect(pool.end).toHaveBeenCalledOnce();
-  });
+  }));
 
-  it("bounds post-reset identity verification and destroys an ambiguous session", async () => {
+  it("bounds post-reset identity verification and destroys an ambiguous session", () => withMigrationClock(async () => {
     let ownerRoleAssumed = false;
     let identityChecks = 0;
     const query = vi.fn(async (sql: string) => {
@@ -869,7 +891,7 @@ describe("production migration", () => {
       end: vi.fn(async () => undefined),
     };
 
-    await expect(
+    const rejection = expect(
       runProductionMigration({
         connectionString: "postgresql://test",
         pool,
@@ -878,11 +900,13 @@ describe("production migration", () => {
         cleanupTimeoutMs: 10,
       }),
     ).rejects.toMatchObject({ name: "MigrationCleanupTimeoutError" });
+    await vi.advanceTimersByTimeAsync(10);
+    await rejection;
 
     expect(client.release).toHaveBeenCalledWith(true);
     expect(query.mock.calls.some(([sql]) => String(sql).includes("pg_advisory_unlock"))).toBe(false);
     expect(pool.end).toHaveBeenCalledOnce();
-  });
+  }));
 
   it.each([
     ["unlock", { unlockTimeoutMs: 0 }],
@@ -906,7 +930,7 @@ describe("production migration", () => {
     expect(pool.connect).not.toHaveBeenCalled();
   });
 
-  it("bounds pool shutdown after destroying the migration session", async () => {
+  it("bounds pool shutdown after destroying the migration session", () => withMigrationClock(async () => {
     const client = {
       query: roleAwareQuery(async () => ({ rows: [{ released: true }] })),
       release: vi.fn(),
@@ -924,7 +948,7 @@ describe("production migration", () => {
       drizzle: vi.fn(() => ({})),
       cleanupTimeoutMs: 10,
     });
-    const outcome = await Promise.race([
+    const outcomePromise = Promise.race([
       migration.then(
         () => "resolved",
         (error: unknown) => (error instanceof Error ? error.name : "unknown"),
@@ -933,14 +957,16 @@ describe("production migration", () => {
         watchdog = setTimeout(() => resolve("still pending"), 100);
       }),
     ]);
+    await vi.advanceTimersByTimeAsync(10);
+    const outcome = await outcomePromise;
     if (watchdog) clearTimeout(watchdog);
 
     expect(outcome).toBe("MigrationCleanupTimeoutError");
     expect(client.release).toHaveBeenCalledOnce();
     expect(pool.end).toHaveBeenCalledOnce();
-  });
+  }));
 
-  it("bounds pool checkout inside the production migration operation deadline", async () => {
+  it("bounds pool checkout inside the production migration operation deadline", () => withMigrationClock(async () => {
     const migrate = vi.fn(async () => undefined);
     const pool = {
       connect: vi.fn(() => new Promise<never>(() => undefined)),
@@ -956,7 +982,7 @@ describe("production migration", () => {
       cleanupTimeoutMs: 40,
     });
     let watchdog: ReturnType<typeof setTimeout> | undefined;
-    const outcome = await Promise.race([
+    const outcomePromise = Promise.race([
       migration.then(
         () => undefined,
         (error: unknown) => error,
@@ -965,6 +991,8 @@ describe("production migration", () => {
         watchdog = setTimeout(() => resolve("checkout watchdog expired"), 200);
       }),
     ]);
+    await vi.advanceTimersByTimeAsync(65);
+    const outcome = await outcomePromise;
     if (watchdog) clearTimeout(watchdog);
 
     expect(outcome).toBeInstanceOf(AggregateError);
@@ -983,9 +1011,9 @@ describe("production migration", () => {
     expect(pool.connect).toHaveBeenCalledOnce();
     expect(pool.end).toHaveBeenCalledOnce();
     expect(migrate).not.toHaveBeenCalled();
-  });
+  }));
 
-  it("destroys a checkout that resolves after the operation deadline", async () => {
+  it("destroys a checkout that resolves after the operation deadline", () => withMigrationClock(async () => {
     const client = {
       query: vi.fn(),
       release: vi.fn(),
@@ -999,7 +1027,7 @@ describe("production migration", () => {
     };
     const migrate = vi.fn(async () => undefined);
 
-    const failure = await runProductionMigration({
+    const failurePromise = runProductionMigration({
       connectionString: "postgresql://test",
       pool,
       migrate,
@@ -1010,6 +1038,8 @@ describe("production migration", () => {
       () => undefined,
       (error: unknown) => error,
     );
+    await vi.advanceTimersByTimeAsync(65);
+    const failure = await failurePromise;
     expect(failure).toBeInstanceOf(AggregateError);
     const aggregate = failure as AggregateError;
     expect(aggregate.cause).toMatchObject({
@@ -1023,18 +1053,16 @@ describe("production migration", () => {
     );
     expect(resolveCheckout).toBeTypeOf("function");
     resolveCheckout?.(client);
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0);
-    });
+    await vi.advanceTimersByTimeAsync(0);
 
     expect(client.release).toHaveBeenCalledOnce();
     expect(client.release).toHaveBeenCalledWith(true);
     expect(client.query).not.toHaveBeenCalled();
     expect(migrate).not.toHaveBeenCalled();
     expect(pool.end).toHaveBeenCalledOnce();
-  });
+  }));
 
-  it("preserves a late checkout release failure with the timeout primary", async () => {
+  it("preserves a late checkout release failure with the timeout primary", () => withMigrationClock(async () => {
     const releaseError = new Error("late checkout forced release failed");
     const client = {
       query: vi.fn(),
@@ -1052,7 +1080,7 @@ describe("production migration", () => {
     const migrate = vi.fn(async () => undefined);
     setTimeout(() => resolveCheckout?.(client), 40);
 
-    const failure = await runProductionMigration({
+    const failurePromise = runProductionMigration({
       connectionString: "postgresql://test",
       pool,
       migrate,
@@ -1064,6 +1092,8 @@ describe("production migration", () => {
       (error: unknown) => error,
     );
 
+    await vi.advanceTimersByTimeAsync(40);
+    const failure = await failurePromise;
     expect(failure).toBeInstanceOf(AggregateError);
     const aggregate = failure as AggregateError;
     expect(aggregate.cause).toMatchObject({
@@ -1077,7 +1107,7 @@ describe("production migration", () => {
     expect(client.query).not.toHaveBeenCalled();
     expect(migrate).not.toHaveBeenCalled();
     expect(pool.end).toHaveBeenCalledOnce();
-  });
+  }));
 
   it("uses one cleanup deadline across safe session restoration and pool shutdown", async () => {
     vi.useFakeTimers();
@@ -1169,7 +1199,7 @@ describe("production migration", () => {
     }
   });
 
-  it("shares one cleanup deadline between timeout settlement and pool shutdown", async () => {
+  it("shares one cleanup deadline between timeout settlement and pool shutdown", () => withMigrationClock(async () => {
     const lateAbortError = new Error("migration rejected after stream abort");
     let rejectMigration: ((error: Error) => void) | undefined;
     const migrate = vi.fn(() => new Promise<never>((_resolve, reject) => {
@@ -1199,7 +1229,7 @@ describe("production migration", () => {
       cleanupTimeoutMs: 100,
     });
     let watchdog: ReturnType<typeof setTimeout> | undefined;
-    const outcome = await Promise.race([
+    const outcomePromise = Promise.race([
       migration.then(
         () => undefined,
         (error: unknown) => error,
@@ -1208,6 +1238,8 @@ describe("production migration", () => {
         watchdog = setTimeout(() => resolve("cleanup watchdog expired"), 300);
       }),
     ]);
+    await vi.advanceTimersByTimeAsync(125);
+    const outcome = await outcomePromise;
     if (watchdog) clearTimeout(watchdog);
     const elapsedMs = performance.now() - startedAt;
 
@@ -1224,7 +1256,7 @@ describe("production migration", () => {
         ([sql]) => String(sql).includes("RESET ROLE"),
       ),
     ).toBe(false);
-  });
+  }));
 });
 
 describe("runProductionMigrationWithRetry", () => {
