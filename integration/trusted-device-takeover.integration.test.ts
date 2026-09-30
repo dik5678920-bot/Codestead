@@ -2,7 +2,49 @@ import { createOTP } from "@better-auth/utils/otp";
 import { hashPassword, symmetricEncrypt } from "better-auth/crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { NextRequest } from "next/server";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+
+/**
+ * Replay-check barrier: while armed, each request that reaches the TOTP replay
+ * check (or the atomic claim that replaces it) waits until the other request
+ * gets there too, so two takeovers with the same code overlap exactly at the
+ * check-then-consume boundary instead of depending on scheduler luck.
+ */
+const replayBarrier = vi.hoisted(() => {
+  const state = { armed: false, parties: 0, arrived: 0, release: () => {}, gate: Promise.resolve() };
+  return {
+    arm(parties: number) {
+      state.armed = true;
+      state.parties = parties;
+      state.arrived = 0;
+      state.gate = new Promise<void>((resolve) => { state.release = resolve; });
+    },
+    disarm() {
+      state.armed = false;
+      state.release();
+    },
+    async wait() {
+      if (!state.armed) return;
+      state.arrived += 1;
+      if (state.arrived >= state.parties) state.release();
+      await Promise.race([state.gate, new Promise((resolve) => setTimeout(resolve, 5_000))]);
+    },
+  };
+});
+
+vi.mock("@/lib/security/session-takeover", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const wrapped: Record<string, unknown> = { ...actual };
+  for (const name of ["isTotpCodeUsed", "claimTotpCode"]) {
+    const original = actual[name];
+    if (typeof original !== "function") continue;
+    wrapped[name] = async (...args: unknown[]) => {
+      await replayBarrier.wait();
+      return (original as (...input: unknown[]) => unknown)(...args);
+    };
+  }
+  return wrapped;
+});
 
 import { POST as takeoverPost } from "@/app/api/security/session-takeover/route";
 
@@ -190,6 +232,42 @@ describe("PingID-style trusted device with one active device (real Better Auth s
     expect(outcomes.filter((row) => row.outcome === "success")).toHaveLength(1);
     expect(outcomes.filter((row) => row.outcome === "failure").map((row) => row.reason).sort())
       .toEqual(["invalid_code", "invalid_code", "invalid_credentials"]);
+  });
+
+  it("lets exactly one of two concurrent takeovers with the same code consume it", async () => {
+    const laptop = new Browser("Integration laptop");
+    await signIn(laptop);
+    expect((await verifyTotp(laptop)).ok).toBe(true);
+    const [laptopSession] = await activeSessions();
+
+    const phone = new Browser("Integration phone");
+    const tablet = new Browser("Integration tablet");
+    const sharedCode = await code();
+    replayBarrier.arm(2);
+    let responses: Response[];
+    try {
+      responses = await Promise.all([
+        takeover(phone, { code: sharedCode }),
+        takeover(tablet, { code: sharedCode }),
+      ]);
+    } finally {
+      replayBarrier.disarm();
+    }
+
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 401]);
+    const winner = responses[0]!.status === 200 ? phone : tablet;
+    const loser = winner === phone ? tablet : phone;
+    const sessions = await activeSessions();
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]!.id).not.toBe(laptopSession!.id);
+    expect((await sessionOf(winner))?.user.id).toBe(USER_ID);
+    expect(await sessionOf(loser)).toBeNull();
+    expect(await sessionOf(laptop)).toBeNull();
+
+    const outcomes = await db.select({ outcome: auditEvent.outcome, reason: auditEvent.reason })
+      .from(auditEvent).where(eq(auditEvent.action, "session.takeover"));
+    expect(outcomes.filter((row) => row.outcome === "success")).toHaveLength(1);
+    expect(outcomes.filter((row) => row.outcome === "failure").map((row) => row.reason)).toEqual(["invalid_code"]);
   });
 
   it("does not let a trusted browser skip the code while another device is active", async () => {
