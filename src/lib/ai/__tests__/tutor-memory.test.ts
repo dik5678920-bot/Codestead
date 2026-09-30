@@ -6,6 +6,7 @@ vi.mock("@/lib/db/client", () => ({ pool: { query: mocks.query } }));
 import {
   loadMentorRecommendation,
   loadTutorStructuredMemory,
+  loadTutorThreadTail,
   sanitizeTutorMemoryList,
   sanitizeTutorMemoryText,
   TUTOR_MEMORY_LIMITS,
@@ -173,6 +174,27 @@ describe("bounded tutor structured memory", () => {
     expect(memory.activeMisconceptionTags.length).toBeLessThanOrEqual(TUTOR_MEMORY_LIMITS.misconceptionTags);
     expect(memory.recentRelevantSummary).toMatchObject({ truncated: true });
     expect(memory.recentRelevantSummary?.text.length).toBeLessThanOrEqual(TUTOR_MEMORY_LIMITS.summaryChars);
+  });
+
+  it("loads a general thread tail only through the owner-active predicate", async () => {
+    const rows = [
+      { id: "m2", role: "assistant" as const, content: "A closure keeps its scope.", content_length: 26, created_at: new Date(NOW.getTime() - 1_000) },
+      { id: "m1", role: "user" as const, content: "What is a closure?", content_length: 18, created_at: new Date(NOW.getTime() - 2_000) },
+    ];
+    mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
+      if (!sql.includes("from chat_message")) throw new Error(`Unexpected SQL: ${sql}`);
+      // Rows exist only for learner-1's thread; any other owner sees nothing.
+      return { rows: params[1] === "learner-1" ? rows : [] };
+    });
+
+    const tail = await loadTutorThreadTail({ userId: "learner-1", threadId: THREAD });
+    expect(tail?.messages.map((message) => message.content)).toEqual(["What is a closure?", "A closure keeps its scope."]);
+    const [sql, params] = mocks.query.mock.calls[0]!;
+    expect(sql).toContain("t.user_id = $2 and t.status = 'active'");
+    expect(params.slice(0, 2)).toEqual([THREAD, "learner-1"]);
+
+    await expect(loadTutorThreadTail({ userId: "learner-2", threadId: THREAD })).resolves.toBeNull();
+    await expect(loadTutorThreadTail({ userId: "learner-1", threadId: "not-a-uuid" })).rejects.toThrow(/thread is invalid/i);
   });
 
   it("returns no tail when the owner-active query finds no selected thread and rejects invalid identifiers", async () => {
