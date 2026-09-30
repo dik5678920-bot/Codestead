@@ -216,9 +216,8 @@ async function main(): Promise<void> {
   results.sort((left, right) => left.itemId.localeCompare(right.itemId) || left.testId.localeCompare(right.testId));
   const failures = results.filter((result) => result.status === "failed");
   const fullRuntimeRun = !structureOnly && selected.length === matched.length;
-  const buildEvidence = (generatedAt: string) => ({
+  const buildEvidence = () => ({
     schemaVersion: 1,
-    generatedAt,
     scope: "Programming Foundations, Java 21 and Python 3.14 authored code-task pinned-runtime evidence",
     status: failures.length === 0 && fullRuntimeRun ? "verified" : structureOnly ? "structure-only" : "failed-or-partial",
     counts: {

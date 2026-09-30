@@ -408,9 +408,8 @@ async function main(): Promise<void> {
     (sum, item) => sum + item.tests.filter((test) => test.visibility === "hidden" && test.category === "boundary").length,
     0,
   );
-  const buildEvidence = (generatedAt: string) => ({
+  const buildEvidence = () => ({
     schemaVersion: "1.0.0",
-    generatedAt,
     scope: "C23 and C++20 executable authored curriculum evidence",
     status: failures.length === 0 && fullRuntimeRun ? "verified" : structureOnly ? "structure-only" : "failed-or-partial",
     counts: {
