@@ -9,11 +9,13 @@ function browserTarget() {
   return envelopeTarget(process.env.SENTRY_BROWSER_DSN);
 }
 
-/** Whether browser error monitoring is on for this signed-in session. */
+/** Browser monitoring availability and deployment release for this signed-in session. */
 export async function GET() {
   const authz = await requireAuth({ allowPending: true, allowPasswordChange: true, allowMfaChallenge: true });
   if (!authz.session) return authz.response;
-  return NextResponse.json({ enabled: browserTarget() !== null }, { headers: NO_STORE });
+  const status = { enabled: browserTarget() !== null };
+  const release = status.enabled ? process.env.SENTRY_RELEASE?.trim() : undefined;
+  return NextResponse.json({ ...status, ...(release ? { release } : {}) }, { headers: NO_STORE });
 }
 
 /** Forward one browser error envelope to the configured GlitchTip project. */

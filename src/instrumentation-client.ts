@@ -10,9 +10,12 @@ async function startBrowserErrorMonitoring() {
   // signed-in session; anonymous pages and unconfigured deployments skip it.
   const response = await fetch(ENVELOPE_ROUTE, { cache: "no-store", credentials: "same-origin" });
   if (!response.ok) return;
-  const status = (await response.json().catch(() => null)) as { enabled?: unknown } | null;
+  const status = (await response.json().catch(() => null)) as { enabled?: unknown; release?: unknown } | null;
   if (status?.enabled !== true) return;
-  const options = errorMonitoringOptions({ runtime: "browser", dsn: TUNNEL_DSN });
+  const options = errorMonitoringOptions({
+    runtime: "browser", dsn: TUNNEL_DSN,
+    release: typeof status.release === "string" ? status.release : undefined,
+  });
   if (!options) return;
   const Sentry = await import("@sentry/nextjs");
   Sentry.init({
