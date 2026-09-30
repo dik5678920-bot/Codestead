@@ -627,13 +627,15 @@ export async function publishCurriculumVersion(input: {
     const version = versionResult.rows[0];
     if (!version) throw new CurriculumAdminError("NOT_FOUND");
     const eventName = input.targetStage === "beta" ? "published_beta" : "promoted_verified";
-    const prior = await client.query<{ actor_user_id: string; event: string; reason: string; evidence: Record<string, unknown> }>(
-      `select actor_user_id, event, reason, evidence from curriculum_publication_event where course_id = $1 and request_id = $2`,
+    const prior = await client.query<{ course_version_id: string; actor_user_id: string; event: string; reason: string; evidence: Record<string, unknown> }>(
+      `select course_version_id, actor_user_id, event, reason, evidence from curriculum_publication_event where course_id = $1 and request_id = $2`,
       [version.course_id, input.requestId],
     );
     if (prior.rows[0]) {
       const event = prior.rows[0];
-      if (event.actor_user_id !== input.actorUserId || event.event !== eventName || event.reason !== reason || event.evidence.targetStage !== input.targetStage) throw new CurriculumAdminError("IDEMPOTENCY_MISMATCH");
+      // Request ids are unique per course, so the stored event must be for the
+      // requested version; another version's event is never a replay of this one.
+      if (event.course_version_id !== input.courseVersionId || event.actor_user_id !== input.actorUserId || event.event !== eventName || event.reason !== reason || event.evidence.targetStage !== input.targetStage) throw new CurriculumAdminError("IDEMPOTENCY_MISMATCH");
       await client.query("commit");
       return { courseVersionId: input.courseVersionId, stage: input.targetStage, publicationRevision: Number(event.evidence.resultingVersion), replayed: true, gate: event.evidence.gate as PublicationGateReport } as const;
     }
@@ -734,7 +736,11 @@ export async function rollbackCurriculumPointer(input: {
     await client.query("begin");
     await assertAdmin(client, input.actorUserId);
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [`curriculum-course:${input.courseId}`]);
-    const target = await client.query<{ id: string; stage: string }>(`select id, stage from course_version where id = $1 and course_id = $2`, [input.targetCourseVersionId, input.courseId]);
+    // Serialize with publish/retire of the target: same version lock, then the
+    // version row, then the pointer, and recheck the stage under that lock so
+    // a concurrently retired version can never become the pointer target.
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`curriculum-version:${input.targetCourseVersionId}`]);
+    const target = await client.query<{ id: string; stage: string }>(`select id, stage from course_version where id = $1 and course_id = $2 for update`, [input.targetCourseVersionId, input.courseId]);
     if (!target.rows[0] || !["beta", "verified"].includes(target.rows[0].stage)) throw new CurriculumAdminError("ROLLBACK_TARGET_INVALID");
     const pointerResult = await client.query<{ current_course_version_id: string; row_version: string | number }>(`select current_course_version_id, row_version from curriculum_publication_pointer where course_id = $1 for update`, [input.courseId]);
     const pointer = pointerResult.rows[0];
