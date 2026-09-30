@@ -734,7 +734,11 @@ export async function rollbackCurriculumPointer(input: {
     await client.query("begin");
     await assertAdmin(client, input.actorUserId);
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [`curriculum-course:${input.courseId}`]);
-    const target = await client.query<{ id: string; stage: string }>(`select id, stage from course_version where id = $1 and course_id = $2`, [input.targetCourseVersionId, input.courseId]);
+    // Serialize with publish/retire of the target: same version lock, then the
+    // version row, then the pointer, and recheck the stage under that lock so
+    // a concurrently retired version can never become the pointer target.
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`curriculum-version:${input.targetCourseVersionId}`]);
+    const target = await client.query<{ id: string; stage: string }>(`select id, stage from course_version where id = $1 and course_id = $2 for update`, [input.targetCourseVersionId, input.courseId]);
     if (!target.rows[0] || !["beta", "verified"].includes(target.rows[0].stage)) throw new CurriculumAdminError("ROLLBACK_TARGET_INVALID");
     const pointerResult = await client.query<{ current_course_version_id: string; row_version: string | number }>(`select current_course_version_id, row_version from curriculum_publication_pointer where course_id = $1 for update`, [input.courseId]);
     const pointer = pointerResult.rows[0];
