@@ -191,3 +191,47 @@ describe("exam finalization lease fencing", () => {
     expect(terminal?.[1]?.[3]).toBe("LEARNER_NOT_ACTIVE");
   });
 });
+
+describe("terminal exam finalization jobs", () => {
+  it("never reclaims a job that was dead-lettered for an inactive learner", async () => {
+    vi.clearAllMocks();
+    // Minimal job table: the claim only returns the job when the worker's own
+    // status predicate admits the job's current status.
+    const job = { status: "scheduled", attemptCount: 0, generation: 1 };
+    mocks.clientQuery.mockImplementation(async (statement: string) => {
+      if (!statement.includes("with candidate as")) return { rows: [], rowCount: 0 };
+      const claimable = /j\.status in \(([^)]*)\)/u.exec(statement)?.[1]
+        ?.split(",").map((value) => value.trim().replace(/'/gu, "")) ?? [];
+      if (!claimable.includes(job.status) || job.generation > 10) return { rows: [], rowCount: 0 };
+      job.status = "leased";
+      job.attemptCount += 1;
+      return {
+        rows: [{
+          id: "job-1", session_id: "session-1", user_id: "learner-1",
+          attempt_count: job.attemptCount, runner_request_generation: job.generation,
+        }],
+        rowCount: 1,
+      };
+    });
+    mocks.poolQuery.mockImplementation(async (statement: string, params: unknown[]) => {
+      if (statement.includes("last_error_code = $4") && statement.includes("lease_owner = $6")) {
+        job.status = String(params[1]);
+        if (params[7] !== true) job.generation += 1;
+        return { rows: [{ id: "job-1" }], rowCount: 1 };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+    mocks.finalizeExam.mockRejectedValue(new ExamServiceError("Learner is not active.", 409, "LEARNER_NOT_ACTIVE"));
+
+    await expect(processExamFinalizationBatch({
+      workerId: "worker-a", limit: 1, now: new Date("2026-07-12T10:00:00.000Z"),
+    })).resolves.toMatchObject({ processed: 1, failed: 1, retried: 0 });
+    expect(job.status).toBe("failed");
+
+    await expect(processExamFinalizationBatch({
+      workerId: "worker-b", limit: 1, now: new Date("2026-07-13T10:00:00.000Z"),
+    })).resolves.toEqual({ processed: 0, succeeded: 0, retried: 0, failed: 0, leaseLost: 0 });
+    expect(job.status).toBe("failed");
+    expect(mocks.finalizeExam).toHaveBeenCalledTimes(1);
+  });
+});
