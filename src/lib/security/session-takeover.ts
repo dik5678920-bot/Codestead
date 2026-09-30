@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 
-import { and, eq, gt, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import { APIError } from "better-auth/api";
 
 import { db } from "@/lib/db/client";
@@ -85,12 +85,30 @@ export async function isTotpCodeUsed(userId: string, code: string, now = new Dat
   return Boolean(used);
 }
 
-export async function markTotpCodeUsed(userId: string, code: string, now = new Date()) {
-  await db.insert(verification).values({
-    id: randomUUID(),
-    identifier: totpReplayIdentifier(userId, code),
-    value: userId,
-    expiresAt: new Date(now.getTime() + TOTP_REPLAY_WINDOW_MS),
+/**
+ * Atomically claims a TOTP code for takeover. The check for an unexpired
+ * consumption marker and the insert of a new one run in one transaction under
+ * a transaction-scoped advisory lock keyed on the replay identifier, so two
+ * concurrent requests with the same code serialize here and exactly one of
+ * them gets true. Callers must claim before revoking or creating sessions.
+ */
+export async function claimTotpCode(userId: string, code: string, now = new Date()) {
+  const identifier = totpReplayIdentifier(userId, code);
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${identifier}, 0))`);
+    const [used] = await tx
+      .select({ id: verification.id })
+      .from(verification)
+      .where(and(eq(verification.identifier, identifier), gt(verification.expiresAt, now)))
+      .limit(1);
+    if (used) return false;
+    await tx.insert(verification).values({
+      id: randomUUID(),
+      identifier,
+      value: userId,
+      expiresAt: new Date(now.getTime() + TOTP_REPLAY_WINDOW_MS),
+    });
+    return true;
   });
 }
 

@@ -10,11 +10,10 @@ import { account, twoFactor, user } from "@/lib/db/schema";
 import { rateLimitIp, withRateLimit } from "@/lib/security/rate-limit";
 import { evaluateRequestOrigin } from "@/lib/security/request-origin-policy";
 import {
+  claimTotpCode,
   consumeSessionTakeoverBudget,
   INTERNAL_TOTP_GRANT_HEADER,
-  isTotpCodeUsed,
   issueInternalTotpGrant,
-  markTotpCodeUsed,
   recordSessionTakeoverFailure,
   revokeSessionsForTakeover,
 } from "@/lib/security/session-takeover";
@@ -100,17 +99,17 @@ export async function POST(request: NextRequest) {
       let codeValid = false;
       try {
         const secret = await symmetricDecrypt({ key: context.secretConfig, data: candidate.secret });
-        codeValid = await createOTP(secret, { period: 30, digits: 6 }).verify(code)
-          && !(await isTotpCodeUsed(candidate.userId, code));
+        codeValid = await createOTP(secret, { period: 30, digits: 6 }).verify(code);
       } catch {
         codeValid = false;
       }
-      if (!codeValid) {
+      // Claim the code atomically before any session is revoked, so a
+      // concurrent request with the same code cannot also take over.
+      if (!codeValid || !(await claimTotpCode(candidate.userId, code))) {
         await recordSessionTakeoverFailure(candidate.userId, "invalid_code");
         return fail();
       }
 
-      await markTotpCodeUsed(candidate.userId, code);
       await revokeSessionsForTakeover(candidate.userId);
 
       const forwarded = {
