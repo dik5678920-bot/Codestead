@@ -1,9 +1,10 @@
-import { spawnSync } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve, relative, sep } from "node:path";
 
 import ts from "typescript";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
+
+import { prepareChild } from "../../../../scripts/__tests__/helpers/prepared-child";
 
 const REPOSITORY_ROOT = process.cwd();
 const MATERIALIZATION_MODULE =
@@ -106,13 +107,7 @@ function stringArgument(node: ts.CallExpression) {
 }
 
 function collectModuleAccesses(filePath: string) {
-  const sourceText = readFileSync(filePath, "utf8");
-  const sourceFile = ts.createSourceFile(
-    filePath,
-    sourceText,
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const sourceFile = sourceSnapshot.get(filePath)!;
   const accesses: ModuleAccess[] = [];
   const importer = repositoryPath(filePath);
 
@@ -232,12 +227,7 @@ function isProcessStdoutWrite(node: ts.CallExpression) {
 }
 
 function physicalPrimitiveLocations(filePath: string) {
-  const sourceFile = ts.createSourceFile(
-    filePath,
-    readFileSync(filePath, "utf8"),
-    ts.ScriptTarget.Latest,
-    true,
-  );
+  const sourceFile = sourceSnapshot.get(filePath)!;
   let gmailSendUrl = false;
   let stdoutWrite = false;
   const visit = (node: ts.Node) => {
@@ -278,9 +268,22 @@ function strictChildEnvironment() {
   return environment;
 }
 
+// Parse each immutable repository source once during fixture preparation.
+const inventorySnapshot = inventoryFiles();
+const sourceSnapshot = new Map(inventorySnapshot.map((filePath) => [
+  filePath,
+  ts.createSourceFile(filePath, readFileSync(filePath, "utf8"), ts.ScriptTarget.Latest, true),
+]));
+
+const cycleFixture = await prepareChild(
+  ["--import", "tsx", resolve(REPOSITORY_ROOT, "src/lib/notifications/__tests__/fixtures/tx2-module-cycle-smoke.ts")],
+  { cwd: REPOSITORY_ROOT, env: strictChildEnvironment() },
+);
+afterAll(() => cycleFixture.kill());
+
 describe("TX2 module authority boundary", () => {
   it("keeps authority-bearing imports on the exact store-to-channel path", () => {
-    const accesses = inventoryFiles().flatMap(collectModuleAccesses);
+    const accesses = inventorySnapshot.flatMap(collectModuleAccesses);
     const violations: string[] = [];
     const physicalAccesses: string[] = [];
     const channelFactoryAccesses: string[] = [];
@@ -333,7 +336,7 @@ describe("TX2 module authority boundary", () => {
   });
 
   it("isolates both physical delivery primitives in the internal transport", () => {
-    const notificationFiles = inventoryFiles().filter((filePath) =>
+    const notificationFiles = inventorySnapshot.filter((filePath) =>
       repositoryPath(filePath).startsWith("src/lib/notifications/"),
     );
     const gmailSendLocations: string[] = [];
@@ -361,22 +364,8 @@ describe("TX2 module authority boundary", () => {
     });
   });
 
-  it("initializes the complete TX2 cycle in a clean process", () => {
-    const fixturePath = resolve(
-      REPOSITORY_ROOT,
-      "src/lib/notifications/__tests__/fixtures/tx2-module-cycle-smoke.ts",
-    );
-    const result = spawnSync(
-      process.execPath,
-      ["--import", "tsx", fixturePath],
-      {
-        cwd: REPOSITORY_ROOT,
-        encoding: "utf8",
-        env: strictChildEnvironment(),
-        timeout: 10_000,
-        windowsHide: true,
-      },
-    );
+  it("initializes the complete TX2 cycle in a clean process", async () => {
+    const result = await cycleFixture.run(10_000);
 
     expect(result.error).toBeUndefined();
     expect(result.signal).toBeNull();
