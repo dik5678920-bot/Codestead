@@ -56,6 +56,13 @@ export class InvalidUploadIdempotencyKeyError extends Error {
   }
 }
 
+export class UploadOwnerUnavailableError extends Error {
+  constructor() {
+    super("The upload owner is no longer an active account.");
+    this.name = "UploadOwnerUnavailableError";
+  }
+}
+
 export class UploadCommitAmbiguousError extends Error {
   constructor(options?: ErrorOptions) {
     super("The upload commit outcome is ambiguous; retry with the same idempotency key.", options);

@@ -47,6 +47,7 @@ describe("PostgreSQL upload receipt transaction", () => {
     vi.clearAllMocks();
     query.mockImplementation(async (statement: string) => {
       const sql = statement.replace(/\s+/g, " ").trim().toLowerCase();
+      if (sql.includes('from "user"')) return { rows: [{ status: "active" }], rowCount: 1 };
       if (sql === "begin" || sql === "commit" || sql === "rollback") return { rows: [], rowCount: 0 };
       if (sql.includes("pg_advisory_xact_lock")) return { rows: [], rowCount: 1 };
       if (sql.includes("from upload_receipt") && sql.includes("join stored_object")) {
@@ -86,6 +87,7 @@ describe("PostgreSQL upload receipt transaction", () => {
   it("returns an exact concurrent replay without duplicating object or quota", async () => {
     query.mockImplementation(async (statement: string) => {
       const sql = statement.replace(/\s+/g, " ").trim().toLowerCase();
+      if (sql.includes('from "user"')) return { rows: [{ status: "active" }], rowCount: 1 };
       if (sql === "begin" || sql === "commit") return { rows: [], rowCount: 0 };
       if (sql.includes("pg_advisory_xact_lock")) return { rows: [], rowCount: 1 };
       if (sql.includes("from upload_receipt") && sql.includes("join stored_object")) {
@@ -106,6 +108,7 @@ describe("PostgreSQL upload receipt transaction", () => {
   it("keeps a deleted receipt reserved and returns a tombstoned replay disposition", async () => {
     query.mockImplementation(async (statement: string) => {
       const sql = statement.replace(/\s+/g, " ").trim().toLowerCase();
+      if (sql.includes('from "user"')) return { rows: [{ status: "active" }], rowCount: 1 };
       if (sql === "begin" || sql === "commit") return { rows: [], rowCount: 0 };
       if (sql.includes("pg_advisory_xact_lock")) return { rows: [], rowCount: 1 };
       if (sql.includes("from upload_receipt") && sql.includes("join stored_object")) {
@@ -131,6 +134,7 @@ describe("PostgreSQL upload receipt transaction", () => {
   it("rejects a concurrent key mismatch and rolls back", async () => {
     query.mockImplementation(async (statement: string) => {
       const sql = statement.replace(/\s+/g, " ").trim().toLowerCase();
+      if (sql.includes('from "user"')) return { rows: [{ status: "active" }], rowCount: 1 };
       if (["begin", "rollback"].includes(sql) || sql.includes("pg_advisory_xact_lock")) {
         return { rows: [], rowCount: 1 };
       }
@@ -152,6 +156,7 @@ describe("PostgreSQL upload receipt transaction", () => {
   it("rolls back a quota rejection before metadata publication", async () => {
     query.mockImplementation(async (statement: string) => {
       const sql = statement.replace(/\s+/g, " ").trim().toLowerCase();
+      if (sql.includes('from "user"')) return { rows: [{ status: "active" }], rowCount: 1 };
       if (["begin", "rollback"].includes(sql) || sql.includes("pg_advisory_xact_lock")) {
         return { rows: [], rowCount: 1 };
       }
@@ -174,6 +179,7 @@ describe("PostgreSQL upload receipt transaction", () => {
   it("classifies a lost COMMIT response as ambiguous and does not issue rollback", async () => {
     query.mockImplementation(async (statement: string) => {
       const sql = statement.replace(/\s+/g, " ").trim().toLowerCase();
+      if (sql.includes('from "user"')) return { rows: [{ status: "active" }], rowCount: 1 };
       if (sql === "commit") throw new Error("connection lost");
       if (sql === "begin" || sql.includes("pg_advisory_xact_lock") || sql.startsWith("insert")) return { rows: [], rowCount: 1 };
       if (sql.includes("from upload_receipt") && sql.includes("join stored_object")) return { rows: [], rowCount: 0 };
@@ -196,6 +202,7 @@ describe("PostgreSQL upload receipt transaction", () => {
   it("destroys the client when rollback itself rejects", async () => {
     query.mockImplementation(async (statement: string) => {
       const sql = statement.replace(/\s+/g, " ").trim().toLowerCase();
+      if (sql.includes('from "user"')) return { rows: [{ status: "active" }], rowCount: 1 };
       if (sql === "rollback") throw new Error("rollback connection failure");
       if (sql === "begin" || sql.includes("pg_advisory_xact_lock")) return { rows: [], rowCount: 1 };
       if (sql.includes("from upload_receipt")) return { rows: [], rowCount: 0 };
@@ -211,6 +218,7 @@ describe("PostgreSQL upload receipt transaction", () => {
   it("bounds a hung rollback and destroys rather than returning the transaction to the pool", async () => {
     query.mockImplementation(async (statement: string) => {
       const sql = statement.replace(/\s+/g, " ").trim().toLowerCase();
+      if (sql.includes('from "user"')) return { rows: [{ status: "active" }], rowCount: 1 };
       if (sql === "rollback") return new Promise(() => undefined);
       if (sql === "begin" || sql.includes("pg_advisory_xact_lock")) return { rows: [], rowCount: 1 };
       if (sql.includes("from upload_receipt")) return { rows: [], rowCount: 0 };
@@ -226,6 +234,7 @@ describe("PostgreSQL upload receipt transaction", () => {
   it("destroys a client after a protocol failure even when rollback acknowledges", async () => {
     query.mockImplementation(async (statement: string) => {
       const sql = statement.replace(/\s+/g, " ").trim().toLowerCase();
+      if (sql.includes('from "user"')) return { rows: [{ status: "active" }], rowCount: 1 };
       if (sql === "rollback" || sql === "begin" || sql.includes("pg_advisory_xact_lock")) return { rows: [], rowCount: 1 };
       if (sql.includes("from upload_receipt")) return { rows: [], rowCount: 0 };
       if (sql.includes("quota_bytes")) throw Object.assign(new Error("socket reset"), { code: "ECONNRESET" });
