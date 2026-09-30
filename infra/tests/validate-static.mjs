@@ -1945,6 +1945,21 @@ expect(
 );
 const runnerLaunch = read("infra/runner/run-runner.sh");
 expect(/RUNNER_SHARED_SECRET_FILE/.test(runnerLaunch), "runner secret must come from a file");
+expect(
+  /\[ -L "\$secret_file" \]/.test(runnerLaunch)
+    && /stat -c '%u:%g:%a' -- "\$secret_file"/.test(runnerLaunch)
+    && /"0:\$\(id -g\):440"/.test(runnerLaunch),
+  "runner startup must reject a symlinked secret and require root:<runner group> mode 0440 before any Docker call",
+);
+expect(
+  /RUNNER_MAX_QUEUE_DEPTH:-\}" != "100"/.test(runnerLaunch),
+  "runner startup must require the reviewed queue depth of exactly 100",
+);
+expect(
+  runnerLaunch.indexOf('"$secret_file"') < runnerLaunch.indexOf("docker_binary")
+    && runnerLaunch.indexOf("RUNNER_MAX_QUEUE_DEPTH") < runnerLaunch.indexOf('mkdir -p -m 0700 -- "$state_root"'),
+  "runner configuration must be validated before state creation or Docker reconciliation",
+);
 expect(/RUNNER_STATE_ROOT/.test(runnerLaunch) && /mode-0700/.test(runnerLaunch), "runner startup must validate its private state root");
 expect(/flock --exclusive --nonblock 9/.test(runnerLaunch), "runner startup must hold a kernel lifetime lock before reconciliation");
 expect(/AS verification-artifact/.test(runnerDockerfile) && /io\.learncoding\.runner\.image-role="verification-only"/.test(runnerDockerfile), "runner Dockerfile must identify its verification-only artifact role");

@@ -2,8 +2,14 @@
 set -eu
 
 secret_file="${RUNNER_SHARED_SECRET_FILE:-}"
-if [ -z "$secret_file" ] || [ ! -f "$secret_file" ] || [ ! -r "$secret_file" ] || [ ! -s "$secret_file" ]; then
-  echo "fatal: RUNNER_SHARED_SECRET_FILE must be a readable, non-empty file" >&2
+if [ -z "$secret_file" ] || [ -L "$secret_file" ] || [ ! -f "$secret_file" ] || [ ! -r "$secret_file" ] || [ ! -s "$secret_file" ]; then
+  echo "fatal: RUNNER_SHARED_SECRET_FILE must be a readable, non-empty regular file (not a symlink)" >&2
+  exit 66
+fi
+# The reviewed handoff installs the secret as root:<runner group> mode 0440, so
+# the runner can read it but never rewrite it and no other account can read it.
+if [ "$(stat -c '%u:%g:%a' -- "$secret_file")" != "0:$(id -g):440" ]; then
+  echo "fatal: RUNNER_SHARED_SECRET_FILE must be owned by root and the runner group with mode 0440" >&2
   exit 66
 fi
 RUNNER_SHARED_SECRET=$(cat -- "$secret_file")
@@ -16,6 +22,10 @@ if [ "${#RUNNER_SHARED_SECRET}" -lt 32 ]; then
 fi
 if [ "${RUNNER_MAX_CONCURRENCY:-2}" != "2" ]; then
   echo "fatal: this deployment permits exactly two runner jobs" >&2
+  exit 64
+fi
+if [ "${RUNNER_MAX_QUEUE_DEPTH:-}" != "100" ]; then
+  echo "fatal: RUNNER_MAX_QUEUE_DEPTH must be the reviewed value 100" >&2
   exit 64
 fi
 
