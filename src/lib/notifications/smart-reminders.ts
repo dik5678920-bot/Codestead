@@ -193,7 +193,12 @@ export function dueKinds(candidate: Candidate, now: Date): Array<{ kind: SmartRe
   return due;
 }
 
-async function loadCandidates(database: SmartReminderDatabase, now: Date, limit: number): Promise<Candidate[]> {
+async function loadCandidates(
+  database: SmartReminderDatabase,
+  now: Date,
+  limit: number,
+  afterId: string | null,
+): Promise<Candidate[]> {
   const result = await database.execute(sql<Candidate>`
       select u.id,u.name,u.email,u.last_meaningful_activity_at,
             p.timezone,p.daily_study_enabled,p.revision_enabled,p.goal_enabled,
@@ -219,6 +224,7 @@ async function loadCandidates(database: SmartReminderDatabase, now: Date, limit:
       where u.role='learner' and u.status='active' and u.banned=false
         and (p.daily_study_enabled or p.revision_enabled or p.goal_enabled
           or p.challenge_enabled or p.weekly_summary_enabled)
+        ${afterId === null ? sql`` : sql`and u.id > ${afterId}`}
       order by u.id
       limit ${limit}
   `);
@@ -333,6 +339,9 @@ async function dispatch(database: SmartReminderDatabase, candidate: Candidate, k
   });
 }
 
+/** Upper bound on pages per run (with the default limit, 100,000 accounts). */
+const MAX_CANDIDATE_PAGES = 1_000;
+
 export async function scheduleSmartRemindersWithDatabase(
   database: SmartReminderDatabase,
   now = new Date(),
@@ -340,29 +349,38 @@ export async function scheduleSmartRemindersWithDatabase(
 ) {
   if (!Number.isFinite(now.getTime())) throw new Error("Smart-reminder clock is invalid.");
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 500) throw new Error("Smart-reminder batch limit is invalid.");
-  const candidates = await loadCandidates(database, now, limit);
   let dispatched = 0;
   let failed = 0;
-  for (const candidate of candidates) {
-    let dispatchedForCandidate = 0;
-    for (const reminder of dueKinds(candidate, now)) {
-      if (dispatchedForCandidate >= 2) break;
-      try {
-        if (await dispatch(database, candidate, reminder.kind, reminder.periodKey, now)) {
-          dispatched += 1;
-          dispatchedForCandidate += 1;
+  let scanned = 0;
+  // Keyset paging by account id: every eligible account is visited once per
+  // run, instead of the same first page on every run.
+  let afterId: string | null = null;
+  for (let page = 0; page < MAX_CANDIDATE_PAGES; page += 1) {
+    const candidates = await loadCandidates(database, now, limit, afterId);
+    scanned += candidates.length;
+    for (const candidate of candidates) {
+      let dispatchedForCandidate = 0;
+      for (const reminder of dueKinds(candidate, now)) {
+        if (dispatchedForCandidate >= 2) break;
+        try {
+          if (await dispatch(database, candidate, reminder.kind, reminder.periodKey, now)) {
+            dispatched += 1;
+            dispatchedForCandidate += 1;
+          }
+        } catch (error) {
+          failed += 1;
+          console.error(JSON.stringify({
+            event: "smart_reminder.dispatch_failed",
+            kind: reminder.kind,
+            code: smartReminderErrorCode(error),
+          }));
         }
-      } catch (error) {
-        failed += 1;
-        console.error(JSON.stringify({
-          event: "smart_reminder.dispatch_failed",
-          kind: reminder.kind,
-          code: smartReminderErrorCode(error),
-        }));
       }
     }
+    if (candidates.length < limit) break;
+    afterId = candidates[candidates.length - 1]!.id;
   }
-  return { candidates: candidates.length, dispatched, failed };
+  return { candidates: scanned, dispatched, failed };
 }
 
 export async function scheduleSmartReminders(now = new Date(), limit = 100) {
