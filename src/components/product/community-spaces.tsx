@@ -28,6 +28,7 @@ type Reply = {
 type Post = {
   id: string; groupId: string; kind: string; title: string; body: string; rowVersion: number;
   createdAt: string; editedAt: string | null; authorAlias: string; own: boolean; replies: Reply[];
+  replyNextCursor?: string | null;
 };
 type DiscussionPayload = { groups: Group[]; posts: Post[]; nextCursor: string | null; moderation: boolean; privacy: string };
 type Battle = {
@@ -140,6 +141,7 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
   const [editing, setEditing] = useState<{ target: "post" | "reply"; id: string; version: number; title: string; body: string } | null>(null);
   const [replying, setReplying] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState("");
+  const [loadingReplies, setLoadingReplies] = useState(false);
   const logicalRequestIds = useRef(new Map<string, { fingerprint: string; requestId: string }>());
 
   function requestIdFor(key: string, payload: Record<string, unknown>) {
@@ -232,6 +234,25 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
       return false;
     }
     finally { setBusy(false); }
+  }
+
+  async function loadReplies(post: Post) {
+    if (!post.replyNextCursor || loadingReplies) return;
+    setLoadingReplies(true);
+    try {
+      const query = new URLSearchParams({ groupId: post.groupId, postId: post.id, replyCursor: post.replyNextCursor });
+      const page = await requestJson<DiscussionPayload>(`/api/community/discussions?${query}`);
+      const next = page.posts.find((candidate) => candidate.id === post.id);
+      if (!next) throw new Error("That conversation is no longer available.");
+      setDiscussion((current) => current && ({ ...current, posts: current.posts.map((candidate) => {
+        if (candidate.id !== post.id || candidate.replyNextCursor !== post.replyNextCursor) return candidate;
+        const seen = new Set(candidate.replies.map((reply) => reply.id));
+        return { ...candidate, replyNextCursor: next.replyNextCursor,
+          replies: [...candidate.replies, ...next.replies.filter((reply) => !seen.has(reply.id))] };
+      }) }));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Replies could not be loaded.");
+    } finally { setLoadingReplies(false); }
   }
 
   async function createGroup(event: FormEvent<HTMLFormElement>) {
@@ -440,6 +461,8 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
             {editing?.id === item.id ? <form className={styles.editForm} onSubmit={(event) => void saveEdit(event)}><label>Reply<textarea value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} /></label><div><button className="button button-primary">Save</button><button type="button" className="button button-secondary" onClick={() => setEditing(null)}>Cancel</button></div></form> : <p className={styles.body}>{item.body}</p>}
             <div className={styles.actions}>{item.own && <><button type="button" onClick={() => setEditing({ target: "reply", id: item.id, version: item.rowVersion, title: "", body: item.body })}><Pencil size={13} /> Edit</button><button type="button" onClick={() => void mutate({ action: "delete", target: "reply", targetId: item.id, expectedVersion: item.rowVersion }, "Reply removed from the cohort feed.")}><Trash2 size={13} /> Delete</button></>}<ReportControl target="reply" targetId={item.id} onDone={setNotice} /></div>
           </div>)}</div> : null}
+          {post.replyNextCursor && <button type="button" className="button button-secondary" disabled={loadingReplies}
+            onClick={() => void loadReplies(post)}>Load more replies</button>}
         </article>) : <div className={styles.state}><MessageCircle size={24} /><h3>No conversations in this group</h3><p>Start with one specific question, useful explanation, or project milestone.</p></div>}
         {discussion.nextCursor && <button type="button" className="button button-secondary" onClick={() => loadSafely(selectedGroup, true, discussion.nextCursor)}>Load older conversations</button>}
       </div>

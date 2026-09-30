@@ -112,6 +112,32 @@ describe("community spaces UI boundaries", () => {
     installFetch();
   });
 
+  it("loads the remaining five replies after the oldest twenty", async () => {
+    const user = userEvent.setup();
+    const replies = Array.from({ length: 25 }, (_, index) => ({
+      id: `reply-${index}`, body: `Reachable reply ${index + 1}`, rowVersion: 1,
+      createdAt: "2026-07-14T12:00:00.000Z", editedAt: null, authorAlias: "learner-alpha", own: false,
+    }));
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.startsWith("/api/community/discussions")) {
+        const continuation = url.includes("replyCursor=");
+        return Response.json({ ...discussion, posts: [{ ...discussion.posts[0],
+          replies: continuation ? replies.slice(20) : replies.slice(0, 20),
+          replyNextCursor: continuation ? null : "reply-page-2",
+        }] });
+      }
+      if (url === "/api/battles") return Response.json(battles);
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+    render(<CommunitySpaces people={[]} />);
+    await screen.findByText("Reachable reply 20");
+    await user.click(screen.getByRole("button", { name: "Load more replies" }));
+    await screen.findByText("Reachable reply 25");
+    for (const reply of replies) expect(screen.getAllByText(reply.body)).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Load more replies" })).not.toBeInTheDocument();
+  });
+
   it("renders discussion text safely and keeps battle results sealed before reveal", async () => {
     const user = userEvent.setup();
     const { container } = render(<CommunitySpaces people={[{

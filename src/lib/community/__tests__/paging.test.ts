@@ -20,6 +20,61 @@ describe("community post pagination", () => {
     mocks.connect.mockResolvedValue({ query: mocks.query, release: mocks.release });
   });
 
+  it("rejects a reply cursor bound to another post before reading data", async () => {
+    const replyCursor = Buffer.from(JSON.stringify(["2026-09-29T10:00:00.123456Z", idFor(1), idFor(100)])).toString("base64url");
+    await expect(listCommunity({ actorUserId: "learner-1", postId: idFor(101), replyCursor }))
+      .rejects.toMatchObject({ code: "INVALID_INPUT" });
+    expect(mocks.connect).not.toHaveBeenCalled();
+  });
+
+  it("does not read replies when the visibility-filtered post is unavailable", async () => {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from "user"')) return { rows: [{ id: "learner-1", role: "learner" }] };
+      if (sql.includes("from community_group g") || sql.includes("from community_post p")) return { rows: [] };
+      throw new Error("Replies must not be queried for an unavailable post.");
+    });
+    const page = await listCommunity({ actorUserId: "learner-1", postId: idFor(100) });
+    expect(page.posts).toEqual([]);
+    expect(mocks.query.mock.calls.some(([sql]) => String(sql).includes("from community_reply r"))).toBe(false);
+  });
+
+  it.each([25, 45])("makes all %i replies reachable once, including timestamp ties", async (count) => {
+    const postId = idFor(100);
+    const replies = Array.from({ length: count }, (_, index) => ({
+      id: idFor(index + 1), post_id: postId, body: `Reply ${index + 1}`, state: "active",
+      row_version: 1, created_at: new Date("2026-09-29T10:00:00.123456Z"), edited_at: null,
+      created_at_token: "2026-09-29T10:00:00.123456Z", author_alias: "You", own: true,
+    }));
+    mocks.query.mockImplementation(async (sql: string, values: readonly unknown[] = []) => {
+      if (sql.includes('from "user"')) return { rows: [{ id: "learner-1", role: "learner" }] };
+      if (sql.includes("from community_group g")) return { rows: [] };
+      if (sql.includes("from community_post p")) return { rows: [{
+        id: postId, group_id: groupId, kind: "discussion", title: "Post", body: "Post body",
+        state: "active", row_version: 1, created_at: new Date(), edited_at: null, author_alias: "You", own: true,
+      }] };
+      if (sql.includes("from community_reply r")) {
+        const boundary = values[4] == null ? null : exactTimestamp(values[4]);
+        return { rows: replies.filter((reply) => !boundary || reply.created_at_token > boundary
+          || (reply.created_at_token === boundary && reply.id > String(values[5])))
+          .slice(0, sql.includes("reply_rank <= 21") ? 21 : 20) };
+      }
+      throw new Error(`Unexpected query: ${sql}`);
+    });
+    const received: string[] = [];
+    let replyCursor: string | null = null;
+    for (let pageNumber = 0; pageNumber < 4; pageNumber += 1) {
+      const page = await listCommunity({ actorUserId: "learner-1", postId, replyCursor });
+      const post = page.posts[0]!;
+      expect(post.replies.length).toBeLessThanOrEqual(20);
+      received.push(...post.replies.map((reply) => reply.id));
+      replyCursor = post.replyNextCursor ?? null;
+      if (!replyCursor) break;
+    }
+    expect(replyCursor).toBeNull();
+    expect(received).toEqual(replies.map((reply) => reply.id));
+    expect(new Set(received).size).toBe(count);
+  });
+
   it.each([
     { name: "identical microsecond timestamps", fractions: ["123456", "123456", "123456", "123456", "123456", "123456"] },
     { name: "near timestamps within a millisecond", fractions: ["123900", "123456", "123400", "123300", "123000", "122999"] },
