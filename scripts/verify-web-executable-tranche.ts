@@ -378,6 +378,13 @@ async function applyActions(page: Page, testCase: BrowserVerificationCase): Prom
       else await page.keyboard.press(action.key);
     } else if (action.type === "wait") {
       await page.waitForTimeout(action.milliseconds ?? 0);
+    } else if (action.type === "waitFor") {
+      if (!action.expression) throw new Error("WaitFor action lacks expression.");
+      await page.waitForFunction(
+        (expression) => new Function(`return (${expression});`)(),
+        action.expression,
+        { timeout: action.milliseconds ?? 5_000 },
+      );
     } else if (action.type === "evaluate") {
       if (!action.expression) throw new Error("Evaluate action lacks expression.");
       await page.evaluate((expression) => new Function(`return (${expression});`)(), action.expression);
