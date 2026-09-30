@@ -694,8 +694,8 @@ test("rollback verifies both 0069 trees before local image inspection", () => {
 });
 test("root CI release and rollback harnesses use one private exact Git trust file", () => {
   for (const command of [
-    'sudo -n env "PATH=$PATH" bash infra/tests/release-production.test.sh',
-    'sudo -n env "PATH=$PATH" bash infra/tests/rollback-production.test.sh',
+    'sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/release-production.test.sh',
+    'sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/rollback-production.test.sh',
   ]) {
     assert.match(ciWorkflow, new RegExp(command.replaceAll("$", "\\$"), "u"));
   }
