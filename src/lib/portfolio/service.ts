@@ -54,6 +54,14 @@ export type PublicPortfolioMutation = Readonly<{
   now?: Date;
 }>;
 
+export type PublicPortfolioWithdrawal = Readonly<{
+  action: "withdraw";
+  userId: string;
+  requestId: string;
+  expectedVersion: number;
+  now?: Date;
+}>;
+
 function uniqueSortedIds(values: readonly string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
 }
@@ -182,7 +190,58 @@ async function validateSelections(
   return { selectedProjects } as const;
 }
 
-export async function updatePublicPortfolio(input: PublicPortfolioMutation) {
+async function withdrawPublicPortfolio(input: PublicPortfolioWithdrawal) {
+  const now = input.now ?? new Date();
+  if (!input.userId.trim() || !UUID_PATTERN.test(input.requestId)
+    || !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 0
+    || !Number.isFinite(now.getTime())) throw new PublicPortfolioError("INVALID_REQUEST");
+  const inputHash = hashSocialEvidence({
+    operation: "public-portfolio-withdraw", requestId: input.requestId, expectedVersion: input.expectedVersion,
+  });
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query("select pg_advisory_xact_lock(hashtext($1))", [`public-portfolio:${input.userId}`]);
+    await assertOwner(client, input.userId);
+    const replay = await client.query<{ input_hash: string; event: string; resulting_version: string | number }>(
+      `select input_hash,event,resulting_version from public_portfolio_event
+        where user_id=$1 and request_id=$2`, [input.userId, input.requestId],
+    );
+    if (replay.rows[0]) {
+      if (replay.rows[0].input_hash !== inputHash) throw new PublicPortfolioError("IDEMPOTENCY_MISMATCH");
+      await client.query("commit");
+      return { rowVersion: Number(replay.rows[0].resulting_version), event: replay.rows[0].event, replayed: true } as const;
+    }
+    const existing = await client.query<{ row_version: string | number; is_published: boolean }>(
+      `select row_version,is_published from public_portfolio where user_id=$1 for update`, [input.userId],
+    );
+    if (!existing.rows[0]) throw new PublicPortfolioError("NOT_FOUND");
+    if (Number(existing.rows[0].row_version) !== input.expectedVersion) throw new PublicPortfolioError("VERSION_CONFLICT");
+    const rowVersion = input.expectedVersion + 1;
+    await client.query(
+      `update public_portfolio set is_published=false,row_version=$2,withdrawn_at=$3,updated_at=$3 where user_id=$1`,
+      [input.userId, rowVersion, now],
+    );
+    const snapshot = { requestHash: inputHash, isPublished: false };
+    await client.query(
+      `insert into public_portfolio_event
+        (user_id,actor_user_id,request_id,event,input_hash,snapshot,evidence_hash,reason,resulting_version,occurred_at)
+       values ($1,$1,$2,'withdrawn',$3,$4::jsonb,$5,$6,$7,$8)`,
+      [input.userId, input.requestId, inputHash, JSON.stringify(snapshot), hashSocialEvidence(snapshot),
+        "Learner explicitly withdrew the public portfolio projection.", rowVersion, now],
+    );
+    await client.query("commit");
+    return { rowVersion, event: "withdrawn", replayed: false } as const;
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function updatePublicPortfolio(input: PublicPortfolioMutation | PublicPortfolioWithdrawal) {
+  if ("action" in input) return withdrawPublicPortfolio(input);
   const now = input.now ?? new Date();
   const normalized = normalizeMutation(input, now);
   const inputHash = mutationHash(input, normalized);

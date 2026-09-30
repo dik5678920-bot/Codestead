@@ -267,6 +267,63 @@ describe("updatePublicPortfolio transaction behaviour", () => {
   });
 });
 
+describe("withdrawPublicPortfolio", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const withdrawal = { action: "withdraw" as const, userId, requestId, expectedVersion: 2, now: new Date("2026-07-12T00:00:00Z") };
+
+  it("withdraws without revalidating revoked selections or writing profile content", async () => {
+    let published = true;
+    const client = fakeClient({
+      'from "user" where id=$1 for update': [{ role: "learner", status: "active" }],
+      "from public_portfolio where user_id=$1 for update": [{ row_version: 2, is_published: true }],
+      "update public_portfolio set": () => { published = false; return []; },
+    });
+    mocks.connect.mockResolvedValue(client);
+    expect(await updatePublicPortfolio(withdrawal)).toMatchObject({ event: "withdrawn", rowVersion: 3, replayed: false });
+    const statements = client.query.mock.calls.map(([sql]) => sql.replace(/\s+/g, " "));
+    const update = statements.find((sql) => sql.startsWith("update public_portfolio set"));
+    expect(update).toContain("is_published=false");
+    expect(update).not.toMatch(/slug=|display_name=|headline=|about=/);
+    expect(statements.some((sql) => /delete from|from project|from user_achievement|from course_certificate/.test(sql))).toBe(false);
+    mocks.poolQuery.mockImplementation(async () => ({ rows: published ? [{}] : [] }));
+    await expect(loadPublicPortfolio("my-portfolio")).rejects.toMatchObject({ code: "NOT_FOUND" });
+  });
+
+  it.each([
+    [{ role: "learner", status: "inactive" }, 2, "NOT_FOUND"],
+    [{ role: "admin", status: "active" }, 2, "NOT_FOUND"],
+    [{ role: "learner", status: "active" }, 3, "VERSION_CONFLICT"],
+  ])("keeps owner and concurrency checks for withdrawal", async (owner, version, code) => {
+    const client = fakeClient({
+      'from "user" where id=$1 for update': [owner],
+      "from public_portfolio where user_id=$1 for update": [{ row_version: version, is_published: true }],
+    });
+    mocks.connect.mockResolvedValue(client);
+    await expect(updatePublicPortfolio(withdrawal)).rejects.toMatchObject({ code });
+    expect(client.query.mock.calls.some(([sql]) => sql.startsWith("update public_portfolio"))).toBe(false);
+    expect(client.query).toHaveBeenCalledWith("rollback");
+  });
+
+  it("replays an identical withdrawal without another write and rejects a changed request", async () => {
+    const inputHash = hashSocialEvidence({ operation: "public-portfolio-withdraw", requestId, expectedVersion: 2 });
+    const client = fakeClient({
+      'from "user" where id=$1 for update': [{ role: "learner", status: "active" }],
+      "from public_portfolio_event": [{ input_hash: inputHash, event: "withdrawn", resulting_version: 3 }],
+    });
+    mocks.connect.mockResolvedValue(client);
+    expect(await updatePublicPortfolio(withdrawal)).toMatchObject({ rowVersion: 3, event: "withdrawn", replayed: true });
+    await expect(updatePublicPortfolio({ ...withdrawal, expectedVersion: 3 })).rejects.toMatchObject({ code: "IDEMPOTENCY_MISMATCH" });
+    expect(client.query.mock.calls.some(([sql]) => sql.startsWith("update public_portfolio"))).toBe(false);
+  });
+
+  it("rejects invalid retry inputs before connecting", async () => {
+    await expect(updatePublicPortfolio({ ...withdrawal, requestId: "bad" })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    await expect(updatePublicPortfolio({ ...withdrawal, expectedVersion: -1 })).rejects.toMatchObject({ code: "INVALID_REQUEST" });
+    expect(mocks.connect).not.toHaveBeenCalled();
+  });
+});
+
 describe("loadPublicPortfolio", () => {
   beforeEach(() => vi.clearAllMocks());
 

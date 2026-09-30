@@ -51,6 +51,22 @@ describe("public portfolio owner API", () => {
     expect(mocks.load).toHaveBeenCalledWith("learner-owner");
   });
 
+  it("accepts an owner-bound withdrawal with only retry and concurrency inputs", async () => {
+    const body = { action: "withdraw", requestId, expectedVersion: 2 };
+    mocks.update.mockResolvedValue({ event: "withdrawn", rowVersion: 3, replayed: false });
+    const response = await PATCH(request(body));
+    expect(response.status).toBe(200);
+    expect(mocks.update).toHaveBeenCalledWith({ userId: "learner-owner", ...body });
+    expect(mocks.audit).toHaveBeenLastCalledWith(expect.objectContaining({ action: "public_portfolio.withdrawn" }));
+  });
+
+  it("rejects withdrawal owner overrides, edit fields, and invalid concurrency inputs", async () => {
+    for (const extra of [{ userId: "victim" }, { headline: "" }, { expectedVersion: -1 }]) {
+      expect((await PATCH(request({ action: "withdraw", requestId, expectedVersion: 2, ...extra }))).status).toBe(400);
+    }
+    expect(mocks.update).not.toHaveBeenCalled();
+  });
+
   it("rejects a body owner override and binds every selection to the session owner", async () => {
     const denied = await PATCH(request({ ...validBody, userId: "victim" }));
     expect(denied.status).toBe(400);

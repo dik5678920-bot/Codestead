@@ -72,14 +72,16 @@ export function PortfolioEditor() {
     setter(values.includes(id) ? values.filter((value) => value !== id) : [...values, id]);
   }
 
-  async function save(publish: boolean) {
+  async function save(publish: boolean, withdraw = false) {
     if (!settings) return;
     setBusy(true); setError(null); setMessage(null);
     try {
       const response = await fetch("/api/portfolio", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(withdraw ? {
+          action: "withdraw", requestId: crypto.randomUUID(), expectedVersion: settings.profile.rowVersion,
+        } : {
           requestId: crypto.randomUUID(), expectedVersion: settings.profile.rowVersion,
           slug, displayName, headline, about: about.trim() || null, publish,
           confirmPublicDisclosure: publish && confirmed,
@@ -89,7 +91,8 @@ export function PortfolioEditor() {
       });
       const body = await response.json() as { settings?: Settings; error?: string };
       if (!response.ok || !body.settings) throw new Error(body.error ?? "PORTFOLIO_UPDATE_FAILED");
-      apply(body.settings);
+      if (withdraw) setSettings({ ...settings, profile: body.settings.profile });
+      else apply(body.settings);
       setMessage(publish ? "Portfolio published. Only the selected projection is public." : settings.profile.isPublished ? "Portfolio withdrawn immediately." : "Private portfolio draft saved.");
     } catch (cause) {
       setError(errorMessage(cause instanceof Error ? cause.message : "PORTFOLIO_UPDATE_FAILED"));
@@ -138,7 +141,7 @@ export function PortfolioEditor() {
       {settings ? <section className={`${styles.panel} card`}>
         <label className={styles.disclosure}><input checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} type="checkbox" /><span><strong>I understand this creates a public web page.</strong><small>{settings.disclosure}</small></span></label>
         <div className={styles.actions}>
-          <button className="button button-secondary" disabled={busy} onClick={() => void save(false)} type="button">{settings.profile.isPublished ? "Withdraw public page" : "Save private draft"}</button>
+          <button className="button button-secondary" disabled={busy} onClick={() => void save(false, settings.profile.isPublished)} type="button">{settings.profile.isPublished ? "Withdraw public page" : "Save private draft"}</button>
           <button className="button button-primary" disabled={busy || !confirmed} onClick={() => void save(true)} type="button">{busy ? "Saving…" : settings.profile.isPublished ? "Update public page" : "Publish selected proof"}</button>
         </div>
       </section> : null}

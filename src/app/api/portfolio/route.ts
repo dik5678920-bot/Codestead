@@ -21,6 +21,12 @@ const updateSchema = z.object({
   selectedCertificateIds: z.array(z.uuid()).max(50),
 }).strict();
 
+const mutationSchema = z.union([updateSchema, z.object({
+  action: z.literal("withdraw"),
+  requestId: z.uuid(),
+  expectedVersion: z.number().int().min(0),
+}).strict()]);
+
 function status(code: string) {
   if (code === "NOT_FOUND") return 404;
   if (["INVALID_REQUEST", "INVALID_SELECTION", "DISCLOSURE_CONFIRMATION_REQUIRED"].includes(code)) return 400;
@@ -39,9 +45,12 @@ export async function PATCH(request: NextRequest) {
   return withRateLimit(
     { policy: "portfolio_mutation_user", identity: { kind: "user", value: authz.session.user.id } },
     async () => {
-      const parsed = updateSchema.safeParse(await request.json().catch(() => null));
+      const parsed = mutationSchema.safeParse(await request.json().catch(() => null));
       if (!parsed.success) return NextResponse.json({ error: "INVALID_REQUEST" }, { status: 400, headers: noStore });
-      const auditMetadata = {
+      const auditMetadata = "action" in parsed.data ? {
+        action: parsed.data.action,
+        expectedVersion: parsed.data.expectedVersion,
+      } : {
         publish: parsed.data.publish,
         expectedVersion: parsed.data.expectedVersion,
         projectCount: parsed.data.selectedProjectIds.length,
