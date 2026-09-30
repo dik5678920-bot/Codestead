@@ -10,7 +10,7 @@ assert.match(
 );
 assert.match(
   workflow,
-  /- run: sudo -n bash infra\/tests\/ingress-control-linux\.test\.sh/u,
+  /- run: sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra\/tests\/ingress-control-linux\.test\.sh/u,
   "CI must run the ingress-control authority suite under non-interactive root",
 );
 
@@ -26,7 +26,7 @@ for (const harness of [
   );
   assert.match(
     workflow,
-    new RegExp(`- run: sudo -n bash ${escaped}`, "u"),
+    new RegExp(`- run: sudo -n env PYTHONDONTWRITEBYTECODE=1 bash ${escaped}`, "u"),
     `CI must run ${harness} under non-interactive root`,
   );
 }
