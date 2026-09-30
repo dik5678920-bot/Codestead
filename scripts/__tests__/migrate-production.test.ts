@@ -1,4 +1,5 @@
 import { EventEmitter } from "node:events";
+import { performance as nodePerformance } from "node:perf_hooks";
 
 import { describe, expect, it, vi } from "vitest";
 
@@ -1079,81 +1080,93 @@ describe("production migration", () => {
   });
 
   it("uses one cleanup deadline across safe session restoration and pool shutdown", async () => {
-    const primaryError = new Error("migration failed before cleanup");
-    const phaseDelayMs = 50;
-    const cleanupBudgetMs = 170;
-    const pause = () => new Promise<void>((resolve) => {
-      setTimeout(resolve, phaseDelayMs);
-    });
-    let ownerRoleAssumed = false;
-    let cleanupStarted = false;
-    const query = vi.fn(async (sql: string) => {
-      if (cleanupStarted) await pause();
-      if (sql.includes("pg_try_advisory_lock")) {
-        return { rows: [{ acquired: true }] };
-      }
-      if (sql.includes("SET ROLE learncoding_owner")) {
-        ownerRoleAssumed = true;
+    vi.useFakeTimers();
+    const epoch = Date.now();
+    const clock = vi.spyOn(nodePerformance, "now").mockImplementation(() => Date.now() - epoch);
+    try {
+      const primaryError = new Error("migration failed before cleanup");
+      const phaseDelayMs = 50;
+      const cleanupBudgetMs = 170;
+      const pause = () => new Promise<void>((resolve) => {
+        setTimeout(resolve, phaseDelayMs);
+      });
+      let ownerRoleAssumed = false;
+      let cleanupStarted = false;
+      const query = vi.fn(async (sql: string) => {
+        if (cleanupStarted) await pause();
+        if (sql.includes("pg_try_advisory_lock")) {
+          return { rows: [{ acquired: true }] };
+        }
+        if (sql.includes("SET ROLE learncoding_owner")) {
+          ownerRoleAssumed = true;
+          return { rows: [] };
+        }
+        if (sql.includes("RESET ROLE")) {
+          ownerRoleAssumed = false;
+          return { rows: [] };
+        }
+        if (sql.includes("current_user") && sql.includes("session_user")) {
+          return {
+            rows: [{
+              current_user: ownerRoleAssumed
+                ? "learncoding_owner"
+                : "learncoding_migrator",
+              session_user: "learncoding_migrator",
+            }],
+          };
+        }
+        if (sql.includes("pg_advisory_unlock")) {
+          return { rows: [{ released: true }] };
+        }
         return { rows: [] };
-      }
-      if (sql.includes("RESET ROLE")) {
-        ownerRoleAssumed = false;
-        return { rows: [] };
-      }
-      if (sql.includes("current_user") && sql.includes("session_user")) {
-        return {
-          rows: [{
-            current_user: ownerRoleAssumed
-              ? "learncoding_owner"
-              : "learncoding_migrator",
-            session_user: "learncoding_migrator",
-          }],
-        };
-      }
-      if (sql.includes("pg_advisory_unlock")) {
-        return { rows: [{ released: true }] };
-      }
-      return { rows: [] };
-    });
-    const client = { query, release: vi.fn() };
-    const pool = {
-      connect: vi.fn(async () => client),
-      end: vi.fn(async () => {
-        await pause();
-      }),
-    };
-    const migrate = vi.fn(async () => {
-      cleanupStarted = true;
-      throw primaryError;
-    });
-    const startedAt = performance.now();
+      });
+      const client = { query, release: vi.fn() };
+      const pool = {
+        connect: vi.fn(async () => client),
+        end: vi.fn(async () => {
+          await pause();
+        }),
+      };
+      const migrate = vi.fn(async () => {
+        cleanupStarted = true;
+        throw primaryError;
+      });
+      const startedAt = performance.now();
 
-    const failure = await runProductionMigration({
-      connectionString: "postgresql://test",
-      pool,
-      migrate,
-      drizzle: vi.fn(() => ({})),
-      cleanupTimeoutMs: cleanupBudgetMs,
-    }).then(
-      () => undefined,
-      (error: unknown) => error,
-    );
-    const elapsedMs = performance.now() - startedAt;
+      const failurePromise = runProductionMigration({
+        connectionString: "postgresql://test",
+        pool,
+        migrate,
+        drizzle: vi.fn(() => ({})),
+        cleanupTimeoutMs: cleanupBudgetMs,
+      }).then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      await vi.advanceTimersByTimeAsync(cleanupBudgetMs);
+      const failure = await failurePromise;
+      const elapsedMs = performance.now() - startedAt;
 
-    expect(failure).toBe(primaryError);
-    expect(elapsedMs).toBeLessThan(190);
-    const cause = (failure as Error & { cause?: unknown }).cause;
-    expect(cause).toBeInstanceOf(AggregateError);
-    expect(
-      (cause as AggregateError).errors.some(
-        (error) => (
-          error instanceof Error
-          && error.name === "MigrationCleanupTimeoutError"
+      expect(failure).toBe(primaryError);
+      expect(elapsedMs).toBeLessThan(190);
+      expect(elapsedMs).toBe(cleanupBudgetMs);
+      const cause = (failure as Error & { cause?: unknown }).cause;
+      expect(cause).toBeInstanceOf(AggregateError);
+      expect(
+        (cause as AggregateError).errors.some(
+          (error) => (
+            error instanceof Error
+            && error.name === "MigrationCleanupTimeoutError"
+          ),
         ),
-      ),
-    ).toBe(true);
-    expect(client.release).toHaveBeenCalledOnce();
-    expect(pool.end).toHaveBeenCalledOnce();
+      ).toBe(true);
+      expect(client.release).toHaveBeenCalledOnce();
+      expect(pool.end).toHaveBeenCalledOnce();
+    } finally {
+      vi.clearAllTimers();
+      clock.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it("shares one cleanup deadline between timeout settlement and pool shutdown", async () => {

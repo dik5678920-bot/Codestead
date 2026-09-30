@@ -1,3 +1,5 @@
+import { performance as nodePerformance } from "node:perf_hooks";
+
 import { describe, expect, it, vi } from "vitest";
 
 type DatabaseRoleModule = {
@@ -328,6 +330,10 @@ async function loadDatabaseRoleModule(): Promise<DatabaseRoleModule | null> {
     return null;
   }
 }
+
+// Load the catalog-heavy fixture before the timed test body. The behavior under
+// test starts with an already available module, not a cold module import.
+const managedSessionDatabaseRoleModule = await loadDatabaseRoleModule();
 
 const urls = {
   postgresUser: "legacy_bootstrap",
@@ -1906,46 +1912,59 @@ describe("database least-privilege bootstrap", () => {
   });
 
   it("rejects malformed or non-draining managed-session evidence", async () => {
-    const databaseRoleBootstrap = await loadDatabaseRoleModule();
+    const databaseRoleBootstrap = managedSessionDatabaseRoleModule;
     expect(databaseRoleBootstrap).not.toBeNull();
 
-    for (const rows of [
-      [],
-      [{ remaining: -1 }],
-      [{ remaining: "0" }],
-      [{ remaining: 0 }, { remaining: 0 }],
-    ]) {
+    vi.useFakeTimers();
+    const epoch = Date.now();
+    const clock = vi.spyOn(nodePerformance, "now").mockImplementation(() => Date.now() - epoch);
+    try {
+
+      for (const rows of [
+        [],
+        [{ remaining: -1 }],
+        [{ remaining: "0" }],
+        [{ remaining: 0 }, { remaining: 0 }],
+      ]) {
+        const client = {
+          query: vi.fn(async (sql: string) => {
+            if (sql.includes("pg_terminate_backend")) return { rows: [] };
+            if (sql === "select pg_catalog.pg_stat_clear_snapshot()") {
+              return { rows: [] };
+            }
+            return { rows };
+          }),
+        };
+        await expect(
+          databaseRoleBootstrap!.terminateAndDrainManagedLoginRoleSessions(
+            client,
+            { timeoutMs: 50 },
+          ),
+        ).rejects.toThrow(/database role session evidence is invalid/u);
+      }
+
       const client = {
         query: vi.fn(async (sql: string) => {
           if (sql.includes("pg_terminate_backend")) return { rows: [] };
           if (sql === "select pg_catalog.pg_stat_clear_snapshot()") {
             return { rows: [] };
           }
-          return { rows };
+          return { rows: [{ remaining: 1 }] };
         }),
       };
-      await expect(
-        databaseRoleBootstrap!.terminateAndDrainManagedLoginRoleSessions(
-          client,
-          { timeoutMs: 50 },
-        ),
-      ).rejects.toThrow(/database role session evidence is invalid/u);
+      const rejection = expect(
+        databaseRoleBootstrap!.terminateAndDrainManagedLoginRoleSessions(client, {
+          timeoutMs: 1,
+        }),
+      ).rejects.toThrow(/database role sessions remain active/u);
+      await vi.advanceTimersByTimeAsync(1);
+      await rejection;
+      expect(client.query).toHaveBeenCalledWith(expect.stringContaining("count(*)::integer remaining"), expect.any(Array));
+    } finally {
+      vi.clearAllTimers();
+      clock.mockRestore();
+      vi.useRealTimers();
     }
-
-    const client = {
-      query: vi.fn(async (sql: string) => {
-        if (sql.includes("pg_terminate_backend")) return { rows: [] };
-        if (sql === "select pg_catalog.pg_stat_clear_snapshot()") {
-          return { rows: [] };
-        }
-        return { rows: [{ remaining: 1 }] };
-      }),
-    };
-    await expect(
-      databaseRoleBootstrap!.terminateAndDrainManagedLoginRoleSessions(client, {
-        timeoutMs: 1,
-      }),
-    ).rejects.toThrow(/database role sessions remain active/u);
   });
 
   it("reads one bounded PostgreSQL 17 or 18 authentication fence setting with zero auth delays", async () => {
@@ -2593,57 +2612,68 @@ describe("database least-privilege bootstrap", () => {
   });
 
   it("rejects late zero-session evidence and a never-settling drain query", async () => {
-    const databaseRoleBootstrap = await loadDatabaseRoleModule();
+    const databaseRoleBootstrap = managedSessionDatabaseRoleModule;
     expect(databaseRoleBootstrap).not.toBeNull();
-    let clock = 0;
-    const lateZeroClient = {
-      query: vi.fn(async (sql: string) => {
+    vi.useFakeTimers();
+    const epoch = Date.now();
+    const monotonicClock = vi.spyOn(nodePerformance, "now").mockImplementation(() => Date.now() - epoch);
+    try {
+      let clock = 0;
+      const lateZeroClient = {
+        query: vi.fn(async (sql: string) => {
+          if (sql.includes("pg_terminate_backend")) return { rows: [] };
+          if (sql === "select pg_catalog.pg_stat_clear_snapshot()") {
+            return { rows: [] };
+          }
+          clock = 2;
+          return { rows: [{ remaining: 0 }] };
+        }),
+      };
+      await expect(
+        databaseRoleBootstrap!.terminateAndDrainManagedLoginRoleSessions(
+          lateZeroClient,
+          { timeoutMs: 1, queryTimeoutMs: 10, now: () => clock },
+        ),
+      ).rejects.toThrow("database role sessions remain active");
+
+      const queryTimeout = expect(
+        databaseRoleBootstrap!.terminateAndDrainManagedLoginRoleSessions(
+          {
+            query: vi.fn(() => new Promise<never>(() => undefined)),
+          },
+          { timeoutMs: 50, queryTimeoutMs: 5 },
+        ),
+      ).rejects.toMatchObject({
+        name: "DatabaseBootstrapControlTimeoutError",
+      });
+      await vi.advanceTimersByTimeAsync(5);
+      await queryTimeout;
+
+      let sharedDrainClock = 0;
+      const sharedDrainQuery = vi.fn(async (sql: string) => {
+        sharedDrainClock += 10;
         if (sql.includes("pg_terminate_backend")) return { rows: [] };
         if (sql === "select pg_catalog.pg_stat_clear_snapshot()") {
           return { rows: [] };
         }
-        clock = 2;
         return { rows: [{ remaining: 0 }] };
-      }),
-    };
-    await expect(
-      databaseRoleBootstrap!.terminateAndDrainManagedLoginRoleSessions(
-        lateZeroClient,
-        { timeoutMs: 1, queryTimeoutMs: 10, now: () => clock },
-      ),
-    ).rejects.toThrow("database role sessions remain active");
-
-    await expect(
-      databaseRoleBootstrap!.terminateAndDrainManagedLoginRoleSessions(
-        {
-          query: vi.fn(() => new Promise<never>(() => undefined)),
-        },
-        { timeoutMs: 50, queryTimeoutMs: 5 },
-      ),
-    ).rejects.toMatchObject({
-      name: "DatabaseBootstrapControlTimeoutError",
-    });
-
-    let sharedDrainClock = 0;
-    const sharedDrainQuery = vi.fn(async (sql: string) => {
-      sharedDrainClock += 10;
-      if (sql.includes("pg_terminate_backend")) return { rows: [] };
-      if (sql === "select pg_catalog.pg_stat_clear_snapshot()") {
-        return { rows: [] };
-      }
-      return { rows: [{ remaining: 0 }] };
-    });
-    await expect(
-      databaseRoleBootstrap!.terminateAndDrainManagedLoginRoleSessions(
-        { query: sharedDrainQuery },
-        {
-          timeoutMs: 15,
-          queryTimeoutMs: 50,
-          now: () => sharedDrainClock,
-        },
-      ),
-    ).rejects.toThrow("database role sessions remain active");
-    expect(sharedDrainQuery).toHaveBeenCalledTimes(2);
+      });
+      await expect(
+        databaseRoleBootstrap!.terminateAndDrainManagedLoginRoleSessions(
+          { query: sharedDrainQuery },
+          {
+            timeoutMs: 15,
+            queryTimeoutMs: 50,
+            now: () => sharedDrainClock,
+          },
+        ),
+      ).rejects.toThrow("database role sessions remain active");
+      expect(sharedDrainQuery).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.clearAllTimers();
+      monotonicClock.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it("bounds client checkout and destroys a client that arrives after timeout", async () => {

@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 import ts from "typescript";
@@ -905,7 +905,10 @@ describe("database role-boundary test launcher", () => {
     const result = nodeSpawnSync(
       process.execPath,
       [
-        path.join(repositoryRoot, "node_modules/tsx/dist/cli.mjs"),
+        "--import",
+        pathToFileURL(path.join(repositoryRoot, "node_modules/tsx/dist/loader.mjs")).href,
+        "--import",
+        pathToFileURL(path.join(repositoryRoot, "scripts/__tests__/helpers/role-boundary-cli-scheduling.mjs")).href,
         path.join(
           repositoryRoot,
           "scripts/run-database-role-boundaries-tests.ts",
@@ -934,6 +937,14 @@ describe("database role-boundary test launcher", () => {
       .map((line) => line.replaceAll(tokenCanary, "[canary]"))
       .join("\n");
     expect(result.status, diagnostics).toBe(0);
+    const laneStarts = output.split("\n").filter((line) => line.startsWith("database-role-boundary lane START "));
+    const lanePasses = output.split("\n").filter((line) => line.startsWith("database-role-boundary lane PASS "));
+    expect(laneStarts).toHaveLength(10);
+    expect(lanePasses.map((line) => line.replace(" PASS ", " START "))).toEqual(laneStarts);
+    // A subsequent lane starts only after the previous real child has passed.
+    for (let index = 1; index < laneStarts.length; index++) {
+      expect(output.indexOf(lanePasses[index - 1]!)).toBeLessThan(output.indexOf(laneStarts[index]!));
+    }
     expect(output).toContain(
       "publishes the exact migration-derived 0069 public and Drizzle inventory",
     );
