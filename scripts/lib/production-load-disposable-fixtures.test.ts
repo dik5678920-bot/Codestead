@@ -2,7 +2,7 @@ import {
   createConnection,
   createServer as createTcpServer,
   type AddressInfo,
-  type Socket,
+  Socket,
 } from "node:net";
 
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -40,6 +40,8 @@ import {
 const closeables: ProductionLoadDisposableCloseable[] = [];
 
 afterEach(async () => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   await Promise.allSettled(closeables.splice(0).reverse().map((item) => item.close()));
 });
 
@@ -122,9 +124,11 @@ describe("production load disposable TCP proxy", () => {
     closeables.push(proxy);
 
     await expect(roundTrip(proxy.port, "before")).resolves.toBe("before");
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const interruption = proxy.interruptAndRelease(100, new AbortController().signal);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(proxy.status().interrupted).toBe(true);
     await expect(roundTrip(proxy.port, "during")).rejects.toThrow();
+    await vi.advanceTimersByTimeAsync(100);
     await interruption;
     await expect(roundTrip(proxy.port, "after")).resolves.toBe("after");
     expect(proxy.status()).toEqual({ interrupted: false, activeConnections: 0 });
@@ -164,11 +168,13 @@ describe("production load disposable TCP proxy", () => {
     closeables.push(proxy);
     const client = await rawConnection(proxy.port);
     await waitUntil(() => proxy.status().activeConnections === 1);
+    vi.useFakeTimers();
     const activeFault = proxy.interruptAndRelease(5_000, new AbortController().signal);
+    const cancelledFault = expect(activeFault).rejects.toThrow("aborted");
     const started = Date.now();
     await proxy.close();
     expect(Date.now() - started).toBeLessThan(750);
-    await expect(activeFault).rejects.toThrow("aborted");
+    await cancelledFault;
     await waitForClose(client);
     expect(proxy.status().activeConnections).toBe(0);
   });
@@ -179,14 +185,16 @@ describe("production load fake provider endpoint", () => {
     const server = await startProductionLoadDisposableProviderServer();
     closeables.push(server);
 
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     for (const provider of ["gmail", "ai", "drive"] as const) {
       const url = `http://127.0.0.1:${server.port}/${provider}`;
       await expect(fetch(url, { redirect: "manual" }).then((value) => value.status)).resolves.toBe(204);
       const interruption = server.interruptAndRelease(
         provider, 100, new AbortController().signal,
       );
-      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(server.status()[provider]).toBe(true);
       await expect(fetch(url, { redirect: "manual" }).then((value) => value.status)).resolves.toBe(503);
+      await vi.advanceTimersByTimeAsync(100);
       await interruption;
       await expect(fetch(url, { redirect: "manual" }).then((value) => value.status)).resolves.toBe(204);
     }
@@ -239,12 +247,36 @@ describe("production load fake provider endpoint", () => {
   });
 
   it("closes slow headers and destroys keep-alive sockets during bounded shutdown", async () => {
+    vi.useFakeTimers();
+    let partialHeadersReceived!: () => void;
+    const partialHeaders = new Promise<void>((resolve) => { partialHeadersReceived = resolve; });
+    const nativeSetTimeout = Socket.prototype.setTimeout;
+    // Socket idle timers live in libuv rather than the global timer API. Drive
+    // this fixture's configured idle deadline while retaining real TCP traffic.
+    vi.spyOn(Socket.prototype, "setTimeout").mockImplementation(function (
+      this: Socket, timeout: number, callback?: () => void,
+    ) {
+      if (timeout !== 2_500) return nativeSetTimeout.call(this, timeout, callback);
+      nativeSetTimeout.call(this, 0);
+      if (callback) this.once("timeout", callback);
+      let timer = setTimeout(() => this.emit("timeout"), timeout);
+      this.on("data", () => {
+        clearTimeout(timer);
+        timer = setTimeout(() => this.emit("timeout"), timeout);
+        partialHeadersReceived();
+      });
+      this.once("close", () => clearTimeout(timer));
+      return this;
+    });
     const server = await startProductionLoadDisposableProviderServer();
     closeables.push(server);
     const slow = await rawConnection(server.port);
     slow.write("POST /ai HTTP/1.1\r\nHost:");
     const slowStarted = Date.now();
-    await waitForClose(slow);
+    const slowClosed = waitForClose(slow);
+    await partialHeaders;
+    await vi.advanceTimersByTimeAsync(2_500);
+    await slowClosed;
     expect(Date.now() - slowStarted).toBeLessThan(3_500);
 
     const keepAlive = await rawConnection(server.port);
@@ -260,10 +292,11 @@ describe("production load fake provider endpoint", () => {
       keepAlive.once("error", reject);
     });
     const activeFault = server.interruptAndRelease("ai", 5_000, new AbortController().signal);
+    const cancelledFault = expect(activeFault).rejects.toThrow("aborted");
     const closeStarted = Date.now();
     await server.close();
     expect(Date.now() - closeStarted).toBeLessThan(750);
-    await expect(activeFault).rejects.toThrow("aborted");
+    await cancelledFault;
     await waitForClose(keepAlive);
   });
 });
