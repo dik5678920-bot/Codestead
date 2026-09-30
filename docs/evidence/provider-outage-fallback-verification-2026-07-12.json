@@ -80,7 +80,7 @@
     "src/lib/ai/router.ts": "5951f7b8204b3adf4c182d7d726c69f4c1f8bccb4f5ea8aefe85465987e2fcba",
     "src/lib/ai/provider-operation-idempotency.ts": "06d2e17e1d3cb76b93e4ba736760763c5b5d94decff3f4a29cd535add88aefc5",
     "src/lib/ai/__tests__/provider-operation-idempotency-store.test.ts": "0ef67a0418aab93bb24f438a4b099a2f726c75318d00f30984f71f60bc10cac4",
-    "src/app/api/ai/tutor/route.ts": "7c4f3478127a41ab906931b3e5ddb21897ed617d7e07e3ebb8e9409614b5b416",
+    "src/app/api/ai/tutor/route.ts": "6e7fa32a699d8fbcdf643eba3b14a917d2e2ae25620b14d63d66c844d667f3af",
     "src/lib/privacy/consent.ts": "7028354d1bff8efaaf91ee47623fa0f325b928707fa39cbf1d8a0816b15bc958",
     "src/app/api/privacy/consents/route.ts": "14a613b56f579d5031342312812c99bf74b36efc2abda71ae473fdfbed337c71",
     "src/app/api/onboarding/profile/route.ts": "2b54cd8d028e4a4cc505f569e7f77270e18539a631cdb9f600f39c0ea9d1c822",

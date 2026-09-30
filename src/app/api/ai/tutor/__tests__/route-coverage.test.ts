@@ -452,6 +452,19 @@ describe("tutor route durable execution coverage", () => {
     expect(response.status).toBe(200);
   });
 
+  it("keeps a provider unroutable when every configured policy for it is disabled", async () => {
+    const disabledNimPolicy = { ...nimPolicy, id: "policy-nim-disabled", enabled: false };
+    queueExecution({ policies: [disabledNimPolicy] });
+    mocks.routeTutorRequest.mockImplementation(async () => providerSuccess());
+
+    await POST(tutorRequest());
+
+    expect(mocks.openCredential).not.toHaveBeenCalled();
+    for (const [input] of mocks.routeTutorRequest.mock.calls) {
+      expect(input.candidates).toEqual([]);
+    }
+  });
+
   it("prefers an admin-configured Google policy model over the built-in default", async () => {
     state.acceptedPurposes.add("provider:google");
     mocks.consentPurposeForProvider.mockImplementation((provider) =>

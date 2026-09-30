@@ -251,19 +251,23 @@ export async function POST(request: NextRequest) {
   const policies = await db
     .select()
     .from(providerPolicy)
-    .where(and(eq(providerPolicy.operation, "tutor"), eq(providerPolicy.enabled, true)))
+    .where(eq(providerPolicy.operation, "tutor"))
     .orderBy(asc(providerPolicy.priority));
+  const configuredProviders = new Set<string>();
   const policyByProvider = new Map<string, (typeof policies)[number]>();
   const policyByProviderModel = new Map<string, (typeof policies)[number]>();
   for (const policy of policies) {
+    configuredProviders.add(policy.provider);
+    if (!policy.enabled) continue;
     if (!policyByProvider.has(policy.provider)) policyByProvider.set(policy.provider, policy);
     policyByProviderModel.set(`${policy.provider}\u0000${policy.model}`, policy);
   }
-  // Admin provider_policy rows always win; every self-serve provider gets a
-  // default here so a learner isn't silently unroutable just because nobody
-  // configured that provider in the admin console.
+  // Admin provider_policy rows always win; every self-serve provider with no
+  // configured row gets a default here so a learner isn't silently unroutable
+  // just because nobody configured that provider in the admin console. A
+  // provider whose rows are all disabled stays unroutable.
   for (const provider of AI_PROVIDER_CATALOG) {
-    if (policyByProvider.has(provider.id)) continue;
+    if (configuredProviders.has(provider.id)) continue;
     const defaultPolicy: (typeof policies)[number] = {
       id: randomUUID(),
       provider: provider.id,
