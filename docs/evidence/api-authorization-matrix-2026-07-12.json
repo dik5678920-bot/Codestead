@@ -1825,7 +1825,7 @@
       "admin": "allowed",
       "objectAuthorization": "no-user-object",
       "ownershipProof": "authenticated browser error-monitoring availability probe",
-      "operationSourceSha256": "cce2aa09e0ad4bd7ff7b700a5d0f205ab77e9290f5c214cb357e2e34d3a0261f"
+      "operationSourceSha256": "66c3661de8548c5facb0438d9e4bef0f1a20fc1473ff126b31ab0ec671efa51d"
     },
     {
       "operation": "POST /api/monitoring/envelope",
