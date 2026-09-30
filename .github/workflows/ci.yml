@@ -171,34 +171,34 @@ jobs:
       - run: python3 infra/tests/release-tree-packaging.test.py
       - run: python3 infra/tests/existing-container-baseline.test.py
       - run: python3 infra/tests/capture-existing-containers.test.py
-      - run: sudo python3 infra/tests/capture-existing-containers-linux.test.py
+      - run: sudo env PYTHONDONTWRITEBYTECODE=1 python3 infra/tests/capture-existing-containers-linux.test.py
       - run: python3 infra/tests/test_production_load_browser_journey.py
       - run: python3 infra/tests/test_production_load_control.py
       - run: python3 infra/tests/test_production_load_peer_credentials.py
-      - run: sudo -n bash infra/tests/ingress-control-linux.test.sh
-      - run: sudo -n bash infra/tests/start-production-stack.test.sh
-      - run: sudo -n bash infra/tests/start-production-stack-adversarial.test.sh
-      - run: sudo -n bash infra/tests/ingress-recovery.test.sh
+      - run: sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/ingress-control-linux.test.sh
+      - run: sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/start-production-stack.test.sh
+      - run: sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/start-production-stack-adversarial.test.sh
+      - run: sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/ingress-recovery.test.sh
       - run: bash infra/tests/runner-vm-provision.test.sh
-      - run: sudo bash infra/tests/runner-guest-installer.test.sh
-      - run: sudo bash infra/tests/runner-firewall.test.sh
+      - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-guest-installer.test.sh
+      - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-firewall.test.sh
       # Runner images ship varying Docker Engines; the packet test uses
       # interface_name, which needs Engine 28.1+, so pin the reviewed engine.
       - run: bash infra/tests/install-reviewed-docker-engine.sh
-      - run: sudo bash infra/tests/runner-firewall-packets.test.sh
+      - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-firewall-packets.test.sh
       - run: python3 infra/tests/recovery-evidence-helper.test.py
       - run: python3 infra/tests/recovery-evidence-provenance.test.py
       - run: python3 infra/tests/recovery-evidence-storage-health.test.py
       - run: python3 infra/tests/recovery-evidence-atomic.test.py
       - run: python3 infra/tests/recovery-evidence-collection.test.py
       - run: python3 infra/tests/host-operations-compatibility.test.py
-      - run: sudo bash infra/tests/power-evidence.test.sh
-      - run: sudo bash infra/tests/power-recovery-check.test.sh
+      - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-evidence.test.sh
+      - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-recovery-check.test.sh
       - run: sudo bash infra/tests/systemd-recovery.test.sh
       - run: bash infra/ops/install-compose-ci.sh
       - run: bash infra/tests/smoke-production.test.sh
-      - run: sudo -n env "PATH=$PATH" bash infra/tests/release-production.test.sh
-      - run: sudo -n env "PATH=$PATH" bash infra/tests/rollback-production.test.sh
+      - run: sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/release-production.test.sh
+      - run: sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/rollback-production.test.sh
       - run: REQUIRE_COMPOSE_MAJOR=5 bash infra/tests/compose-release-cli-contract.test.sh
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: sudo -n env "PATH=$PATH" bash infra/tests/runner-reconciliation.test.sh

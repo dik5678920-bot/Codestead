@@ -828,7 +828,7 @@ if [[ "${1:-}" == "compose" ]]; then
   emit_host_port cloudflared
   if [[ "$operations_profile" == true ]]; then
     for service in database-role-bootstrap database-negative-probes database-boundary-verifier \
-      migrate lifecycle platform-seed admin-bootstrap; do
+      backup-status-reporter migrate lifecycle platform-seed admin-bootstrap; do
       service_image="$(value_for "$service" image 'registry.example.test/operations@sha256:1111111111111111111111111111111111111111111111111111111111111111')"
       service_restart="$(value_for "$service" restart "$FAKE_ONESHOT_RESTART")"
       printf '%s\n' \
@@ -991,7 +991,8 @@ realpath_input_is_contained() {
 
 case "$command_name" in
   trusted-stat)
-    [[ "$#" == 4 && "$1" == -c && "$3" == -- && ( "$2" == '%u:%g:%a' || "$2" == '%u:%g:%a:%h' || "$2" == '%a' || "$2" == '%u' ) ]] || exit 64
+    # %u:%a is the pre-privileged preparer-ancestry check.
+    [[ "$#" == 4 && "$1" == -c && "$3" == -- && ( "$2" == '%u:%g:%a' || "$2" == '%u:%g:%a:%h' || "$2" == '%u:%a' || "$2" == '%a' || "$2" == '%u' ) ]] || exit 64
     safe_fixture_path "$4" || exit 97
     stat_output="$(/usr/bin/stat -c "$2" -- "$4")" || exit 97
     if [[ "$2" == '%u:%g:%a' || "$2" == '%u:%g:%a:%h' ]]; then
@@ -1009,9 +1010,15 @@ case "$command_name" in
     fi
     ;;
   trusted-realpath)
-    [[ "$#" == 4 && ( "$1" == --canonicalize-missing || "$1" == --canonicalize-existing ) && "$2" == --no-symlinks && "$3" == -- ]] || exit 64
-    realpath_input_is_contained "$4" || exit 97
-    resolved="$(/usr/bin/realpath "$1" --no-symlinks -- "$4")" || exit 97
+    if [[ "$#" == 3 && "$1" == -e && "$2" == -- ]]; then
+      # The pre-privileged preparer checks resolve symlinks and require existence.
+      realpath_input_is_contained "$3" || exit 97
+      resolved="$(/usr/bin/realpath -e -- "$3")" || exit 97
+    else
+      [[ "$#" == 4 && ( "$1" == --canonicalize-missing || "$1" == --canonicalize-existing ) && "$2" == --no-symlinks && "$3" == -- ]] || exit 64
+      realpath_input_is_contained "$4" || exit 97
+      resolved="$(/usr/bin/realpath "$1" --no-symlinks -- "$4")" || exit 97
+    fi
     has_fixture_prefix "$resolved" || exit 97
     printf '%s\n' "$resolved"
     ;;
@@ -1960,7 +1967,7 @@ while IFS='|' read -r label alternate_url; do
   fake_runner_url="$alternate_url"
   expect_failure \
     "runner URL $label" \
-    'fatal: runner URL must be exactly http://192.168.122.12:4100'
+    'fatal: runner gateway upstream must be exactly http://192.168.122.12:4100'
 done <<'EOF'
 other-rfc1918|http://10.20.0.13:4100
 other-rfc1918-172|http://172.29.40.12:4100
@@ -2038,7 +2045,7 @@ internal_long_running_services=(
 )
 operations_services=(
   database-role-bootstrap database-negative-probes database-boundary-verifier
-  migrate lifecycle platform-seed admin-bootstrap
+  backup-status-reporter migrate lifecycle platform-seed admin-bootstrap
 )
 one_shot_services=("${operations_services[@]}")
 
@@ -2425,7 +2432,7 @@ for bad_mode in 0400 0444; do
   chmod "$bad_mode" "$secrets/postgres_password"
   expect_failure \
     "secret mode $bad_mode" \
-    "fatal: secret must be owned by root:2000 with mode 440: $secrets/postgres_password"
+    "fatal: secret must be owned by root:2000 with mode 440 and one link: $secrets/postgres_password"
 done
 
 make_fixture untrusted-path-stat
@@ -2446,7 +2453,7 @@ EOF
 chmod 0755 "$case_dir/bin/stat"
 expect_failure \
   'caller PATH cannot forge secret metadata' \
-  "fatal: secret must be owned by root:2000 with mode 440: $secrets/postgres_password"
+  "fatal: secret must be owned by root:2000 with mode 440 and one link: $secrets/postgres_password"
 
 make_fixture secret-symlink
 rm "$secrets/postgres_password"
@@ -2465,6 +2472,9 @@ done
 
 for cloudflare_case in missing-tunnel-id extra-field malformed-account invalid-secret; do
   make_fixture "cloudflare-$cloudflare_case"
+  # Every shape violation is rejected by the one canonical-fields pattern; a
+  # well-shaped but non-canonical base64 secret fails the TunnelSecret check.
+  cloudflare_expected_fatal='fatal: cloudflare tunnel credentials must contain only canonical AccountTag, TunnelSecret, and TunnelID fields'
   case "$cloudflare_case" in
     missing-tunnel-id)
       printf '%s' '{"AccountTag":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","TunnelSecret":"MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="}' >"$secrets/cloudflare_tunnel_credentials.json"
@@ -2477,11 +2487,12 @@ for cloudflare_case in missing-tunnel-id extra-field malformed-account invalid-s
       ;;
     invalid-secret)
       printf '%s' '{"AccountTag":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","TunnelSecret":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAB=","TunnelID":"11111111-1111-4111-8111-111111111111"}' >"$secrets/cloudflare_tunnel_credentials.json"
+      cloudflare_expected_fatal='fatal: cloudflare tunnel credentials contain an invalid TunnelSecret'
       ;;
   esac
   expect_failure \
     "invalid Cloudflare credential: $cloudflare_case" \
-    'fatal: cloudflare tunnel credentials'
+    "$cloudflare_expected_fatal"
 done
 
 make_fixture invalid-uploads-boolean

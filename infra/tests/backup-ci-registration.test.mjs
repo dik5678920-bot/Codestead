@@ -791,9 +791,9 @@ const registrationRun = "node infra/tests/backup-ci-registration.test.mjs";
 const releaseRollbackRun =
   "npm run test:mail-guarded-delivery-0069:release-rollback";
 const releaseProductionRun =
-  'sudo -n env "PATH=$PATH" bash infra/tests/release-production.test.sh';
+  'sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/release-production.test.sh';
 const rollbackProductionRun =
-  'sudo -n env "PATH=$PATH" bash infra/tests/rollback-production.test.sh';
+  'sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/rollback-production.test.sh';
 const shellSyntaxRun = "bash -n scripts/backup/*.sh infra/tests/*.sh";
 const pythonSyntaxRun =
   "python3 -m py_compile scripts/backup/run-managed-deadline.py infra/tests/managed-deadline-stop-channel-linux.py";
@@ -896,27 +896,27 @@ const expectedApplicationRuns = [
   "python3 infra/tests/release-tree-packaging.test.py",
   "python3 infra/tests/existing-container-baseline.test.py",
   "python3 infra/tests/capture-existing-containers.test.py",
-  "sudo python3 infra/tests/capture-existing-containers-linux.test.py",
+  "sudo env PYTHONDONTWRITEBYTECODE=1 python3 infra/tests/capture-existing-containers-linux.test.py",
   "python3 infra/tests/test_production_load_browser_journey.py",
   "python3 infra/tests/test_production_load_control.py",
   "python3 infra/tests/test_production_load_peer_credentials.py",
-  "sudo -n bash infra/tests/ingress-control-linux.test.sh",
-  "sudo -n bash infra/tests/start-production-stack.test.sh",
-  "sudo -n bash infra/tests/start-production-stack-adversarial.test.sh",
-  "sudo -n bash infra/tests/ingress-recovery.test.sh",
+  "sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/ingress-control-linux.test.sh",
+  "sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/start-production-stack.test.sh",
+  "sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/start-production-stack-adversarial.test.sh",
+  "sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/ingress-recovery.test.sh",
   "bash infra/tests/runner-vm-provision.test.sh",
-  "sudo bash infra/tests/runner-guest-installer.test.sh",
-  "sudo bash infra/tests/runner-firewall.test.sh",
+  "sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-guest-installer.test.sh",
+  "sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-firewall.test.sh",
   "bash infra/tests/install-reviewed-docker-engine.sh",
-  "sudo bash infra/tests/runner-firewall-packets.test.sh",
+  "sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-firewall-packets.test.sh",
   "python3 infra/tests/recovery-evidence-helper.test.py",
   "python3 infra/tests/recovery-evidence-provenance.test.py",
   "python3 infra/tests/recovery-evidence-storage-health.test.py",
   "python3 infra/tests/recovery-evidence-atomic.test.py",
   "python3 infra/tests/recovery-evidence-collection.test.py",
   "python3 infra/tests/host-operations-compatibility.test.py",
-  "sudo bash infra/tests/power-evidence.test.sh",
-  "sudo bash infra/tests/power-recovery-check.test.sh",
+  "sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-evidence.test.sh",
+  "sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-recovery-check.test.sh",
   "sudo bash infra/tests/systemd-recovery.test.sh",
   "bash infra/ops/install-compose-ci.sh",
   "bash infra/tests/smoke-production.test.sh",

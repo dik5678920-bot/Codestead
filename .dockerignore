@@ -11,6 +11,8 @@ npm-debug.log*
 /public/monaco
 /dist
 /uploads
+# Python bytecode from host test runs (root-run tests can leave it unreadable).
+**/__pycache__
 
 # Workstation-only tooling and root scratch artifacts never enter direct Docker contexts.
 /.superpowers
