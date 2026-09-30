@@ -22,7 +22,12 @@ work="$(cd "$work" && pwd -P)"
   echo 'runner reconciliation fixture escaped its verified temporary root' >&2
   exit 1
 }
-chmod 0700 "$work"
+# Search-only for others: the capability-free containment user must traverse
+# to its bind-mount sources, but cannot list the fixture root.
+chmod 0711 "$work"
+# Bubblewrap runs as this unprivileged uid with every capability dropped, so it
+# uses the kernel's unprivileged user-namespace path (uid 0 inside maps here).
+readonly containment_uid=65534
 lock_holder=""
 cleanup() {
   if [[ -n "$lock_holder" ]]; then
@@ -813,7 +818,8 @@ EOF
   containment_command=(
     /usr/bin/timeout --signal=KILL --kill-after=5s 45s
     /usr/bin/prlimit "${resource_limit_args[@]}" --
-    /usr/bin/setpriv --clear-groups --no-new-privs --bounding-set=-all --inh-caps=-all --ambient-caps=-all
+    /usr/bin/setpriv --reuid="$containment_uid" --regid="$containment_uid" --clear-groups
+    --no-new-privs --bounding-set=-all --inh-caps=-all --ambient-caps=-all
     /usr/bin/bwrap
     --die-with-parent --new-session --unshare-user --uid 0 --gid 0
     --unshare-pid --unshare-net --unshare-ipc --unshare-uts --disable-userns
@@ -828,12 +834,15 @@ EOF
   )
 
   preflight_ro_probes="$entry:$launcher_under_test:$runner_flock_wrapper:$runner_node_wrapper"
+  map_root_owned_fixture_to_containment "$entry" "$launcher_under_test" "$runner_flock_wrapper" \
+    "$runner_node_wrapper" "$containment_probe_dir" || return 1
   set +e
   /usr/bin/env -i PATH= HOME="$containment_probe_dir" CONTAINMENT_RO_PROBES="$preflight_ro_probes" \
     "${containment_command[@]}" /usr/bin/bash -c ':' \
     >"$work/containment-preflight.stdout" 2>"$work/containment-preflight.stderr"
   probe_status=$?
   set -e
+  restore_fixture_ownership
   (( probe_status == 0 )) || {
     echo 'FAIL: Bubblewrap containment preflight or mandatory user namespace was rejected' >&2
     return 1
@@ -895,6 +904,78 @@ assert_fixture_path() {
     "$work"|"$work"/*) ;;
     *) fail "$label escaped the verified temporary fixture" ;;
   esac
+}
+
+# Inside the user namespace only $containment_uid (and its gid) map to 0. Hand
+# root-owned fixture paths to that uid just before a crossing so the code under
+# test still sees them as root-owned; a root group is mapped the same way and any
+# other owner or group a case chose deliberately is left unchanged. Concurrent
+# crossings share one reference-counted mapping so no crossing restores
+# ownership under another that is still running.
+containment_map_lock="$work/.containment-ownership.lock"
+containment_map_count="$work/.containment-ownership.count"
+containment_map_list="$work/.containment-ownership.list"
+map_one_fixture_path_to_containment() {
+  local path="$1" original new_uid new_gid
+  original="$(/usr/bin/stat -c '%u:%g' -- "$path")" || return 1
+  new_uid="${original%%:*}"
+  new_gid="${original##*:}"
+  [[ "$new_uid" == 0 ]] || return 0
+  new_uid="$containment_uid"
+  [[ "$new_gid" == 0 ]] && new_gid="$containment_uid"
+  printf '%s\0%s\0' "$path" "$original" >>"$containment_map_list"
+  /usr/bin/chown -h "$new_uid:$new_gid" -- "$path"
+}
+
+map_root_owned_fixture_to_containment() {
+  local source ancestor path count lock_fd status=0
+  exec {lock_fd}>>"$containment_map_lock"
+  /usr/bin/flock --exclusive "$lock_fd" || return 1
+  for source in "$@"; do
+    [[ -e "$source" || -L "$source" ]] || continue
+    case "$source" in
+      "$work"/*) ;;
+      *) echo "containment ownership mapping escaped the fixture: $source" >&2; status=1; break ;;
+    esac
+    while IFS= read -r -d '' path; do
+      map_one_fixture_path_to_containment "$path" || { status=1; break 2; }
+    done < <(/usr/bin/find "$source" -xdev -uid 0 -print0)
+    # Private (0700) fixture directories between $work and the source must be
+    # traversable by the containment user as well.
+    ancestor="$(dirname -- "$source")"
+    while [[ "$ancestor" == "$work"/* ]]; do
+      map_one_fixture_path_to_containment "$ancestor" || { status=1; break 2; }
+      ancestor="$(dirname -- "$ancestor")"
+    done
+  done
+  if (( status == 0 )); then
+    count="$(cat -- "$containment_map_count" 2>/dev/null || printf 0)"
+    printf '%s\n' "$((count + 1))" >"$containment_map_count"
+  fi
+  exec {lock_fd}>&-
+  return "$status"
+}
+
+# When the last concurrent crossing ends, return every mapped path to its exact
+# original owner and group so each outside assertion observes the fixture as it
+# was created.
+restore_fixture_ownership() {
+  local path original count lock_fd status=0
+  exec {lock_fd}>>"$containment_map_lock"
+  /usr/bin/flock --exclusive "$lock_fd" || return 1
+  count="$(cat -- "$containment_map_count" 2>/dev/null || printf 0)"
+  count=$((count > 0 ? count - 1 : 0))
+  printf '%s\n' "$count" >"$containment_map_count"
+  if (( count == 0 )) && [[ -s "$containment_map_list" ]]; then
+    while IFS= read -r -d '' path && IFS= read -r -d '' original; do
+      if [[ -e "$path" || -L "$path" ]]; then
+        /usr/bin/chown -h "$original" -- "$path" || status=1
+      fi
+    done <"$containment_map_list"
+    : >"$containment_map_list"
+  fi
+  exec {lock_fd}>&-
+  return "$status"
 }
 
 run_runner_sut() {
@@ -986,12 +1067,19 @@ run_runner_sut() {
   done
   : >"$sut_stdout"
   : >"$sut_stderr"
+  map_root_owned_fixture_to_containment "$containment_entry" "$launcher_under_test" \
+    "$runner_flock_wrapper" "$runner_node_wrapper" "$containment_probe_dir" \
+    "$runner_mutable_root" "$runner_output_root" \
+    ${secret_target:+"$secret_target"} \
+    ${RUNNER_SHARED_SECRET_FILE:+"$RUNNER_SHARED_SECRET_FILE"} \
+    "${read_only_test_scripts[@]}" || fail 'could not hand fixture paths to the containment user'
   if /usr/bin/env -i "${clean_environment[@]}" "${execution_containment[@]}" /usr/bin/sh "$launcher_under_test" \
     >"$sut_stdout" 2>"$sut_stderr"; then
     sut_status=0
   else
     sut_status=$?
   fi
+  restore_fixture_ownership
   [[ -s "$sut_stdout" ]] && /usr/bin/cat -- "$sut_stdout"
   [[ -s "$sut_stderr" ]] && /usr/bin/cat -- "$sut_stderr" >&2
   return "$sut_status"
