@@ -179,7 +179,7 @@
           "id": "javascript.network.fetch.browser.visible",
           "visibility": "visible",
           "category": "normal",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"fulfilled response renders parsed body\",\n      \"expression\": \"document.querySelector('output').textContent\",\n      \"expected\": \"Network lesson\"\n    }\n  ],\n  \"document\": \"<main><h1>Fetch</h1><output></output></main>\",\n  \"routes\": [\n    {\n      \"url\": \"https://learncoding.test/api/lesson\",\n      \"status\": 200,\n      \"contentType\": \"application/json\",\n      \"body\": \"{\\\"title\\\":\\\"Network lesson\\\"}\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 20\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 1024,\n    \"height\": 768\n  },\n  \"assertions\": [\n    {\n      \"description\": \"fulfilled response renders parsed body\",\n      \"expression\": \"document.querySelector('output').textContent\",\n      \"expected\": \"Network lesson\"\n    }\n  ],\n  \"document\": \"<main><h1>Fetch</h1><output></output></main>\",\n  \"routes\": [\n    {\n      \"url\": \"https://learncoding.test/api/lesson\",\n      \"status\": 200,\n      \"contentType\": \"application/json\",\n      \"body\": \"{\\\"title\\\":\\\"Network lesson\\\"}\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"document.querySelector('output').textContent!=='loading'\",\n      \"milliseconds\": 5000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true
@@ -188,7 +188,7 @@
           "id": "javascript.network.fetch.browser.hidden",
           "visibility": "hidden",
           "category": "boundary",
-          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"non-success status reaches recoverable failure\",\n      \"expression\": \"document.querySelector('output').textContent\",\n      \"expected\": \"failed\"\n    }\n  ],\n  \"document\": \"<main><h1>Fetch</h1><output></output></main>\",\n  \"routes\": [\n    {\n      \"url\": \"https://learncoding.test/api/lesson\",\n      \"status\": 503,\n      \"contentType\": \"application/json\",\n      \"body\": \"{}\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"wait\",\n      \"milliseconds\": 20\n    }\n  ]\n}\n",
+          "stdin": "{\n  \"viewport\": {\n    \"width\": 320,\n    \"height\": 568\n  },\n  \"assertions\": [\n    {\n      \"description\": \"non-success status reaches recoverable failure\",\n      \"expression\": \"document.querySelector('output').textContent\",\n      \"expected\": \"failed\"\n    }\n  ],\n  \"document\": \"<main><h1>Fetch</h1><output></output></main>\",\n  \"routes\": [\n    {\n      \"url\": \"https://learncoding.test/api/lesson\",\n      \"status\": 503,\n      \"contentType\": \"application/json\",\n      \"body\": \"{}\"\n    }\n  ],\n  \"actions\": [\n    {\n      \"type\": \"waitFor\",\n      \"expression\": \"document.querySelector('output').textContent!=='loading'\",\n      \"milliseconds\": 5000\n    }\n  ]\n}\n",
           "expectedStdout": "pass\n",
           "comparison": "exact",
           "critical": true
