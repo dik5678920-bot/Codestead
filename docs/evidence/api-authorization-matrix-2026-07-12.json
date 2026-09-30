@@ -95,7 +95,7 @@
       "file": "src/lib/achievements/trophy-cabinet.ts",
       "purpose": "learner-owned certificate and independent mastery trophy projection",
       "anchors": 3,
-      "sourceSha256": "c81a1f8bfbb2e0abe82a98f8341564d9cb7523b2440368bd7e405f84270a9c8e"
+      "sourceSha256": "97e18c644acd82affed768be0ed8dec584750ebaec45f127f16acfc432a4817a"
     },
     {
       "file": "src/lib/social/profile-service.ts",

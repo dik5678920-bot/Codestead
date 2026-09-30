@@ -1,5 +1,7 @@
 import { EXAM_MASTERY_RULE_VERSION } from "@/lib/achievements/exam-mastery";
+import { hashAppealEvidence } from "@/lib/appeals/evidence";
 import { pool } from "@/lib/db/client";
+import type { ExamResult } from "@/lib/exams/contracts";
 
 export const TROPHY_PRESENTATION_POLICY = "evidence-trophy-cabinet-2026-07-14.v1";
 
@@ -37,6 +39,26 @@ type MasteryTrophyRow = {
   assistance_level: string | null;
   solution_revealed: boolean | null;
   attempt_user_id: string | null;
+  effective_attempt_id?: string | null;
+  effective_user_id?: string | null;
+  effective_outcome_id?: string | null;
+  effective_revision?: number | null;
+  effective_result?: unknown;
+  effective_result_hash?: string | null;
+  outcome_id?: string | null;
+  outcome_attempt_id?: string | null;
+  outcome_user_id?: string | null;
+  outcome_revision?: number | null;
+  outcome_correction_id?: string | null;
+  outcome_impact_id?: string | null;
+  outcome_course_id?: string | null;
+  outcome_module_id?: string | null;
+  outcome_result?: unknown;
+  outcome_result_hash?: string | null;
+  outcome_original_result?: unknown;
+  outcome_original_result_hash?: string | null;
+  outcome_decision_evidence?: unknown;
+  outcome_decision_evidence_hash?: string | null;
   selected: boolean;
   portfolio_published: boolean;
   portfolio_slug: string | null;
@@ -70,8 +92,64 @@ function certificateTrophy(row: CertificateTrophyRow): Trophy {
   };
 }
 
+type TrophyResult = Pick<ExamResult,
+  "schemaVersion" | "gradingStatus" | "outcome" | "officialScorePercent" |
+  "pendingReviewItemIds" | "failedCriticalClusters" | "masteryBlockingCodingItems" |
+  "compilationGatePassed" | "infrastructureFailure">;
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function finalTrophyResult(value: unknown): value is TrophyResult {
+  const result = record(value);
+  return result !== null
+    && result.schemaVersion === 1
+    && result.gradingStatus === "graded"
+    && ["MASTERED", "PASSED", "NOT_PASSED"].includes(String(result.outcome))
+    && result.infrastructureFailure === false
+    && typeof result.officialScorePercent === "number"
+    && Number.isFinite(result.officialScorePercent)
+    && result.officialScorePercent >= 0 && result.officialScorePercent <= 100
+    && Array.isArray(result.pendingReviewItemIds) && result.pendingReviewItemIds.length === 0
+    && Array.isArray(result.failedCriticalClusters) && result.failedCriticalClusters.every((item) => typeof item === "string")
+    && Array.isArray(result.masteryBlockingCodingItems) && result.masteryBlockingCodingItems.every((item) => typeof item === "string")
+    && typeof result.compilationGatePassed === "boolean";
+}
+
+function supportsMastery(result: TrophyResult): boolean {
+  return result.outcome === "MASTERED"
+    && result.officialScorePercent! >= 95
+    && result.failedCriticalClusters.length === 0
+    && result.masteryBlockingCodingItems.length === 0
+    && result.compilationGatePassed === true;
+}
+
+function boundCorrection(row: MasteryTrophyRow, userId: string): boolean {
+  const decision = record(row.outcome_decision_evidence);
+  return row.effective_attempt_id === row.attempt_id
+    && row.effective_user_id === userId
+    && Boolean(row.effective_outcome_id) && row.effective_outcome_id === row.outcome_id
+    && row.outcome_attempt_id === row.attempt_id && row.outcome_user_id === userId
+    && typeof row.effective_revision === "number" && Number.isSafeInteger(row.effective_revision)
+    && row.effective_revision >= 1 && row.effective_revision === row.outcome_revision
+    && row.outcome_course_id === row.course_id && row.outcome_module_id === row.module_id
+    && row.effective_result_hash === row.outcome_result_hash
+    && hashAppealEvidence(row.effective_result) === row.effective_result_hash
+    && hashAppealEvidence(row.outcome_result) === row.outcome_result_hash
+    && hashAppealEvidence(row.outcome_original_result) === row.outcome_original_result_hash
+    && decision?.schemaVersion === 1 && decision.deterministic === true && decision.aiRole === "none"
+    && decision.correctionId === row.outcome_correction_id && decision.impactId === row.outcome_impact_id
+    && decision.revision === row.effective_revision
+    && decision.correctedResultHash === row.effective_result_hash
+    && decision.priorResultHash === row.outcome_original_result_hash
+    && hashAppealEvidence(decision) === row.outcome_decision_evidence_hash;
+}
+
 export function validIndependentMasteryTrophy(row: MasteryTrophyRow, userId: string): boolean {
-  return row.rule_version === EXAM_MASTERY_RULE_VERSION
+  const independentEvidence = row.rule_version === EXAM_MASTERY_RULE_VERSION
     && row.event === "exam_mastery"
     && Boolean(row.course_id)
     && Boolean(row.module_id)
@@ -80,12 +158,23 @@ export function validIndependentMasteryTrophy(row: MasteryTrophyRow, userId: str
     && Boolean(row.attempt_id)
     && row.evidence_id === `exam-attempt:${row.attempt_id}`
     && row.attempt_user_id === userId
-    && row.attempt_status === "graded"
-    && row.mastery_awarded === true
-    && typeof row.attempt_score === "number"
-    && Math.round(row.attempt_score * 10_000) / 10_000 >= 0.95
     && row.assistance_level === "A0"
     && row.solution_revealed === false;
+  if (!independentEvidence) return false;
+
+  if (row.effective_attempt_id != null || row.effective_result != null) {
+    // A present but invalid/negative correction must never revive the raw pass.
+    if (!finalTrophyResult(row.effective_result) || !boundCorrection(row, userId)) return false;
+    if (supportsMastery(row.effective_result)) return true;
+    // Revoked history requires the prior official result to prove the award.
+    return row.revoked_at !== null
+      && finalTrophyResult(row.outcome_original_result)
+      && supportsMastery(row.outcome_original_result);
+  }
+  return row.attempt_status === "graded"
+    && row.mastery_awarded === true
+    && typeof row.attempt_score === "number" && Number.isFinite(row.attempt_score)
+    && Math.round(row.attempt_score * 10_000) / 10_000 >= 0.95;
 }
 
 function masteryTrophy(row: MasteryTrophyRow): Trophy {
@@ -156,6 +245,15 @@ export async function listOwnTrophyCabinet(userId: string) {
               evidence_attempt.id attempt_id,evidence_attempt.score attempt_score,evidence_attempt.status attempt_status,
               evidence_attempt.mastery_awarded,evidence_attempt.assistance_level,
               evidence_attempt.solution_revealed,evidence_attempt.user_id attempt_user_id,
+              effective.attempt_id effective_attempt_id,effective.user_id effective_user_id,
+              effective.outcome_id effective_outcome_id,effective.revision effective_revision,
+              effective.result effective_result,effective.result_hash effective_result_hash,
+              corrected.id outcome_id,corrected.attempt_id outcome_attempt_id,corrected.user_id outcome_user_id,
+              corrected.revision outcome_revision,corrected.correction_id outcome_correction_id,corrected.impact_id outcome_impact_id,
+              impact.snapshot->'form'->>'courseId' outcome_course_id,impact.snapshot->'form'->>'moduleId' outcome_module_id,
+              corrected.corrected_result outcome_result,corrected.corrected_result_hash outcome_result_hash,
+              corrected.original_result outcome_original_result,corrected.original_result_hash outcome_original_result_hash,
+              corrected.decision_evidence outcome_decision_evidence,corrected.decision_evidence_hash outcome_decision_evidence_hash,
               (selection.user_achievement_id is not null) selected,
               coalesce(portfolio.is_published,false) portfolio_published,portfolio.slug portfolio_slug
          from user_achievement owned
@@ -163,6 +261,12 @@ export async function listOwnTrophyCabinet(userId: string) {
          left join attempt evidence_attempt
            on owned.evidence_id='exam-attempt:' || evidence_attempt.id::text
           and evidence_attempt.user_id=owned.user_id
+         left join assessment_attempt_effective_result effective
+           on effective.attempt_id=evidence_attempt.id
+         left join assessment_regrade_outcome corrected on corrected.id=effective.outcome_id
+         left join assessment_correction_impact impact
+           on impact.id=corrected.impact_id and impact.correction_id=corrected.correction_id
+          and impact.attempt_id=evidence_attempt.id and impact.user_id=owned.user_id
          left join public_portfolio portfolio on portfolio.user_id=owned.user_id
          left join public_portfolio_achievement selection
            on selection.user_id=owned.user_id and selection.user_achievement_id=owned.id
