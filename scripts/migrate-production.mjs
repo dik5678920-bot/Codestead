@@ -25,6 +25,7 @@ const TIMED_OUT_OPERATION_OUTCOME = Symbol(
 const INTERRUPTED_BEFORE_LOCK = Symbol("interrupted-before-migration-lock");
 const ADMIN_SHUTDOWN_SQLSTATE = "57P01";
 const INVALID_AUTHORIZATION_SQLSTATE = "28000";
+const INVALID_PASSWORD_SQLSTATE = "28P01";
 const DEFAULT_RETRY_DEADLINE_MS = 120_000;
 const DEFAULT_RETRY_BACKOFF_MS = 1_000;
 
@@ -684,8 +685,11 @@ export async function runProductionMigration(options) {
 function isRetryableBeforeLock(error, attempt) {
   const code = error?.[INTERRUPTED_BEFORE_LOCK];
   if (code === ADMIN_SHUTDOWN_SQLSTATE) return true;
-  // A concurrent role bootstrap fences login while it holds the shared lock.
-  return attempt > 1 && code === INVALID_AUTHORIZATION_SQLSTATE;
+  // A concurrent role bootstrap fences login while it holds the shared lock:
+  // first NOLOGIN (28000), then PASSWORD NULL until passwords are reinstalled
+  // (28P01). Only a reconnect after an earlier retryable interruption counts.
+  return attempt > 1 &&
+    (code === INVALID_AUTHORIZATION_SQLSTATE || code === INVALID_PASSWORD_SQLSTATE);
 }
 
 // Role bootstrap terminates every managed-role session once it wins the shared
@@ -733,6 +737,10 @@ if (entrypoint && import.meta.url === pathToFileURL(entrypoint).href) {
       JSON.stringify({
         event: "database.migration_failed",
         code: error instanceof Error ? error.name : "UNKNOWN",
+        // SQLSTATE is a fixed five-character class code, never row data.
+        ...(typeof error?.code === "string" && /^[0-9A-Z]{5}$/u.test(error.code)
+          ? { sqlstate: error.code }
+          : {}),
       }),
     );
     process.exitCode = 1;

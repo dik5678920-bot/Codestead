@@ -145,7 +145,7 @@
     },
     {
       "path": "scripts/migrate-production.mjs",
-      "sha256": "fb8dcd2e70138f92536ce0e1586e2ae6668d0b4e882176c97f22590dfd91cf05"
+      "sha256": "27de088002fb60d1f18cde0610f2fe8bf84fe1b91b40b8c88e79362b582b5946"
     },
     {
       "path": "scripts/bootstrap-database-roles.mjs",
