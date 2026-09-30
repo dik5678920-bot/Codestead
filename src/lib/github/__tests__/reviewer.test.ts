@@ -9,6 +9,54 @@ import {
 } from "../reviewer";
 
 describe("GitHub static reviewer", () => {
+  it("keeps the request timeout active while the response body is stalled", async () => {
+    vi.useFakeTimers();
+    let signal: AbortSignal | undefined;
+    let rejectBody!: (error: Error) => void;
+    let startBody!: () => void;
+    const bodyStarted = new Promise<void>((resolve) => { startBody = resolve; });
+    const fetchMock = vi.fn(async (_request: RequestInfo | URL, init?: RequestInit) => {
+      signal = init?.signal ?? undefined;
+      return {
+        ok: true,
+        json: () => {
+          startBody();
+          return new Promise<unknown>((_resolve, reject) => {
+            rejectBody = reject;
+            signal?.addEventListener("abort", () => {
+              reject(new DOMException("The request was aborted.", "AbortError"));
+            }, { once: true });
+          });
+        },
+      } as Response;
+    });
+    let settled = false;
+    const result = reviewPublicRepository("https://github.com/octo/repo", fetchMock as typeof fetch)
+      .then(
+        () => { settled = true; return { state: "resolved" as const }; },
+        (error: unknown) => { settled = true; return { state: "rejected" as const, error }; },
+      );
+    try {
+      await bodyStarted;
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(signal).toBeDefined();
+      await vi.advanceTimersByTimeAsync(14_999);
+      expect(signal?.aborted).toBe(false);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(signal?.aborted).toBe(true);
+      expect(settled).toBe(true);
+      await expect(result).resolves.toMatchObject({
+        state: "rejected",
+        error: { name: "AbortError" },
+      });
+    } finally {
+      rejectBody(new DOMException("Test cleanup.", "AbortError"));
+      await result;
+      vi.useRealTimers();
+    }
+  });
+
   it("accepts only canonical public GitHub repository URLs", () => {
     expect(parsePublicGitHubUrl("https://github.com/octo/repo.git")).toMatchObject({ owner: "octo", repo: "repo" });
     expect(() => parsePublicGitHubUrl("http://127.0.0.1/admin")).toThrow();

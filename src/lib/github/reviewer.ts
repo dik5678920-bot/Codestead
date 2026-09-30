@@ -312,7 +312,7 @@ async function reviewPublicRepositoryReference(
         cache: "no-store",
       });
       if (!response.ok) throw new Error(`GitHub API returned ${response.status}.`);
-      return response.json() as Promise<unknown>;
+      return (await response.json()) as unknown;
     } finally {
       clearTimeout(timeout);
     }

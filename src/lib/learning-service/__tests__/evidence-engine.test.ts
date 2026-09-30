@@ -180,6 +180,33 @@ describe("authored deterministic evaluator", () => {
       .toMatchObject({ state: "graded", passed: false, score: 0.5 });
   });
 
+  it.each([
+    { omitted: "one gap", gaps: { first: "a" }, score: 0.5 },
+    { omitted: "all gaps", gaps: {}, score: 0 },
+  ])("grades $omitted as unmatched without throwing", ({ gaps, score }) => {
+    const result = evaluateAuthoredActivity(activity({
+      grading: { kind: "gaps", acceptedByGap: { first: ["a"], second: ["b"] } },
+    }), { gaps });
+    expect(result).toEqual({
+      state: "graded",
+      origin: "deterministic_spec",
+      score,
+      passed: false,
+      correct: false,
+      misconceptionTags: [],
+    });
+  });
+
+  it("does not normalize a missing gap to an accepted empty answer", () => {
+    const blankActivity = activity({
+      grading: { kind: "gaps", acceptedByGap: { blank: [""] } },
+    });
+    expect(evaluateAuthoredActivity(blankActivity, { gaps: {} }))
+      .toMatchObject({ state: "graded", score: 0, passed: false, correct: false });
+    expect(evaluateAuthoredActivity(blankActivity, { gaps: { blank: "" } }))
+      .toMatchObject({ state: "graded", score: 1, passed: true, correct: true });
+  });
+
   it("maps authored wrong-answer patterns to bounded misconception tags", () => {
     const result = evaluateAuthoredActivity(
       activity({ grading: { kind: "exact", acceptedAnswers: ["42"], misconceptions: [{ tag: "assignment.equality", answers: ["41"] }] } }),

@@ -1019,7 +1019,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by eq(chatThread.userId, authz.session.user.id)",
-      "operationSourceSha256": "5f00a44e212b9f80b75fcadb6955dc1701b23eb093e495d7c1bda0de3d480cca"
+      "operationSourceSha256": "52b44471728f8eef569f7f967342d1693b7a504fb3bad8427cb5582eb0397ed8"
     },
     {
       "operation": "GET /api/auth/[...all]",
@@ -1266,7 +1266,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by eq(providerCredential.userId, authz.session.user.id)",
-      "operationSourceSha256": "ae533d7188558613a69e2dd9ff6dbde2d9092a86cdd9167a03ce78cb4bdd8572"
+      "operationSourceSha256": "618dfcbbe184fc7bb7b2c2b72daa45b965b07143518344fb262078a0d39bec3e"
     },
     {
       "operation": "GET /api/credentials",
@@ -2218,7 +2218,7 @@
       "operationSourceSha256": "b88f55f3a91e588c90d93419fbf944eba9e0f64f9fd6a5ab3e2f9a003ce2ccd8"
     }
   ],
-  "generatedAt": "2026-09-30T11:54:43.101Z",
+  "generatedAt": "2026-09-30T12:53:08.702Z",
   "scope": "Complete static role/object-authorization source inventory. The endpoint sweep verifies guard invocation, while authz.test.ts verifies real guard decisions and runtime-authorization.integration.test.ts behaviorally covers a representative owner-bound route set. This report alone is not runtime cross-user proof, deployed proxy/browser evidence, or PostgreSQL RLS evidence.",
   "runtimeVerification": {
     "guardInvocationTest": "src/lib/security/__tests__/endpoint-auth-boundaries.test.ts",

@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { PgDialect } from "drizzle-orm/pg-core";
+import { SQL } from "drizzle-orm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
@@ -7,7 +9,9 @@ const mocks = vi.hoisted(() => {
   const from = vi.fn(() => ({ where: selectWhere }));
   const select = vi.fn(() => ({ from }));
   const updateWhere = vi.fn();
-  const set = vi.fn(() => ({ where: updateWhere }));
+  const set = vi.fn<(patch: Record<string, unknown>) => { where: typeof updateWhere }>(
+    () => ({ where: updateWhere }),
+  );
   const update = vi.fn(() => ({ set }));
   const returning = vi.fn();
   const deleteWhere = vi.fn(() => ({ returning }));
@@ -73,6 +77,7 @@ const owned = {
   dataIv: "data-iv",
   authTag: "auth-tag",
   keyVersion: 2,
+  updatedAtToken: "2026-09-30T00:00:00.000000Z",
   lastFour: "tial",
 };
 const requestId = "10000000-0000-4000-8000-000000000001";
@@ -90,11 +95,13 @@ const context = { params: Promise.resolve({ id: owned.id }) };
 describe("credential mutation API", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.set.mockReset().mockImplementation(() => ({ where: mocks.updateWhere }));
     process.env.CREDENTIAL_MASTER_KEY = Buffer.alloc(32, 7).toString("base64");
     mocks.requireAuth.mockResolvedValue(auth);
     mocks.requireRecentMfa.mockResolvedValue({ allowed: true });
     mocks.withRateLimit.mockImplementation(async (_config, callback) => callback());
     mocks.limit.mockReset().mockResolvedValue([owned]);
+    mocks.updateWhere.mockReset().mockReturnValue({ returning: mocks.returning });
     mocks.returning.mockReset().mockResolvedValue([{ id: owned.id, provider: owned.provider }]);
     mocks.parseMasterKey.mockReturnValue(Buffer.alloc(32, 7));
     mocks.openCredential.mockReturnValue("synthetic-current-secret");
@@ -115,6 +122,50 @@ describe("credential mutation API", () => {
     mocks.writeAuditEvent.mockResolvedValue({ correlationId: "c", eventHash: "h" });
     mocks.notifyCredentialChanged.mockResolvedValue(undefined);
     mocks.hasCurrentConsent.mockResolvedValue(true);
+  });
+
+  it.each([
+    ["test", "disable"],
+    ["test", "replace"],
+    ["replace", "disable"],
+    ["replace", "replace"],
+  ] as const)("rejects delayed %s after a completed %s", async (earlier, newer) => {
+    const row = { ...owned, status: "active", ciphertext: owned.ciphertext };
+    mocks.limit.mockImplementation(async () => [{ ...row }]);
+    mocks.set.mockImplementation((patch: Record<string, unknown>) => ({
+      where: vi.fn((condition: SQL) => {
+        const query = new PgDialect().sqlToQuery(condition);
+        const version = /"key_version" = \$(\d+)/.exec(query.sql);
+        const revision = /\)\s*= \$(\d+)/.exec(query.sql);
+        const matches = (!version || query.params[Number(version[1]) - 1] === row.keyVersion)
+          && (!revision || query.params[Number(revision[1]) - 1] === row.updatedAtToken);
+        if (matches) {
+          Object.assign(row, patch);
+          row.updatedAtToken = `${row.updatedAtToken}:changed`;
+        }
+        const result = matches ? [{ id: row.id }] : [];
+        return Object.assign(Promise.resolve(result), { returning: async () => result });
+      }),
+    }));
+    let release!: (value: { status: "active"; failureCode: null; model: string }) => void;
+    let started!: () => void;
+    const validationStarted = new Promise<void>((resolve) => { started = resolve; });
+    mocks.validateProviderCredential.mockImplementationOnce(() => {
+      started();
+      return new Promise((resolve) => { release = resolve; });
+    });
+    const pending = PATCH(request({ action: earlier, secret: "earlier-secret", requestId }), context);
+    await validationStarted;
+    const completed = await PATCH(request({ action: newer, secret: "newer-secret", requestId }), context);
+    expect(completed.status).toBe(200);
+    const newerState = { ...row };
+    const notifications = mocks.notifyCredentialChanged.mock.calls.length;
+    release({ status: "active", failureCode: null, model: "test/model" });
+    const stale = await pending;
+    expect(row).toEqual(newerState);
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ code: "STALE_CREDENTIAL" });
+    expect(mocks.notifyCredentialChanged).toHaveBeenCalledTimes(notifications);
   });
 
   it("rejects stale MFA before looking up a credential", async () => {
@@ -171,7 +222,8 @@ describe("credential mutation API", () => {
       }),
       expect.any(Buffer),
     );
-    const persisted = JSON.stringify(mocks.set.mock.calls);
+    const persisted = JSON.stringify(mocks.set.mock.calls, (_key, value) =>
+      value instanceof SQL ? new PgDialect().sqlToQuery(value) : value);
     expect(persisted).toContain("new-ciphertext");
     expect(persisted).not.toContain(replacement);
     expect(mocks.notifyCredentialChanged).toHaveBeenCalledWith(
