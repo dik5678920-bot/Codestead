@@ -200,7 +200,8 @@ jobs:
       - run: sudo -n env "PATH=$PATH" bash infra/tests/release-production.test.sh
       - run: sudo -n env "PATH=$PATH" bash infra/tests/rollback-production.test.sh
       - run: REQUIRE_COMPOSE_MAJOR=5 bash infra/tests/compose-release-cli-contract.test.sh
-      - run: bash infra/tests/runner-reconciliation.test.sh
+      - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - run: sudo -n env "PATH=$PATH" bash infra/tests/runner-reconciliation.test.sh
       - run: bash infra/tests/runtime-validator-network-fixture.test.sh
       - run: bash infra/tests/runtime-config.test.sh
       - run: docker compose --env-file infra/env/compose.env.example config --quiet

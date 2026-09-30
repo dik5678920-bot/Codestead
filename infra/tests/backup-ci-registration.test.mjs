@@ -923,7 +923,8 @@ const expectedApplicationRuns = [
   releaseProductionRun,
   rollbackProductionRun,
   "REQUIRE_COMPOSE_MAJOR=5 bash infra/tests/compose-release-cli-contract.test.sh",
-  "bash infra/tests/runner-reconciliation.test.sh",
+  "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0",
+  "sudo -n env \"PATH=$PATH\" bash infra/tests/runner-reconciliation.test.sh",
   "bash infra/tests/runtime-validator-network-fixture.test.sh",
   "bash infra/tests/runtime-config.test.sh",
   "docker compose --env-file infra/env/compose.env.example config --quiet",
@@ -1969,7 +1970,7 @@ function withBackupStepProperty(document, property) {
 
 function withApplicationRun(document, command) {
   const anchor =
-    "      - run: bash infra/tests/runner-reconciliation.test.sh\n";
+    "      - run: sudo -n env \"PATH=$PATH\" bash infra/tests/runner-reconciliation.test.sh\n";
   return replaceExactly(document, anchor, `      - run: ${command}\n${anchor}`);
 }
 
