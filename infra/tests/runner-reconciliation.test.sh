@@ -906,63 +906,76 @@ assert_fixture_path() {
   esac
 }
 
-# Inside the user namespace only $containment_uid maps to uid 0. Hand root-owned
-# fixture paths to that uid just before a crossing so the SUT still sees them as
-# root-owned; paths a case deliberately gave another owner are left unchanged.
-# Concurrent crossings (the lock-contention case) share one reference-counted
-# mapping so no crossing restores ownership under another that is still running.
+# Inside the user namespace only $containment_uid (and its gid) map to 0. Hand
+# root-owned fixture paths to that uid just before a crossing so the code under
+# test still sees them as root-owned; a root group is mapped the same way and any
+# other owner or group a case chose deliberately is left unchanged. Concurrent
+# crossings share one reference-counted mapping so no crossing restores
+# ownership under another that is still running.
 containment_map_lock="$work/.containment-ownership.lock"
 containment_map_count="$work/.containment-ownership.count"
 containment_map_list="$work/.containment-ownership.list"
+map_one_fixture_path_to_containment() {
+  local path="$1" original new_uid new_gid
+  original="$(/usr/bin/stat -c '%u:%g' -- "$path")" || return 1
+  new_uid="${original%%:*}"
+  new_gid="${original##*:}"
+  [[ "$new_uid" == 0 ]] || return 0
+  new_uid="$containment_uid"
+  [[ "$new_gid" == 0 ]] && new_gid="$containment_uid"
+  printf '%s\0%s\0' "$path" "$original" >>"$containment_map_list"
+  /usr/bin/chown -h "$new_uid:$new_gid" -- "$path"
+}
+
 map_root_owned_fixture_to_containment() {
-  local source ancestor path count lock_fd
-  local -a newly_mapped=()
+  local source ancestor path count lock_fd status=0
   exec {lock_fd}>>"$containment_map_lock"
   /usr/bin/flock --exclusive "$lock_fd" || return 1
   for source in "$@"; do
     [[ -e "$source" || -L "$source" ]] || continue
     case "$source" in
       "$work"/*) ;;
-      *) echo "containment ownership mapping escaped the fixture: $source" >&2; exec {lock_fd}>&-; return 1 ;;
+      *) echo "containment ownership mapping escaped the fixture: $source" >&2; status=1; break ;;
     esac
     while IFS= read -r -d '' path; do
-      newly_mapped+=("$path")
+      map_one_fixture_path_to_containment "$path" || { status=1; break 2; }
     done < <(/usr/bin/find "$source" -xdev -uid 0 -print0)
     # Private (0700) fixture directories between $work and the source must be
     # traversable by the containment user as well.
     ancestor="$(dirname -- "$source")"
     while [[ "$ancestor" == "$work"/* ]]; do
-      [[ "$(/usr/bin/stat -c '%u' -- "$ancestor")" == 0 ]] && newly_mapped+=("$ancestor")
+      map_one_fixture_path_to_containment "$ancestor" || { status=1; break 2; }
       ancestor="$(dirname -- "$ancestor")"
     done
   done
-  if (( ${#newly_mapped[@]} > 0 )); then
-    printf '%s\0' "${newly_mapped[@]}" >>"$containment_map_list"
-    /usr/bin/chown -h "$containment_uid:$containment_uid" -- "${newly_mapped[@]}" || { exec {lock_fd}>&-; return 1; }
+  if (( status == 0 )); then
+    count="$(cat -- "$containment_map_count" 2>/dev/null || printf 0)"
+    printf '%s\n' "$((count + 1))" >"$containment_map_count"
   fi
-  count="$(cat -- "$containment_map_count" 2>/dev/null || printf 0)"
-  printf '%s\n' "$((count + 1))" >"$containment_map_count"
   exec {lock_fd}>&-
+  return "$status"
 }
 
-# When the last concurrent crossing ends, hand every mapped path back to root so
-# each outside assertion observes exactly the fixture ownership it created.
+# When the last concurrent crossing ends, return every mapped path to its exact
+# original owner and group so each outside assertion observes the fixture as it
+# was created.
 restore_fixture_ownership() {
-  local -a still_present=()
-  local path count lock_fd
+  local path original count lock_fd status=0
   exec {lock_fd}>>"$containment_map_lock"
   /usr/bin/flock --exclusive "$lock_fd" || return 1
   count="$(cat -- "$containment_map_count" 2>/dev/null || printf 0)"
   count=$((count > 0 ? count - 1 : 0))
   printf '%s\n' "$count" >"$containment_map_count"
   if (( count == 0 )) && [[ -s "$containment_map_list" ]]; then
-    while IFS= read -r -d '' path; do
-      [[ -e "$path" || -L "$path" ]] && still_present+=("$path")
+    while IFS= read -r -d '' path && IFS= read -r -d '' original; do
+      if [[ -e "$path" || -L "$path" ]]; then
+        /usr/bin/chown -h "$original" -- "$path" || status=1
+      fi
     done <"$containment_map_list"
     : >"$containment_map_list"
-    (( ${#still_present[@]} == 0 )) || /usr/bin/chown -h 0:0 -- "${still_present[@]}" || { exec {lock_fd}>&-; return 1; }
   fi
   exec {lock_fd}>&-
+  return "$status"
 }
 
 run_runner_sut() {
