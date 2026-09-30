@@ -11,6 +11,12 @@ type Settings = {
   profile: { slug: string; displayName: string; headline: string; about: string; isPublished: boolean; rowVersion: number };
   projects: Choice[]; achievements: Choice[]; certificates: Choice[]; disclosure: string;
 };
+type MutationResponse = {
+  result?: { rowVersion: number; event: "created" | "updated" | "published" | "withdrawn"; replayed: boolean };
+  settings?: Settings | null;
+  warning?: string;
+  error?: string;
+};
 
 function errorMessage(code: string) {
   const messages: Record<string, string> = {
@@ -35,6 +41,8 @@ export function PortfolioEditor() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+  const [refreshPending, setRefreshPending] = useState(false);
 
   const apply = useCallback((next: Settings) => {
     setSettings(next);
@@ -54,6 +62,8 @@ export function PortfolioEditor() {
     const body = await response.json() as { settings?: Settings; error?: string };
     if (!response.ok || !body.settings) throw new Error(body.error ?? "PORTFOLIO_LOAD_FAILED");
     apply(body.settings);
+    setRefreshPending(false);
+    setWarning(null);
   }, [apply]);
 
   useEffect(() => {
@@ -73,8 +83,8 @@ export function PortfolioEditor() {
   }
 
   async function save(publish: boolean, withdraw = false) {
-    if (!settings) return;
-    setBusy(true); setError(null); setMessage(null);
+    if (!settings || refreshPending) return;
+    setBusy(true); setError(null); setMessage(null); setWarning(null);
     try {
       const response = await fetch("/api/portfolio", {
         method: "PATCH",
@@ -89,10 +99,20 @@ export function PortfolioEditor() {
           selectedCertificateIds: certificates,
         }),
       });
-      const body = await response.json() as { settings?: Settings; error?: string };
-      if (!response.ok || !body.settings) throw new Error(body.error ?? "PORTFOLIO_UPDATE_FAILED");
-      if (withdraw) setSettings({ ...settings, profile: body.settings.profile });
-      else apply(body.settings);
+      const body = await response.json() as MutationResponse;
+      if (!response.ok || !body.result) throw new Error(body.error ?? "PORTFOLIO_UPDATE_FAILED");
+      if (body.settings) {
+        if (withdraw) setSettings({ ...settings, profile: body.settings.profile });
+        else apply(body.settings);
+      } else {
+        setSettings({ ...settings, profile: {
+          ...settings.profile,
+          rowVersion: body.result.rowVersion,
+          isPublished: body.result.event === "published" ? true : body.result.event === "withdrawn" ? false : publish,
+        } });
+        setRefreshPending(true);
+      }
+      setWarning(body.warning ?? (!body.settings ? "The change completed, but private settings could not be refreshed. Refresh before saving again." : null));
       setMessage(publish ? "Portfolio published. Only the selected projection is public." : settings.profile.isPublished ? "Portfolio withdrawn immediately." : "Private portfolio draft saved.");
     } catch (cause) {
       setError(errorMessage(cause instanceof Error ? cause.message : "PORTFOLIO_UPDATE_FAILED"));
@@ -104,12 +124,12 @@ export function PortfolioEditor() {
       <header className={styles.hero}>
         <div><span className={styles.eyebrow}>Opt-in public portfolio</span><h1>Share the proof you choose. Nothing else.</h1><p>Build a resume-ready public page from owner-bound projects, achievements, and verified certificates. Withdraw it at any time.</p></div>
         <div className={styles.heroActions}>
-          {settings?.profile.isPublished ? <Link className="button button-secondary" href={`/p/${settings.profile.slug}`} target="_blank">View public page <ExternalLink aria-hidden="true" size={15} /></Link> : null}
+          {settings?.profile.isPublished && !refreshPending ? <Link className="button button-secondary" href={`/p/${settings.profile.slug}`} target="_blank">View public page <ExternalLink aria-hidden="true" size={15} /></Link> : null}
           <button className="button button-secondary" disabled={busy} onClick={() => void load().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "PORTFOLIO_LOAD_FAILED"))} type="button"><RefreshCw aria-hidden="true" size={15} /> Refresh</button>
         </div>
       </header>
       <aside className={styles.notice}><ShieldCheck aria-hidden="true" size={19} /><span><strong>Public allowlist:</strong> {settings?.disclosure ?? "Loading the exact disclosure…"}</span></aside>
-      <div aria-live="polite">{error ? <p className={styles.error}>{error}</p> : null}{message ? <p className={styles.success}>{message}</p> : null}</div>
+      <div aria-live="polite">{error ? <p className={styles.error}>{error}</p> : null}{message ? <p className={styles.success}>{message}</p> : null}{warning ? <p>{warning} {refreshPending ? "Refresh before saving again." : null}</p> : null}</div>
       {!settings ? <section className={`${styles.empty} card`}><div><span><UserRoundCheck aria-hidden="true" size={28} /></span><h2>Loading your private portfolio controls…</h2></div></section> : (
         <div className={styles.grid}>
           <section className={`${styles.panel} card`}>
@@ -141,8 +161,8 @@ export function PortfolioEditor() {
       {settings ? <section className={`${styles.panel} card`}>
         <label className={styles.disclosure}><input checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} type="checkbox" /><span><strong>I understand this creates a public web page.</strong><small>{settings.disclosure}</small></span></label>
         <div className={styles.actions}>
-          <button className="button button-secondary" disabled={busy} onClick={() => void save(false, settings.profile.isPublished)} type="button">{settings.profile.isPublished ? "Withdraw public page" : "Save private draft"}</button>
-          <button className="button button-primary" disabled={busy || !confirmed} onClick={() => void save(true)} type="button">{busy ? "Saving…" : settings.profile.isPublished ? "Update public page" : "Publish selected proof"}</button>
+          <button className="button button-secondary" disabled={busy || refreshPending} onClick={() => void save(false, settings.profile.isPublished)} type="button">{settings.profile.isPublished ? "Withdraw public page" : "Save private draft"}</button>
+          <button className="button button-primary" disabled={busy || refreshPending || !confirmed} onClick={() => void save(true)} type="button">{busy ? "Saving…" : settings.profile.isPublished ? "Update public page" : "Publish selected proof"}</button>
         </div>
       </section> : null}
     </div>
