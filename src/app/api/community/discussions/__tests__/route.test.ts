@@ -33,7 +33,7 @@ vi.mock("@/lib/community/service", async (importOriginal) => {
   };
 });
 
-import { POST } from "../route";
+import { GET, POST } from "../route";
 
 function request(body: unknown) {
   return new NextRequest("https://learn.test/api/community/discussions", {
@@ -68,6 +68,18 @@ describe("community discussion route audit truth", () => {
     });
     expect((await POST(request(postBody))).status).toBe(401);
     expect(mocks.createPost).not.toHaveBeenCalled();
+  });
+
+  it("binds reply paging to the authenticated learner and validates its post id", async () => {
+    mocks.list.mockResolvedValueOnce({ groups: [], posts: [], nextCursor: null });
+    const response = await GET(new NextRequest(`https://learn.test/api/community/discussions?postId=${postBody.groupId}&replyCursor=cursor`));
+    expect(response.status).toBe(200);
+    expect(mocks.list).toHaveBeenCalledWith(expect.objectContaining({
+      actorUserId: "learner-1", postId: postBody.groupId, replyCursor: "cursor",
+    }));
+    const invalid = await GET(new NextRequest("https://learn.test/api/community/discussions?postId=invalid&replyCursor=cursor"));
+    expect(invalid.status).toBe(400);
+    expect(mocks.list).toHaveBeenCalledTimes(1);
   });
 
   it("returns committed success with an explicit warning when the completion audit fails", async () => {
