@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
+import { prepareChild, prepareSequentially } from "../../../../scripts/__tests__/helpers/prepared-child";
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import path from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   connectMailDispatchDbWithin,
@@ -1017,7 +1017,7 @@ type FatalScenario =
   | "unarmed-watchdog"
   | "already-claimed-watchdog";
 
-async function runFatalScenario(scenario: FatalScenario) {
+async function prepareFatalScenario(scenario: FatalScenario) {
   const fixture = path.resolve(
     process.cwd(),
     "src/lib/notifications/__tests__/fixtures/"
@@ -1034,53 +1034,16 @@ async function runFatalScenario(scenario: FatalScenario) {
   for (const name of ["PATH", "SYSTEMROOT", "WINDIR"] as const) {
     if (process.env[name]) environment[name] = process.env[name];
   }
-  const child = spawn(
-    process.execPath,
-    ["--import", "tsx", fixture],
-    {
-      cwd: process.cwd(),
-      env: environment,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    },
-  );
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stderr.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => {
-    stdout += chunk;
-  });
-  child.stderr.on("data", (chunk: string) => {
-    stderr += chunk;
-  });
-  const exit = await new Promise<Readonly<{
-    code: number | null;
-    signal: NodeJS.Signals | null;
-  }>>((resolve, reject) => {
-    let killedForTimeout = false;
-    const timeout = setTimeout(() => {
-      killedForTimeout = true;
-      child.kill("SIGKILL");
-    }, 12_000);
-    child.once("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.once("close", (code, signal) => {
-      clearTimeout(timeout);
-      if (killedForTimeout) {
-        reject(new Error(`Fatal TX2 fixture hung (${scenario}).`));
-        return;
-      }
-      resolve({ code, signal });
-    });
-  });
-  return Object.freeze({
-    ...exit,
-    stdout,
-    stderr,
-  });
+  return prepareChild(["--import", "tsx", fixture], { cwd: process.cwd(), env: environment });
+}
+
+const fatalScenarios: FatalScenario[] = ["acquire-timeout", "pre-provider-hang", "post-init-arm-failure", "provider-unsettled", "unarmed-watchdog", "already-claimed-watchdog"];
+const fatalFixtures = new Map(await prepareSequentially(fatalScenarios, async (scenario) => [scenario, await prepareFatalScenario(scenario)] as const));
+afterAll(() => { for (const fixture of fatalFixtures.values()) fixture.kill(); });
+
+async function runFatalScenario(scenario: FatalScenario) {
+  const { code, signal, stdout, stderr } = await fatalFixtures.get(scenario)!.run(12_000);
+  return Object.freeze({ code, signal, stdout, stderr });
 }
 
 describe("guarded outbox dispatch", () => {

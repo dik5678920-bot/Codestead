@@ -1,10 +1,9 @@
 // @vitest-environment node
 
-import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   disarmMailDispatchHardWatchdog,
@@ -18,6 +17,8 @@ import {
 } from "../mail-dispatch-hard-watchdog";
 import { planMailDispatchRuntime } from "../mail-dispatch-runtime-policy";
 
+import { prepareChild, prepareSequentially } from "../../../../scripts/__tests__/helpers/prepared-child";
+
 const TEST_FAULT_NAME = "MAIL_DISPATCH_WATCHDOG_TEST_FAULT";
 const TEST_HANDSHAKE_NAME =
   "MAIL_DISPATCH_WATCHDOG_TEST_HANDSHAKE_TIMEOUT_MS";
@@ -28,6 +29,7 @@ function stubWatchdogFault(fault: string) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
 });
@@ -49,11 +51,11 @@ type FatalFixtureResult = Readonly<{
   stderr: string;
 }>;
 
-async function runFatalFixture(input: Readonly<{
+async function prepareFatalFixture(input: Readonly<{
   fault: string;
   phase: "arm" | "armed" | "disarm" | "idle";
   exitMode: "native" | "return" | "throw";
-}>): Promise<FatalFixtureResult> {
+}>) {
   const fixture = path.resolve(
     process.cwd(),
     "src/lib/notifications/__tests__/fixtures/mail-dispatch-hard-watchdog-fatal-parent.mjs",
@@ -74,47 +76,57 @@ async function runFatalFixture(input: Readonly<{
     if (process.env[name]) environment[name] = process.env[name];
   }
 
-  const child = spawn(
-    process.execPath,
-    ["--import", "tsx", fixture],
-    {
-      cwd: process.cwd(),
-      env: environment,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    },
-  );
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stderr.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => {
-    stdout += chunk;
-  });
-  child.stderr.on("data", (chunk: string) => {
-    stderr += chunk;
-  });
-
-  const result = await new Promise<Readonly<{
-    code: number | null;
-    signal: NodeJS.Signals | null;
-  }>>((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      child.kill("SIGKILL");
-      reject(new Error("Watchdog fatal fixture did not terminate."));
-    }, 3_000);
-    child.once("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.once("exit", (code, signal) => {
-      clearTimeout(timeout);
-      resolve({ code, signal });
-    });
-  });
-
-  return { ...result, stdout, stderr };
+  return prepareChild(["--import", "tsx", fixture], { cwd: process.cwd(), env: environment });
 }
+
+const fatalCases = [
+  ["DISCONNECT_AFTER_READY", "idle", "native"],
+  ["MALFORMED_ARMED", "arm", "native"],
+  ["DROP_ARM_ACK", "arm", "native"],
+  ["DISCONNECT_ON_ARM", "arm", "native"],
+  ["SEND_CALLBACK_ERROR", "arm", "native"],
+  ["SEND_SYNC_THROW", "arm", "native"],
+  ["MALFORMED_DISARMED", "disarm", "native"],
+  ["DROP_DISARM_ACK", "disarm", "native"],
+  ["DISCONNECT_ON_DISARM", "disarm", "native"],
+  ["CONTROLLER_FAIL_AFTER_ARMED", "armed", "return"],
+  ["CONTROLLER_FAIL_AFTER_ARMED", "armed", "throw"],
+] as const;
+const fatalFixtures = new Map(await prepareSequentially(fatalCases, async ([fault, phase, exitMode]) => [
+  JSON.stringify({ fault, phase, exitMode }),
+  await prepareFatalFixture({ fault, phase, exitMode }),
+] as const));
+afterAll(() => { for (const fixture of fatalFixtures.values()) fixture.kill(); });
+
+async function runFatalFixture(input: Readonly<{
+  fault: string;
+  phase: "arm" | "armed" | "disarm" | "idle";
+  exitMode: "native" | "return" | "throw";
+}>): Promise<FatalFixtureResult> {
+  const { code, signal, stdout, stderr } = await fatalFixtures.get(JSON.stringify(input))!.run(3_000);
+  return { code, signal, stdout, stderr };
+}
+
+const frozenFaults = ["", "EXIT_AFTER_ARMED", "DISCONNECT_AFTER_ARMED", "UNCAUGHT_AFTER_ARMED", "UNHANDLED_REJECTION_AFTER_ARMED"];
+const frozenFixtures = new Map(await prepareSequentially(frozenFaults, async (fault) => {
+  const environment: NodeJS.ProcessEnv = {
+    NODE_ENV: "test",
+    MAIL_DISPATCH_WATCHDOG_TEST_TIMEOUT_MS: fault ? "5000" : "250",
+    ...(fault ? { MAIL_DISPATCH_WATCHDOG_TEST_FAULT: fault } : {}),
+    DATABASE_URL: "postgresql://watchdog-must-not-inherit",
+    GMAIL_CLIENT_SECRET: "gmail-secret-must-not-inherit",
+    DELETION_TOMBSTONE_KEY: "tombstone-must-not-inherit",
+    LOST_DEVICE_PROOF_KEY: "proof-key-must-not-inherit",
+  };
+  for (const name of ["PATH", "SYSTEMROOT", "WINDIR"] as const) {
+    if (process.env[name]) environment[name] = process.env[name];
+  }
+  return [fault, await prepareChild([
+    "--import", "tsx",
+    path.resolve(process.cwd(), "src/lib/notifications/__tests__/fixtures/mail-dispatch-hard-watchdog-parent.mjs"),
+  ], { cwd: process.cwd(), env: environment })] as const;
+}));
+afterAll(() => { for (const fixture of frozenFixtures.values()) fixture.kill(); });
 
 describe("mail dispatch external hard watchdog", () => {
   it("binds and packages the exact production timer implementation", () => {
@@ -179,6 +191,9 @@ describe("mail dispatch external hard watchdog", () => {
   });
 
   it("accepts delayed ARM acknowledgement and DISARM delivery only inside the explicit IPC budget", async () => {
+    // IPC arrival is an OS signal, not elapsed time in the controller's clock.
+    // Keep the clock controlled while the real child starts and acknowledges.
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     stubWatchdogFault("DELAY_BOUNDARY_IPC");
     let controller: MailDispatchHardWatchdog | undefined;
     let armed: ArmedMailDispatchHardWatchdog | undefined;
@@ -186,7 +201,9 @@ describe("mail dispatch external hard watchdog", () => {
       controller = await startMailDispatchHardWatchdog();
       armed = await controller.arm();
       expect(isMailDispatchHardWatchdogArmed(armed)).toBe(true);
-      await disarmMailDispatchHardWatchdog(armed);
+      const disarming = disarmMailDispatchHardWatchdog(armed);
+      await vi.advanceTimersByTimeAsync(50);
+      await disarming;
       armed = undefined;
     } finally {
       await closeController(controller, armed);
@@ -293,39 +310,12 @@ describe("mail dispatch external hard watchdog", () => {
     "kills a stalled or SIGSTOPped parent without running cleanup, health, retry, or telemetry callbacks",
     { timeout: 10_000 },
     async () => {
-      const fixture = path.resolve(
-        process.cwd(),
-        "src/lib/notifications/__tests__/fixtures/mail-dispatch-hard-watchdog-parent.mjs",
-      );
-      const environment: NodeJS.ProcessEnv = {
-        NODE_ENV: "test",
-        MAIL_DISPATCH_WATCHDOG_TEST_TIMEOUT_MS: "250",
-        DATABASE_URL: "postgresql://watchdog-must-not-inherit",
-        GMAIL_CLIENT_SECRET: "gmail-secret-must-not-inherit",
-        DELETION_TOMBSTONE_KEY: "tombstone-must-not-inherit",
-        LOST_DEVICE_PROOF_KEY: "proof-key-must-not-inherit",
-      };
-      for (const name of ["PATH", "SYSTEMROOT", "WINDIR"] as const) {
-        if (process.env[name]) environment[name] = process.env[name];
-      }
-
-      const child = spawn(
-        process.execPath,
-        ["--import", "tsx", fixture],
-        {
-          cwd: process.cwd(),
-          env: environment,
-          stdio: ["ignore", "pipe", "pipe"],
-          windowsHide: true,
-        },
-      );
+      const run = frozenFixtures.get("")!;
+      const child = run.child;
       let stdout = "";
-      let stderr = "";
       let stopAttempted = false;
       let stopSignalAccepted = false;
-      child.stdout.setEncoding("utf8");
-      child.stderr.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => {
+      child.stdout!.on("data", (chunk: string) => {
         stdout += chunk;
         if (
           process.platform !== "win32"
@@ -336,27 +326,9 @@ describe("mail dispatch external hard watchdog", () => {
           stopSignalAccepted = child.kill("SIGSTOP");
         }
       });
-      child.stderr.on("data", (chunk: string) => {
-        stderr += chunk;
-      });
-
-      const result = await new Promise<Readonly<{
-        code: number | null;
-        signal: NodeJS.Signals | null;
-      }>>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          child.kill("SIGKILL");
-          reject(new Error("Watchdog subprocess did not hard-exit."));
-        }, 5_000);
-        child.once("error", (error) => {
-          clearTimeout(timeout);
-          reject(error);
-        });
-        child.once("exit", (code, signal) => {
-          clearTimeout(timeout);
-          resolve({ code, signal });
-        });
-      });
+      const result = await run.run(5_000);
+      stdout = run.stdout();
+      const stderr = run.stderr();
 
       expect(stdout).toBe("ARMED\n");
       expect(stderr).toBe("");
@@ -380,61 +352,10 @@ describe("mail dispatch external hard watchdog", () => {
     "child fault %s independently kills a frozen parent before its five-second watchdog timer",
     { timeout: 10_000 },
     async (fault) => {
-      const fixture = path.resolve(
-        process.cwd(),
-        "src/lib/notifications/__tests__/fixtures/mail-dispatch-hard-watchdog-parent.mjs",
-      );
-      const environment: NodeJS.ProcessEnv = {
-        NODE_ENV: "test",
-        MAIL_DISPATCH_WATCHDOG_TEST_TIMEOUT_MS: "5000",
-        MAIL_DISPATCH_WATCHDOG_TEST_FAULT: fault,
-        DATABASE_URL: "postgresql://watchdog-must-not-inherit",
-        GMAIL_CLIENT_SECRET: "gmail-secret-must-not-inherit",
-        DELETION_TOMBSTONE_KEY: "tombstone-must-not-inherit",
-        LOST_DEVICE_PROOF_KEY: "proof-key-must-not-inherit",
-      };
-      for (const name of ["PATH", "SYSTEMROOT", "WINDIR"] as const) {
-        if (process.env[name]) environment[name] = process.env[name];
-      }
-
-      const child = spawn(
-        process.execPath,
-        ["--import", "tsx", fixture],
-        {
-          cwd: process.cwd(),
-          env: environment,
-          stdio: ["ignore", "pipe", "pipe"],
-          windowsHide: true,
-        },
-      );
-      let stdout = "";
-      let stderr = "";
-      child.stdout.setEncoding("utf8");
-      child.stderr.setEncoding("utf8");
-      child.stdout.on("data", (chunk: string) => {
-        stdout += chunk;
-      });
-      child.stderr.on("data", (chunk: string) => {
-        stderr += chunk;
-      });
-
-      const result = await new Promise<Readonly<{
-        code: number | null;
-        signal: NodeJS.Signals | null;
-      }>>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          child.kill("SIGKILL");
-          reject(new Error("Faulted watchdog did not kill its frozen parent."));
-        }, 3_000);
-        child.once("error", (error) => {
-          clearTimeout(timeout);
-          reject(error);
-        });
-        child.once("exit", (code, signal) => {
-          clearTimeout(timeout);
-          resolve({ code, signal });
-        });
-      });
+      const run = frozenFixtures.get(fault)!;
+      const result = await run.run(3_000);
+      const stdout = run.stdout();
+      const stderr = run.stderr();
 
       expect(stdout).toBe("ARMED\n");
       expect(stderr).toBe("");
