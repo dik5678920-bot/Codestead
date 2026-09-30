@@ -393,6 +393,13 @@ async function runBootstrapCheckoutFailure(
   return { outcome, pool, clusterAdministrationPool };
 }
 
+async function withBootstrapClock(run: () => Promise<void>): Promise<void> {
+  vi.useFakeTimers();
+  const epoch = Date.now();
+  const clock = vi.spyOn(nodePerformance, "now").mockImplementation(() => Date.now() - epoch);
+  try { await run(); } finally { vi.clearAllTimers(); clock.mockRestore(); vi.useRealTimers(); }
+}
+
 describe("database least-privilege bootstrap", () => {
   it("uses distinct fixed cluster-role and target-database advisory locks", async () => {
     const databaseRoleBootstrap = await loadDatabaseRoleModule();
@@ -2707,99 +2714,111 @@ describe("database least-privilege bootstrap", () => {
   });
 
   it("bounds authentication-fence queries and rejects zero evidence at the hard deadline", async () => {
-    const databaseRoleBootstrap = await loadDatabaseRoleModule();
-    expect(databaseRoleBootstrap).not.toBeNull();
-    let clock = 0;
-    const exactDeadlineClient = {
-      query: vi.fn(async (sql: string) => {
+    vi.useFakeTimers();
+    const epoch = Date.now();
+    const performanceClock = vi.spyOn(nodePerformance, "now").mockImplementation(() => Date.now() - epoch);
+    try {
+      const databaseRoleBootstrap = managedSessionDatabaseRoleModule;
+      expect(databaseRoleBootstrap).not.toBeNull();
+      let clock = 0;
+      const exactDeadlineClient = {
+        query: vi.fn(async (sql: string) => {
+          if (sql.includes("pg_terminate_backend")) return { rows: [] };
+          if (sql === "select pg_catalog.pg_stat_clear_snapshot()") {
+            return { rows: [] };
+          }
+          clock = 200;
+          return { rows: [{ remaining: 0 }] };
+        }),
+      };
+      await expect(
+        databaseRoleBootstrap!.exhaustManagedRoleAuthenticationFence(
+          exactDeadlineClient,
+          {
+            authenticationTimeoutMs: 100,
+            serverVersionNum: 180_001,
+          },
+          {
+            now: () => clock,
+            sleep: async () => undefined,
+            pollMs: 10,
+            safetyMarginMs: 0,
+            finalDrainMs: 100,
+            queryTimeoutMs: 10,
+          },
+        ),
+      ).rejects.toThrow("database authentication fence did not drain");
+
+      const internalOutcome =
+        databaseRoleBootstrap!.exhaustManagedRoleAuthenticationFence(
+          {
+            query: vi.fn(() => new Promise<never>(() => undefined)),
+          },
+          {
+            authenticationTimeoutMs: 100,
+            serverVersionNum: 170_006,
+          },
+          {
+            now: () => 0,
+            sleep: async () => undefined,
+            pollMs: 10,
+            safetyMarginMs: 0,
+            finalDrainMs: 100,
+            queryTimeoutMs: 5,
+          },
+        );
+      const observedPromise = Promise.race([
+        internalOutcome.then(
+          () => ({ kind: "resolved" as const }),
+          (error: unknown) => ({ kind: "rejected" as const, error }),
+        ),
+        new Promise<{ kind: "outer-timeout" }>((resolve) =>
+          setTimeout(() => resolve({ kind: "outer-timeout" }), 25),
+        ),
+      ]);
+      await vi.advanceTimersByTimeAsync(5);
+      const observed = await observedPromise;
+      expect(observed).toMatchObject({
+        kind: "rejected",
+        error: {
+          name: "DatabaseBootstrapControlTimeoutError",
+          controlPhase: "authentication-fence-session-termination",
+        },
+      });
+
+      let sharedFenceClock = 0;
+      const sharedFenceQuery = vi.fn(async (sql: string) => {
+        sharedFenceClock += 110;
         if (sql.includes("pg_terminate_backend")) return { rows: [] };
         if (sql === "select pg_catalog.pg_stat_clear_snapshot()") {
           return { rows: [] };
         }
-        clock = 200;
         return { rows: [{ remaining: 0 }] };
-      }),
-    };
-    await expect(
-      databaseRoleBootstrap!.exhaustManagedRoleAuthenticationFence(
-        exactDeadlineClient,
-        {
-          authenticationTimeoutMs: 100,
-          serverVersionNum: 180_001,
-        },
-        {
-          now: () => clock,
-          sleep: async () => undefined,
-          pollMs: 10,
-          safetyMarginMs: 0,
-          finalDrainMs: 100,
-          queryTimeoutMs: 10,
-        },
-      ),
-    ).rejects.toThrow("database authentication fence did not drain");
+      });
+      await expect(
+        databaseRoleBootstrap!.exhaustManagedRoleAuthenticationFence(
+          { query: sharedFenceQuery },
+          {
+            authenticationTimeoutMs: 100,
+            serverVersionNum: 180_001,
+          },
+          {
+            now: () => sharedFenceClock,
+            sleep: async () => undefined,
+            pollMs: 10,
+            safetyMarginMs: 0,
+            finalDrainMs: 100,
+            queryTimeoutMs: 500,
+          },
+        ),
+      ).rejects.toThrow("database authentication fence did not drain");
+      expect(sharedFenceQuery).toHaveBeenCalledTimes(2);
 
-    const internalOutcome =
-      databaseRoleBootstrap!.exhaustManagedRoleAuthenticationFence(
-        {
-          query: vi.fn(() => new Promise<never>(() => undefined)),
-        },
-        {
-          authenticationTimeoutMs: 100,
-          serverVersionNum: 170_006,
-        },
-        {
-          now: () => 0,
-          sleep: async () => undefined,
-          pollMs: 10,
-          safetyMarginMs: 0,
-          finalDrainMs: 100,
-          queryTimeoutMs: 5,
-        },
-      );
-    const observed = await Promise.race([
-      internalOutcome.then(
-        () => ({ kind: "resolved" as const }),
-        (error: unknown) => ({ kind: "rejected" as const, error }),
-      ),
-      new Promise<{ kind: "outer-timeout" }>((resolve) =>
-        setTimeout(() => resolve({ kind: "outer-timeout" }), 25),
-      ),
-    ]);
-    expect(observed).toMatchObject({
-      kind: "rejected",
-      error: {
-        name: "DatabaseBootstrapControlTimeoutError",
-        controlPhase: "authentication-fence-session-termination",
-      },
-    });
-
-    let sharedFenceClock = 0;
-    const sharedFenceQuery = vi.fn(async (sql: string) => {
-      sharedFenceClock += 110;
-      if (sql.includes("pg_terminate_backend")) return { rows: [] };
-      if (sql === "select pg_catalog.pg_stat_clear_snapshot()") {
-        return { rows: [] };
-      }
-      return { rows: [{ remaining: 0 }] };
-    });
-    await expect(
-      databaseRoleBootstrap!.exhaustManagedRoleAuthenticationFence(
-        { query: sharedFenceQuery },
-        {
-          authenticationTimeoutMs: 100,
-          serverVersionNum: 180_001,
-        },
-        {
-          now: () => sharedFenceClock,
-          sleep: async () => undefined,
-          pollMs: 10,
-          safetyMarginMs: 0,
-          finalDrainMs: 100,
-          queryTimeoutMs: 500,
-        },
-      ),
-    ).rejects.toThrow("database authentication fence did not drain");
-    expect(sharedFenceQuery).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.clearAllTimers();
+      performanceClock.mockRestore();
+      vi.useRealTimers();
+    }
   });
 
   it("holds the visible-session horizon through a late session and never kills unrelated starters", async () => {
@@ -3061,8 +3080,8 @@ describe("database least-privilege bootstrap", () => {
     expect(finalCommit).toBeGreaterThan(foundation);
   });
 
-  it("bounds rollback cleanup and destroys the still-locked session", async () => {
-    const databaseRoleBootstrap = await loadDatabaseRoleModule();
+  it("bounds rollback cleanup and destroys the still-locked session", () => withBootstrapClock(async () => {
+    const databaseRoleBootstrap = managedSessionDatabaseRoleModule;
     expect(databaseRoleBootstrap).not.toBeNull();
     const primary = new Error("simulated gate mutation failure");
     const client = {
@@ -3075,7 +3094,7 @@ describe("database least-privilege bootstrap", () => {
       }),
     };
 
-    await expect(
+    const rejection = expect(
       databaseRoleBootstrap!.commitManagedRoleAuthenticationGate(client, {
         rollbackTimeoutMs: 10,
       }),
@@ -3089,10 +3108,12 @@ describe("database least-privilege bootstrap", () => {
         }),
       ],
     });
-  });
+    await vi.advanceTimersByTimeAsync(10);
+    await rejection;
+  }));
 
-  it("bounds outer rollback cleanup and destroys the still-locked session", async () => {
-    const databaseRoleBootstrap = await loadDatabaseRoleModule();
+  it("bounds outer rollback cleanup and destroys the still-locked session", () => withBootstrapClock(async () => {
+    const databaseRoleBootstrap = managedSessionDatabaseRoleModule;
     expect(databaseRoleBootstrap).not.toBeNull();
     const client = {
       query: vi.fn((sql: string) =>
@@ -3104,7 +3125,7 @@ describe("database least-privilege bootstrap", () => {
     };
     const pool = { end: vi.fn(async () => undefined) };
 
-    await expect(
+    const rejection = expect(
       databaseRoleBootstrap!.cleanupDatabaseBootstrapResources({
         client,
         pool,
@@ -3113,14 +3134,16 @@ describe("database least-privilege bootstrap", () => {
         timeoutMs: 10,
       }),
     ).rejects.toMatchObject({ name: "DatabaseBootstrapCleanupTimeoutError" });
+    await vi.advanceTimersByTimeAsync(10);
+    await rejection;
 
     expect(client.release).toHaveBeenCalledWith(true);
     expect(client.query).toHaveBeenCalledTimes(1);
     expect(pool.end).toHaveBeenCalledOnce();
-  });
+  }));
 
-  it("fails closed when PostgreSQL reports the shared lock was not released", async () => {
-    const databaseRoleBootstrap = await loadDatabaseRoleModule();
+  it("fails closed when PostgreSQL reports the shared lock was not released", () => withBootstrapClock(async () => {
+    const databaseRoleBootstrap = managedSessionDatabaseRoleModule;
     expect(databaseRoleBootstrap).not.toBeNull();
     const client = {
       query: vi.fn(async () => ({ rows: [{ released: false }] })),
@@ -3128,7 +3151,7 @@ describe("database least-privilege bootstrap", () => {
     };
     const pool = { end: vi.fn(async () => undefined) };
 
-    await expect(
+    const rejection = expect(
       databaseRoleBootstrap!.cleanupDatabaseBootstrapResources({
         client,
         pool,
@@ -3137,13 +3160,15 @@ describe("database least-privilege bootstrap", () => {
         timeoutMs: 10,
       }),
     ).rejects.toMatchObject({ name: "DatabaseBootstrapUnlockError" });
+    await vi.advanceTimersByTimeAsync(0);
+    await rejection;
 
     expect(client.release).toHaveBeenCalledWith(true);
     expect(pool.end).toHaveBeenCalledOnce();
-  });
+  }));
 
-  it("bounds pool shutdown after releasing the client", async () => {
-    const databaseRoleBootstrap = await loadDatabaseRoleModule();
+  it("bounds pool shutdown after releasing the client", () => withBootstrapClock(async () => {
+    const databaseRoleBootstrap = managedSessionDatabaseRoleModule;
     expect(databaseRoleBootstrap).not.toBeNull();
     const client = {
       query: vi.fn(async () => ({ rows: [{ released: true }] })),
@@ -3151,7 +3176,7 @@ describe("database least-privilege bootstrap", () => {
     };
     const pool = { end: vi.fn(() => new Promise<never>(() => undefined)) };
 
-    await expect(
+    const rejection = expect(
       databaseRoleBootstrap!.cleanupDatabaseBootstrapResources({
         client,
         pool,
@@ -3160,10 +3185,12 @@ describe("database least-privilege bootstrap", () => {
         timeoutMs: 10,
       }),
     ).rejects.toMatchObject({ name: "DatabaseBootstrapCleanupTimeoutError" });
+    await vi.advanceTimersByTimeAsync(10);
+    await rejection;
 
     expect(client.release).toHaveBeenCalledOnce();
     expect(pool.end).toHaveBeenCalledOnce();
-  });
+  }));
 
   it("surfaces every maintenance cleanup failure after acknowledged re-enable", async () => {
     const databaseRoleBootstrap = await loadDatabaseRoleModule();
