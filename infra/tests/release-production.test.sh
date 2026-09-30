@@ -2826,8 +2826,13 @@ set +e
   >"$work/non-root.stdout" 2>"$work/non-root.stderr"
 non_root_status=$?
 set -e
-[[ "$non_root_status" != 0 ]] || fail "production mode ran without root"
-grep -Fqi 'root' "$work/non-root.stderr" || fail "non-root rejection was not explicit"
+show_non_root_result() {
+  echo "non-root release exit status: $non_root_status" >&2
+  echo "non-root release stderr:" >&2
+  sed 's/^/  /' "$work/non-root.stderr" >&2
+}
+[[ "$non_root_status" != 0 ]] || { show_non_root_result; fail "production mode ran without root"; }
+grep -Fqi 'root' "$work/non-root.stderr" || { show_non_root_result; fail "non-root rejection was not explicit"; }
 echo "ok - production mode requires root; test bypass is explicit and contained"
 
 lock_case="$work/lock-contention"
