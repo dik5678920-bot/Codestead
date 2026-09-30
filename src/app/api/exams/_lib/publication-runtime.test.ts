@@ -241,7 +241,7 @@ describe("N01 staged publication runtime regressions", () => {
     expect(console.error).not.toHaveBeenCalled();
   });
 
-  it.each(["tampered content", "aggregate hash", "different approval hash", "revoked approval", "superseded approval", "non-human approval", "no approval", "incomplete checklist", "incomplete item review", "draft bank", "ineligible bank"])("excludes and reports %s", async (fault) => {
+  it.each(["tampered content", "aggregate hash", "different approval hash", "revoked approval", "superseded approval", "non-human approval", "no approval", "incomplete checklist", "generic review attestation", "incomplete item review", "draft bank", "ineligible bank"])("excludes and reports %s", async (fault) => {
     const fixture = await stagedPublication();
     const manifest = fixture.artifacts.find((artifact) => artifact.artifact_type === "course_manifest")!;
     const bank = fixture.artifacts.find((artifact) => artifact.artifact_type === "assessment_bank")!;
@@ -252,6 +252,7 @@ describe("N01 staged publication runtime regressions", () => {
     if (fault === "revoked approval" || fault === "superseded approval") fixture.reviews.push({ ...review, decision: fault === "revoked approval" ? "rejected" : "changes_requested", resulting_version: review.resulting_version + 1 });
     if (fault === "no approval") fixture.reviews.splice(fixture.reviews.indexOf(review), 1);
     if (fault === "incomplete checklist") review.checklist = {};
+    if (fault === "generic review attestation") review.checklist = { independentlyReviewed: true };
     if (fault === "incomplete item review") review.reviewed_item_ids = [];
     if (fault === "draft bank") (bank.content.publication as Record<string, unknown>).stage = "draft";
     if (fault === "ineligible bank") ((bank.content.items as Record<string, unknown>[])[0]!.examEligibility as Record<string, unknown>).eligible = false;
