@@ -22,6 +22,7 @@ vi.mock("../gate", () => ({ evaluateCurriculumPublicationGate: hooks.gate }));
 
 import {
   CurriculumAdminError,
+  publishCurriculumVersion,
   retireCurriculumVersion,
   rollbackCurriculumPointer,
 } from "../admin-service";
@@ -253,5 +254,51 @@ describe("N11 rollback vs concurrent retirement", () => {
     })).rejects.toMatchObject({ code: "VERSION_CONFLICT" });
     await expect(rollbackToA()).resolves.toEqual({ courseId: COURSE, currentCourseVersionId: VERSION_A, pointerVersion: 5, replayed: false });
     await expect(rollbackToA()).resolves.toMatchObject({ replayed: true, pointerVersion: 5 });
+  });
+});
+
+describe("N10 publish replay is bound to the requested version", () => {
+  function seedPublishScenario() {
+    db.state.versions.set(VERSION_A, { id: VERSION_A, course_id: COURSE, stage: "draft", publication_revision: 1 });
+    db.state.versions.set(VERSION_B, { id: VERSION_B, course_id: COURSE, stage: "draft", publication_revision: 1 });
+  }
+
+  function publish(courseVersionId: string, overrides: Partial<{ actorUserId: string; targetStage: "beta" | "verified"; reason: string }> = {}) {
+    return publishCurriculumVersion({
+      actorUserId: ADMIN_1, courseVersionId, requestId: REQUEST_1, expectedVersion: 1,
+      targetStage: "beta", reason: REASON, now: NOW, ...overrides,
+    });
+  }
+
+  it("replays an exact retry for the same version", async () => {
+    seedPublishScenario();
+    await expect(publish(VERSION_A)).resolves.toMatchObject({ courseVersionId: VERSION_A, replayed: false, publicationRevision: 2 });
+    hooks.gate.mockClear();
+    await expect(publish(VERSION_A)).resolves.toMatchObject({ courseVersionId: VERSION_A, replayed: true, publicationRevision: 2 });
+    expect(hooks.gate).not.toHaveBeenCalled();
+  });
+
+  it("rejects the same request reused for another version of the course", async () => {
+    seedPublishScenario();
+    await publish(VERSION_A);
+    hooks.gate.mockClear();
+    const writesBefore = db.state.writes.length;
+
+    await expect(publish(VERSION_B)).rejects.toMatchObject({ code: "IDEMPOTENCY_MISMATCH" });
+
+    expect(hooks.gate).not.toHaveBeenCalled();
+    expect(db.state.writes.slice(writesBefore)).toEqual([]);
+    expect(db.state.versions.get(VERSION_B)).toMatchObject({ stage: "draft", publication_revision: 1 });
+    expect(db.state.pointers.get(COURSE)?.current_course_version_id).toBe(VERSION_A);
+  });
+
+  it.each([
+    ["actor", { actorUserId: ADMIN_2 }],
+    ["stage", { targetStage: "verified" as const }],
+    ["reason", { reason: `${REASON} Changed.` }],
+  ])("still rejects a changed %s on replay", async (_label, overrides) => {
+    seedPublishScenario();
+    await publish(VERSION_A);
+    await expect(publish(VERSION_A, overrides)).rejects.toMatchObject({ code: "IDEMPOTENCY_MISMATCH" });
   });
 });

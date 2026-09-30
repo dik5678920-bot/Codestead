@@ -627,13 +627,15 @@ export async function publishCurriculumVersion(input: {
     const version = versionResult.rows[0];
     if (!version) throw new CurriculumAdminError("NOT_FOUND");
     const eventName = input.targetStage === "beta" ? "published_beta" : "promoted_verified";
-    const prior = await client.query<{ actor_user_id: string; event: string; reason: string; evidence: Record<string, unknown> }>(
-      `select actor_user_id, event, reason, evidence from curriculum_publication_event where course_id = $1 and request_id = $2`,
+    const prior = await client.query<{ course_version_id: string; actor_user_id: string; event: string; reason: string; evidence: Record<string, unknown> }>(
+      `select course_version_id, actor_user_id, event, reason, evidence from curriculum_publication_event where course_id = $1 and request_id = $2`,
       [version.course_id, input.requestId],
     );
     if (prior.rows[0]) {
       const event = prior.rows[0];
-      if (event.actor_user_id !== input.actorUserId || event.event !== eventName || event.reason !== reason || event.evidence.targetStage !== input.targetStage) throw new CurriculumAdminError("IDEMPOTENCY_MISMATCH");
+      // Request ids are unique per course, so the stored event must be for the
+      // requested version; another version's event is never a replay of this one.
+      if (event.course_version_id !== input.courseVersionId || event.actor_user_id !== input.actorUserId || event.event !== eventName || event.reason !== reason || event.evidence.targetStage !== input.targetStage) throw new CurriculumAdminError("IDEMPOTENCY_MISMATCH");
       await client.query("commit");
       return { courseVersionId: input.courseVersionId, stage: input.targetStage, publicationRevision: Number(event.evidence.resultingVersion), replayed: true, gate: event.evidence.gate as PublicationGateReport } as const;
     }
