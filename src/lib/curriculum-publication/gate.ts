@@ -4,13 +4,10 @@ import { parseCourseManifest } from "@/lib/content/schema";
 import type { AssessmentBank } from "@/lib/content/authored-types";
 import { pool } from "@/lib/db/client";
 
-import {
-  allReviewDimensionsPassed,
-  curriculumReleaseEvidenceSchema,
-  curriculumReviewChecklistSchema,
-} from "./contracts";
+import { curriculumReleaseEvidenceSchema } from "./contracts";
 import { aggregateArtifactHash, hashCurriculumValue } from "./hash";
 import { listOwnerReviewedArtifactIds } from "./owner-review";
+import { artifactHumanReviewIssue, hasApprovedArtifactStage, hasHashBoundHumanApproval } from "./review";
 
 type Queryable = Pick<PoolClient, "query">;
 
@@ -191,14 +188,10 @@ export async function evaluateCurriculumPublicationGate(input: {
   );
   const reviews = new Map(reviewsResult.rows.map((review) => [review.artifact_id, review]));
   const ownerApproved = (artifact: (typeof artifacts)[number]) => {
-    const review = reviews.get(artifact.id);
-    return artifact.review_status === "approved"
-      && review?.decision === "approved"
-      && review.reviewer_kind === "human"
-      && review.content_hash === artifact.content_hash;
+    return hasHashBoundHumanApproval(artifact, reviews.get(artifact.id));
   };
   for (const artifact of artifacts) {
-    if (!["approved", "published"].includes(artifact.publication_stage) && !ownerApproved(artifact)) {
+    if (!hasApprovedArtifactStage(artifact, reviews.get(artifact.id))) {
       issue({ code: "ARTIFACT_STAGE_UNAPPROVED", artifactKey: artifact.artifact_key, message: "Every publication artifact must carry an approved or published immutable stage." });
     }
   }
@@ -206,24 +199,9 @@ export async function evaluateCurriculumPublicationGate(input: {
   const codeItems: Array<{ id: string; artifactKey: string }> = [];
   for (const artifact of artifacts) {
     const review = reviews.get(artifact.id);
-    if (artifact.review_status !== "approved" || review?.decision !== "approved" || review.reviewer_kind !== "human") {
-      issue({ code: "HUMAN_REVIEW_MISSING", artifactKey: artifact.artifact_key, message: "The latest bound review must be an attributable human approval." });
-      continue;
-    }
-    if (review.content_hash !== artifact.content_hash) {
-      issue({ code: "REVIEW_HASH_MISMATCH", artifactKey: artifact.artifact_key, message: "The review is not bound to this immutable artifact hash." });
-      continue;
-    }
-    const checklist = curriculumReviewChecklistSchema.safeParse(review.checklist);
-    if (!checklist.success || !allReviewDimensionsPassed(checklist.data)) {
-      issue({ code: "REVIEW_CHECKLIST_INCOMPLETE", artifactKey: artifact.artifact_key, message: "All seven review dimensions require passing evidence." });
-      continue;
-    }
-    const expectedItems = artifact.artifact_type === "assessment_bank"
-      ? ((artifact.content.items as Array<{ id?: unknown }> | undefined) ?? []).map((item) => typeof item.id === "string" ? item.id : "").filter(Boolean)
-      : [artifact.artifact_key];
-    if (!exactSet(review.reviewed_item_ids, expectedItems)) {
-      issue({ code: "ITEM_REVIEW_INCOMPLETE", artifactKey: artifact.artifact_key, message: "Every item in the immutable artifact must be explicitly reviewed." });
+    const reviewIssue = artifactHumanReviewIssue(artifact, review);
+    if (reviewIssue) {
+      issue({ ...reviewIssue, artifactKey: artifact.artifact_key });
       continue;
     }
     if (artifact.artifact_type !== "course_manifest" && !ownerApproved(artifact)) {

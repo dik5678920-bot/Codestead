@@ -90,7 +90,7 @@
     "src/components/admin/admin-fallback-grant-manager.tsx": "98a117559427c723b5ddc1066e8d123652de11bc38c7029b7d8788c83d555828",
     "integration/provider-outage-fallback.integration.test.ts": "f7f3ff1d262755c1ccbcc0e3edbbe55e1bc0031e6651b25e12217ff838430d8f",
     "integration/provider-operation-idempotency.integration.test.ts": "c58e4507cb07184e91d5540f580d7f244ce69a93a6aeb9d8513230c6d35fca89",
-    "integration/postgres.integration.test.ts": "4932701ec5e32a27efe1bf94bbc0c43f1290442768cbbd7641e692af9f5fe080"
+    "integration/postgres.integration.test.ts": "2dce6d8892d8277a8896ecc13bf46b60545b7a1f20cef4c2c51129f76ff2e311"
   },
   "supersededDigests": [
     {

@@ -8,6 +8,7 @@ import {
 import { pool } from "@/lib/db/client";
 
 import { aggregateArtifactHash, hashCurriculumValue } from "./hash";
+import { artifactHumanReviewIssue, hasApprovedArtifactStage, type LatestArtifactReview } from "./review";
 
 interface RuntimeArtifactRow {
   readonly pointer_course_id: string;
@@ -28,7 +29,7 @@ interface RuntimeArtifactRow {
   readonly content_hash: string | null;
   readonly publication_stage: string | null;
   readonly review_status: string | null;
-  readonly review_event_exists: boolean;
+  readonly latest_review: LatestArtifactReview | null;
 }
 
 export interface PublishedExamCourse {
@@ -71,8 +72,7 @@ function materializePublishedCourse(rows: readonly RuntimeArtifactRow[]): Publis
       row.artifact_key === null ||
       row.artifact_type === null ||
       row.content === null ||
-      row.content_hash === null ||
-      !row.review_event_exists
+      row.content_hash === null
     )
   ) invalid("PUBLICATION_POINTER_INVALID");
   if (!rows.every((row) =>
@@ -81,8 +81,8 @@ function materializePublishedCourse(rows: readonly RuntimeArtifactRow[]): Publis
     row.version_content_hash === first.version_content_hash
   )) invalid("PUBLICATION_VERSION_MIXED");
   if (!rows.every((row) =>
-    row.review_status === "approved" &&
-    (row.publication_stage === "approved" || row.publication_stage === "published") &&
+    artifactHumanReviewIssue(row, row.latest_review) === null &&
+    hasApprovedArtifactStage(row, row.latest_review) &&
     hashCurriculumValue(row.content!) === row.content_hash
   )) invalid("PUBLICATION_ARTIFACT_UNVERIFIED");
 
@@ -172,17 +172,18 @@ export async function listPublishedExamCourses(): Promise<readonly PublishedExam
            ca.content_hash,
            ca.publication_stage,
            ca.review_status,
-           exists (
-             select 1 from curriculum_review_event crv
-              where crv.artifact_id = ca.id
-                and crv.reviewer_kind = 'human'
-                and crv.decision = 'approved'
-                and crv.content_hash = ca.content_hash
-           ) as review_event_exists
+           to_jsonb(latest_review) as latest_review
       from curriculum_publication_pointer cpp
       join course c on c.id = cpp.course_id
       join course_version cv on cv.id = cpp.current_course_version_id
       left join curriculum_artifact ca on ca.course_version_id = cv.id
+      left join lateral (
+         select reviewer_kind, decision, content_hash, checklist, reviewed_item_ids
+           from curriculum_review_event
+          where artifact_id = ca.id
+          order by resulting_version desc, id desc
+          limit 1
+      ) latest_review on true
      order by c.slug, ca.artifact_key
   `);
   const byVersion = new Map<string, RuntimeArtifactRow[]>();
@@ -195,12 +196,25 @@ export async function listPublishedExamCourses(): Promise<readonly PublishedExam
   // Local development may publish unreviewed drafts as beta (see
   // unreviewedCurriculumWaived in ./gate). Such courses can never offer exams, so
   // leave them out of the exam catalog instead of failing every learner page.
-  // Integrity problems (hashes, mixed versions, manifests) still throw.
   // Single-owner mode publishes without release evidence (gate.ts
   // OWNER_MODE_WARNING_CODES); exams still require it, in every environment.
-  // Every other integrity problem still throws in materializePublishedCourse.
   const examReady = versions.filter((rows) => rows[0]?.release_evidence_exists !== false);
-  return examReady.map(materializePublishedCourse);
+  const publications: PublishedExamCourse[] = [];
+  for (const rows of examReady) {
+    try {
+      publications.push(materializePublishedCourse(rows));
+    } catch (error) {
+      if (!(error instanceof PublishedCurriculumRuntimeError)) throw error;
+      // Keep a faulty pointer visible in operator logs without exposing any
+      // artifact contents, answer oracles or learner data. Other courses load.
+      console.error("Curriculum publication excluded from exams", {
+        courseId: rows[0]!.pointer_course_id,
+        courseVersionId: rows[0]!.course_version_id,
+        code: error.code,
+      });
+    }
+  }
+  return publications;
 }
 
 export async function loadPublishedExamModule(

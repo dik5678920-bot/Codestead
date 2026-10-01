@@ -32,6 +32,8 @@ import {
   type CourseManifest,
 } from "@/lib/content";
 import { aggregateArtifactHash, hashCurriculumValue } from "@/lib/curriculum-publication/hash";
+import { curriculumReviewChecklistSchema, REVIEW_DIMENSIONS } from "@/lib/curriculum-publication/contracts";
+import { loadPublishedExamModule } from "@/lib/curriculum-publication/runtime";
 import { db, pool } from "@/lib/db/client";
 import { auth } from "@/lib/auth";
 import { accountMailEventIdempotencyKey } from "@/lib/notifications/idempotency-authority";
@@ -661,6 +663,15 @@ async function seedReviewedRetakePublication(startedAt: Date): Promise<ExamFormS
   };
   const manifestHash = hashCurriculumValue(reviewedCourse);
   const bankHash = hashCurriculumValue(reviewedBank);
+  // Direct fixture inserts must satisfy the same seven-dimension contract as
+  // supported human approval; a generic attestation is not a valid review.
+  const reviewChecklist = curriculumReviewChecklistSchema.parse(Object.fromEntries(
+    REVIEW_DIMENSIONS.map((dimension) => [dimension, {
+      passed: true,
+      evidenceRef: `integration/postgres.integration.test.ts#reviewed-retake-${dimension}`,
+      note: `Synthetic ${dimension} review of the disposable retake fixture.`,
+    }]),
+  ));
   const artifacts = [
     { key: "course.integration-reviewed-retake", type: "course_manifest" as const, hash: manifestHash },
     { key: reviewedBank.id, type: "assessment_bank" as const, hash: bankHash },
@@ -729,7 +740,7 @@ async function seedReviewedRetakePublication(startedAt: Date): Promise<ExamFormS
     decision: "approved",
     requestId: `28000000-0000-4000-8000-00000000001${index}`,
     contentHash: index === 0 ? manifestHash : bankHash,
-    checklist: { independentlyReviewed: true },
+    checklist: reviewChecklist,
     reviewedItemIds: index === 0 ? [artifacts[0]!.key] : [reviewedBank.items[0]!.id],
     reason: "Independently approve the synthetic disposable retake parity fixture.",
     resultingVersion: 2,
@@ -763,6 +774,11 @@ async function seedReviewedRetakePublication(startedAt: Date): Promise<ExamFormS
     reason: "Select the independently reviewed disposable retake parity fixture.",
     updatedAt: startedAt,
   });
+
+  // Catch admission drift at the fixture boundary, before a filesystem fallback
+  // can turn an invalid publication into an unrelated retake parity error.
+  const published = await loadPublishedExamModule(reviewedCourse.modules[0]!.id);
+  expect(published).toMatchObject({ courseVersionId: reviewedVersionId, course: { id: reviewedCourse.id } });
 
   return buildEquivalentExamForm({
     course: reviewedCourse,

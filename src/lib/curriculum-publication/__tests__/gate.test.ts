@@ -226,10 +226,30 @@ function fullHappyPathClient() {
     [bundleRow],
     [releaseRow],
   ]);
-  return { client, version, artifacts, manifest, lesson, bank };
+  return { client, version, artifacts, manifest, lesson, bank, reviews };
 }
 
 describe("evaluateCurriculumPublicationGate", () => {
+  it("accepts the immutable draft manifest stage with a complete current hash-bound human approval", async () => {
+    const { client, version, manifest } = fullHappyPathClient();
+    manifest.publication_stage = "draft";
+    const report = await evaluateCurriculumPublicationGate({ courseVersionId: version.id, targetStage: "beta", client });
+    expect(report.allowed).toBe(true);
+    expect(report.issues).toEqual([]);
+    expect(manifest.publication_stage).toBe("draft");
+  });
+
+  it.each(["different hash", "superseded", "non-human"])("does not waive a draft manifest stage for a latest approval that is %s", async (fault) => {
+    const { client, version, manifest, reviews } = fullHappyPathClient();
+    manifest.publication_stage = "draft";
+    if (fault === "different hash") reviews[0]!.content_hash = "b".repeat(64);
+    if (fault === "superseded") reviews[0]!.decision = "changes_requested";
+    if (fault === "non-human") reviews[0]!.reviewer_kind = "ai-assisted";
+    const report = await evaluateCurriculumPublicationGate({ courseVersionId: version.id, targetStage: "beta", client });
+    expect(report.allowed).toBe(false);
+    expect(report.issues).toContainEqual(expect.objectContaining({ code: "ARTIFACT_STAGE_UNAPPROVED", artifactKey: manifest.artifact_key }));
+  });
+
   it("reports COURSE_VERSION_MISSING when the candidate does not exist", async () => {
     const client = makeClient([[]]);
     const report = await evaluateCurriculumPublicationGate({
