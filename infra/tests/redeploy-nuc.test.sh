@@ -32,6 +32,7 @@ APP_PROJECT_REVIEW_WORKER_IMAGE=ghcr.io/example/codestead-project-review-worker@
 APP_SCANNER_WORKER_IMAGE=ghcr.io/example/codestead-scanner-worker@sha256:old
 APP_OPERATIONS_IMAGE=ghcr.io/example/codestead-operations@sha256:old
 SOME_UNRELATED_SETTING=keep-me
+SENTRY_RELEASE=
 EOF
 export COMPOSE_ENV_FILE="$fake_compose_env"
 export DEPLOY_STATE_FILE="$work/deployed-revision"
@@ -136,5 +137,79 @@ if [[ "$(id -u)" -ne 0 ]]; then
     fail "script ran a real (non-dry-run) redeploy without root"
   fi
 fi
+
+# --- a hermetic deploy exports the resolved SHA to every Compose invocation
+#     without persisting the release or changing unrelated settings ----------
+
+real_git="$(command -v git)"
+real_node="$(command -v node)"
+fake_bin="$work/bin"
+mkdir -p "$fake_bin"
+export TEST_REAL_GIT="$real_git" TEST_REAL_NODE="$real_node"
+export TEST_COMPOSE_TRACE="$work/compose-trace"
+cat >"$fake_bin/git" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+if [[ "${3:-}" == fetch ]]; then exit 0; fi
+exec "$TEST_REAL_GIT" "$@"
+EOF
+cat >"$fake_bin/id" <<'EOF'
+#!/usr/bin/env bash
+[[ "$*" == -u ]] || exit 64
+printf '0\n'
+EOF
+cat >"$fake_bin/node" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+if [[ "$1" == -e ]]; then exec "$TEST_REAL_NODE" "$@"; fi
+[[ "$1" == scripts/app-images/manage-application-images.mjs ]] || exit 64
+case "$2" in
+  build) ;;
+  inspect)
+    mkdir -p dist/application-images
+    printf '{"records":[' >dist/application-images/application-inspection.json
+    separator=""
+    for variable in APP_RUNTIME_IMAGE APP_TOOLING_IMAGE APP_WORKER_IMAGE APP_REGRADE_WORKER_IMAGE \
+      APP_PROJECT_REVIEW_WORKER_IMAGE APP_SCANNER_WORKER_IMAGE APP_OPERATIONS_IMAGE; do
+      printf '%s{"variable":"%s","reference":"registry.example.test/image@sha256:%064d"}' \
+        "$separator" "$variable" 1 >>dist/application-images/application-inspection.json
+      separator=,
+    done
+    printf ']}\n' >>dist/application-images/application-inspection.json
+    ;;
+  *) exit 64 ;;
+esac
+EOF
+cat >"$fake_bin/docker" <<'EOF'
+#!/usr/bin/env bash
+set -Eeuo pipefail
+[[ "$1" == compose ]] || exit 64
+printf '%s\t%s\n' "${SENTRY_RELEASE-}" "$*" >>"$TEST_COMPOSE_TRACE"
+# No daemon is contacted: ps reports no unhealthy services, exec succeeds.
+EOF
+chmod 0700 "$fake_bin"/*
+
+for stored_release in "" "previous-release"; do
+  sed -i "s/^SENTRY_RELEASE=.*/SENTRY_RELEASE=$stored_release/" "$fake_compose_env"
+  grep -v '^APP_.*_IMAGE=' "$fake_compose_env" >"$work/unrelated-before"
+  : >"$TEST_COMPOSE_TRACE"
+  # Force migrations so both operation and long-running services are checked.
+  rm -f "$DEPLOY_STATE_FILE"
+  deploy_output="$(PATH="$fake_bin:$PATH" REPO_ROOT="$fake_repo" BUILD_ROOT="$work/build" \
+    SENTRY_RELEASE=caller-stale "$script" --no-scan "${head_sha:0:7}" 2>&1)" \
+    || fail "hermetic deploy failed:\n$deploy_output"
+  [[ -s "$TEST_COMPOSE_TRACE" ]] || fail "deploy never invoked Compose"
+  while IFS=$'\t' read -r release command; do
+    [[ "$release" == "$head_sha" ]] || fail "Compose received '$release' instead of resolved SHA '$head_sha'"
+  done <"$TEST_COMPOSE_TRACE"
+  grep -qF -- 'up -d --no-build --pull never --no-deps runner-egress-gateway app mail-worker reward-worker regrade-worker exam-finalization-worker practice-runner-recovery-worker project-review-correction-worker file-erasure-worker' "$TEST_COMPOSE_TRACE" \
+    || fail "deploy did not restart the app and every pilot worker"
+  grep -qF -- '--exit-code-from migrate migrate' "$TEST_COMPOSE_TRACE" || fail "migration invocation was not exercised"
+  grep -qF -- 'exec -T app node -e' "$TEST_COMPOSE_TRACE" || fail "health invocation was not exercised"
+  grep -v '^APP_.*_IMAGE=' "$fake_compose_env" >"$work/unrelated-after"
+  cmp -s "$work/unrelated-before" "$work/unrelated-after" \
+    || fail "deploy changed SENTRY_RELEASE or another non-image compose.env setting"
+  [[ "$(<"$DEPLOY_STATE_FILE")" == "$head_sha" ]] || fail "deploy did not record the resolved commit"
+done
 
 echo "redeploy-nuc-ok"

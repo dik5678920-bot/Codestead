@@ -11,6 +11,7 @@ const mailDispatchRuntimePolicy = readFileSync(
   "utf8",
 );
 const failures = [];
+const deployedRelease = "a".repeat(40);
 
 const expect = (condition, message) => {
   if (!condition) failures.push(message);
@@ -113,6 +114,7 @@ function render(name, profiles, { allowFailure = false, environment = {} } = {})
         BOOTSTRAP_ADMIN_EMAIL: "admin@compose-validator.example",
         CLAMAV_IMAGE: clamavImage,
         COMPOSE_PROFILES: "",
+        SENTRY_RELEASE: deployedRelease,
         UPLOADS_ENABLED: profiles.includes("uploads") ? "true" : "false",
         ...environment,
       },
@@ -168,6 +170,12 @@ for (const [modelName, config] of Object.entries(models)) {
     `${modelName} mail worker must render the exact fenced claimant`,
   );
   for (const [name, service] of Object.entries(config.services ?? {})) {
+    if (name === "app" || name.endsWith("-worker")) {
+      expect(
+        service.environment?.SENTRY_RELEASE === deployedRelease,
+        `${modelName} ${name} must receive the deploy-time SENTRY_RELEASE`,
+      );
+    }
     const consumesSecrets = (service.secrets?.length ?? 0) > 0;
     const expectedGroups = consumesSecrets ? ["2000"] : [];
     expect(

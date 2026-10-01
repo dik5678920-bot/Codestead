@@ -22,6 +22,8 @@ swaps only the seven APP_*_IMAGE lines in the running compose.env, runs
 migrations only if the migration set changed since the last commit this
 script actually deployed, restarts the app+worker services with --no-build
 --pull never, and waits for /health/ready.
+The resolved commit SHA is exported as SENTRY_RELEASE for Compose; it is
+never written into compose.env.
 
   --scan        Run the Trivy vulnerability gate (default). Trivy runs as a
                 pinned container (the NUC has no host packages) with the
@@ -239,6 +241,11 @@ else
   resolved_sha="$(capture git_repo rev-parse "$target_sha" 2>/dev/null || echo "$target_sha")"
 fi
 echo "target commit resolved to: $resolved_sha"
+
+# Compose's process environment takes precedence over --env-file, including
+# an empty or stale SENTRY_RELEASE there. Use the actual checked-out commit,
+# not an abbreviated argument or an inherited value; leave compose.env alone.
+export SENTRY_RELEASE="$resolved_sha"
 
 # --- step 2: build the seven images from a clean clone -----------------------
 

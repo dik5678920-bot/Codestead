@@ -23,6 +23,7 @@ beforeEach(() => {
   requireAuth.mockReset().mockResolvedValue(signedIn);
   fetchMock.mockClear();
   vi.stubGlobal("fetch", fetchMock);
+  vi.stubEnv("SENTRY_RELEASE", "");
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -39,9 +40,20 @@ describe("monitoring envelope route", () => {
 
   it("reports disabled and forwards nothing without SENTRY_BROWSER_DSN", async () => {
     vi.stubEnv("SENTRY_BROWSER_DSN", "");
+    vi.stubEnv("SENTRY_RELEASE", "a".repeat(40));
     expect(await (await GET()).json()).toEqual({ enabled: false });
     expect((await post()).status).toBe(204);
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns the current deploy release at request time without exposing the DSN", async () => {
+    vi.stubEnv("SENTRY_BROWSER_DSN", "https://serverkey@errors.example.test/9");
+    for (const release of ["a".repeat(40), "b".repeat(40)]) {
+      vi.stubEnv("SENTRY_RELEASE", ` ${release} `);
+      const response = await GET();
+      expect(await response.json()).toEqual({ enabled: true, release });
+      expect(response.headers.get("Cache-Control")).toBe("private, no-store");
+    }
   });
 
   it("forwards a valid error envelope to the server-held DSN", async () => {
