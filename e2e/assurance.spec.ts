@@ -116,7 +116,9 @@ test.describe("fail-closed learning and credential controls", () => {
 
     await page.getByLabel("Authenticator code for provider changes").fill("123456");
     await page.getByRole("button", { name: "Verify authenticator" }).click();
-    await expect(page.getByRole("button", { name: "Verified" })).toBeDisabled();
+    await expect(page.getByText("Authenticator verified for this sign-in; no extra code needed.")).toBeVisible();
+    await expect(page.getByLabel("Authenticator code for provider changes")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Verify authenticator" })).toHaveCount(0);
     expect(freshMfaCalls).toBe(1);
 
     await page.getByRole("button", { name: "Test", exact: true }).click();

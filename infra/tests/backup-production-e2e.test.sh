@@ -1183,12 +1183,12 @@ journal_path = Path(sys.argv[1])
 drizzle_root = Path(sys.argv[2])
 journal = json.loads(journal_path.read_text(encoding="utf-8"))
 entries = journal.get("entries")
-if not isinstance(entries, list) or len(entries) != 70:
-    raise SystemExit("reviewed migration journal must contain exactly 70 entries")
-if entries[-1].get("idx") != 69:
-    raise SystemExit("reviewed migration journal tail index is not 69")
-if entries[-1].get("tag") != "0069_mail_outbox_guarded_delivery_authority":
-    raise SystemExit("reviewed migration journal tail is not 0069")
+if not isinstance(entries, list) or len(entries) != 71:
+    raise SystemExit("reviewed migration journal must contain exactly 71 entries")
+if entries[-1].get("idx") != 70:
+    raise SystemExit("reviewed migration journal tail index is not 70")
+if entries[-1].get("tag") != "0070_credential_validation_preference":
+    raise SystemExit("reviewed migration journal tail is not 0070")
 
 rows = []
 previous_when = -1
@@ -1224,8 +1224,8 @@ PY
   migration_last_id="${migration_fixture_metadata[1]}"
   migration_created_at="${migration_fixture_metadata[2]}"
   migration_state_hash="${migration_fixture_metadata[3]}"
-  [[ "$migration_count" == 70 && "$migration_last_id" == 70 \
-    && "$migration_created_at" == 1785009372253 \
+  [[ "$migration_count" == 71 && "$migration_last_id" == 71 \
+    && "$migration_created_at" == 1790851350433 \
     && "$migration_state_hash" =~ ^[0-9a-f]{64}$ ]] \
     || fail "migration fixture metadata is invalid"
   original_value="$(docker exec "$postgres_id" psql --username=learncoding \
@@ -1401,9 +1401,9 @@ PY
     "$manifest" || fail "manifest PostgreSQL version is invalid"
   grep -Fxq "git_commit=$git_commit" "$manifest" \
     || fail "manifest Git commit does not match the real release commit"
-  grep -Fxq 'migration_count=70' "$manifest" \
+  grep -Fxq 'migration_count=71' "$manifest" \
     || fail "manifest migration count is invalid"
-  grep -Fxq 'migration_last_id=70' "$manifest" \
+  grep -Fxq 'migration_last_id=71' "$manifest" \
     || fail "manifest migration last id is invalid"
   grep -Fxq "migration_last_created_at=$migration_created_at" "$manifest" \
     || fail "manifest migration timestamp is invalid"

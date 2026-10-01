@@ -64,7 +64,7 @@
   "sha256": {
     "drizzle/0035_official_runner_fairness.sql": "5248e2c78a8152a4994f9e286d16c1577820ef8dda40db1b8df7058eff7abbe6",
     "drizzle/meta/0035_snapshot.json": "4d0e919e4cc302bc0390dc2552d27a15abe4eedd16e2d3e0107c696166e155d2",
-    "src/lib/db/schema.ts": "e9bf049f9bc3ea51c6184913fbb8a089664bd88efd986d62833e097ba06dd82c",
+    "src/lib/db/schema.ts": "3a8ff39ee033be76170a126769e04f40d1b01dbb573f0ef35cc7638af1a681e4",
     "src/lib/runner/admission.ts": "2b114931f9f427c96a0da096d27927a8407de43d6c1a5e64849c9784d4322a00",
     "src/lib/runner/client.ts": "619d3dd0da0588caaec523389964c1a7cd091091ce12f267b372de1275121d3f",
     "src/app/api/code/run/route.ts": "c84e1e6d8d90a6505ae6ce5363db943122ebc4d8bfd9ffa8afdde411357348c8",
@@ -148,5 +148,17 @@
     "remote runner queue survival across process or machine restart",
     "a production power-loss or network-partition recovery drill",
     "browser cancellation; no cancellation UI was added"
-  ]
+  ],
+  "artifactBindingRefresh": {
+    "date": "2026-10-01",
+    "scope": "Current source hash bindings only. Original run dates, results, and historical scopes are unchanged; historical integration gates were not rerun for this change.",
+    "reviewRecord": "docs/evidence/ai-provider-settings-2026-10-01.json",
+    "changes": [
+      {
+        "path": "src/lib/db/schema.ts",
+        "previousSha256": "e9bf049f9bc3ea51c6184913fbb8a089664bd88efd986d62833e097ba06dd82c",
+        "sha256": "3a8ff39ee033be76170a126769e04f40d1b01dbb573f0ef35cc7638af1a681e4"
+      }
+    ]
+  }
 }

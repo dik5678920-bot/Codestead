@@ -26,6 +26,46 @@ function json(body: unknown, init: ResponseInit = {}) {
 describe("provider credential settings", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("hides redundant code controls when the session is already verified", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ credentials: [credential], mfaFresh: true })));
+    render(<SettingsView />);
+    expect(await screen.findByText("Personal NIM")).toBeInTheDocument();
+    expect(screen.getByText("Authenticator verified for this sign-in; no extra code needed.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Authenticator code for provider changes")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Verified" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/NVIDIA NIM is required/)).not.toBeInTheDocument();
+  });
+
+  it("offers validation for legacy pending keys without asking users to re-add them", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (init?.method === "PATCH") return json({ ok: true, status: "active" });
+      return json({ credentials: [{ ...credential, status: "pending_validation" }], mfaFresh: true });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<SettingsView />);
+    await user.click(await screen.findByRole("button", { name: "Validate" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`/api/credentials/${credential.id}`, expect.objectContaining({ method: "PATCH", body: expect.stringContaining('"action":"test"') })));
+  });
+
+  it("shows a safe reason for an unreachable provider", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ credentials: [{ ...credential, status: "unreachable", failureCode: "TIMEOUT" }], mfaFresh: true })));
+    render(<SettingsView />);
+    expect(await screen.findByText(/Provider validation timed out/)).toBeInTheDocument();
+  });
+
+  it("restores the code controls when the server rejects stale step-up MFA", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => init?.method === "PATCH"
+      ? json({ code: "FRESH_MFA_REQUIRED", error: "Verify your authenticator." }, { status: 403 })
+      : json({ credentials: [credential], mfaFresh: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<SettingsView />);
+    await user.click(await screen.findByRole("button", { name: "Test" }));
+    expect(await screen.findByLabelText("Authenticator code for provider changes")).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Verify authenticator" })).toBeEnabled();
+  });
+
   it("shows only masked metadata and reauthenticates before testing a key", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -83,7 +123,7 @@ describe("provider credential settings", () => {
     expect(await screen.findByText("Personal NIM")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Authenticator code for provider changes"), "123456");
     await user.click(screen.getByRole("button", { name: "Verify authenticator" }));
-    await screen.findByRole("button", { name: "Verified" });
+    await screen.findByText("Authenticator verified for this sign-in; no extra code needed.");
     await user.click(screen.getByRole("button", { name: "Replace" }));
 
     expect(screen.getByRole("heading", { name: "Replace Personal NIM" })).toBeInTheDocument();
@@ -181,8 +221,7 @@ describe("provider credential settings", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent("could not be changed");
     expect(screen.getByRole("button", { name: "Test" })).toBeEnabled();
-    expect(code).toBeEnabled();
-    expect(code).toHaveValue("123456");
+    expect(screen.queryByLabelText("Authenticator code for provider changes")).not.toBeInTheDocument();
   });
 
   it("surfaces a rejected post-mutation refresh and restores usable controls", async () => {
@@ -208,7 +247,7 @@ describe("provider credential settings", () => {
     const alert = await screen.findByRole("alert");
     expect(within(alert).getByRole("heading", { name: "AI providers could not be loaded" })).toBeInTheDocument();
     expect(within(alert).getByRole("button", { name: "Try again" })).toBeEnabled();
-    expect(screen.getByLabelText("Authenticator code for provider changes")).toBeEnabled();
+    expect(screen.queryByLabelText("Authenticator code for provider changes")).not.toBeInTheDocument();
   });
 
   it("retains a replacement key when the replacement request is rejected", async () => {
@@ -225,7 +264,7 @@ describe("provider credential settings", () => {
     expect(await screen.findByText("Personal NIM")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Authenticator code for provider changes"), "123456");
     await user.click(screen.getByRole("button", { name: "Verify authenticator" }));
-    await screen.findByRole("button", { name: "Verified" });
+    await screen.findByText("Authenticator verified for this sign-in; no extra code needed.");
     await user.click(screen.getByRole("button", { name: "Replace" }));
     const replacement = screen.getByLabelText(/New API key/);
     await user.type(replacement, "synthetic-new-provider-key");
@@ -294,7 +333,7 @@ describe("provider credential settings", () => {
     expect(await screen.findByText("Personal NIM")).toBeInTheDocument();
     await user.type(screen.getByLabelText("Authenticator code for provider changes"), "123456");
     await user.click(screen.getByRole("button", { name: "Verify authenticator" }));
-    await screen.findByRole("button", { name: "Verified" });
+    await screen.findByText("Authenticator verified for this sign-in; no extra code needed.");
     await user.click(screen.getByRole("button", { name: "Delete Personal NIM" }));
     const dialog = screen.getByRole("dialog", { name: "Delete Personal NIM?" });
     await user.click(within(dialog).getByRole("button", { name: "Delete Personal NIM" }));
