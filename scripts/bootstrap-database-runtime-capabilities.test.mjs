@@ -24,7 +24,7 @@ import {
 
 const POLICY = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
 const CURRENT_POLICY_FINGERPRINT =
-  "514d75c03d562a41d352f55dc00751e1a8f11cb12f7dbbd8515119dc99de3bcb";
+  "2ec68ce9b924fb0815e2824783e73786ac25f2e1c2b41c0979da8ef810c7cea7";
 const POSTGRES_USER = "legacy_bootstrap";
 const POSTGRES_DATABASE = "learncoding";
 const ROLE_OIDS = new Map([

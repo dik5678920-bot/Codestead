@@ -365,7 +365,7 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
     createHash("sha256")
       .update(`${JSON.stringify(physicalManifest)}\n`, "utf8")
       .digest("hex"),
-    "89496fc9d975fc3941c88c27a94c509efbcbdc053941c9019274c9320f6ac9d4",
+    "4b9871085224de975a34cee6201687ce9a5d25b4d9cf7cbbad4c68caf06bff3b",
   );
 
   const derived = await deriveReviewedPublicColumnAttnums(journal);
@@ -530,7 +530,7 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
   assert.equal(
     CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.provenance.inventorySources[0]
       .physicalOrderSha256,
-    "89496fc9d975fc3941c88c27a94c509efbcbdc053941c9019274c9320f6ac9d4",
+    "4b9871085224de975a34cee6201687ce9a5d25b4d9cf7cbbad4c68caf06bff3b",
   );
 });
 
@@ -949,7 +949,7 @@ const resolution = resolveDatabaseRuntimeCapabilityPhase({
   reviewedPrefixExact: false,
   reviewedMigrationCount: 0,
   reviewedMigrationLedgerSha256:
-    "174fea1500e62ff0824624beb2e6a20147d2931f494ee7fd03db86685949eca9",
+    "8baecb4eedbb6f55a41b685438f9329197431d72580645c8c01a6017d7cfeeb6",
 });
 if (resolution.phase === DATABASE_RUNTIME_CAPABILITY_PHASES.FOUNDATION) {
   const absentPolicy: null = resolution.policy;

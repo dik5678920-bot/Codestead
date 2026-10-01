@@ -14,11 +14,11 @@ track the reviewed migration tail.
 | --- | --- | --- |
 | Journal and reviewed ledger | 70 entries, index 69 | 71 entries, index 70 |
 | Reviewed tail | `0069_mail_outbox_guarded_delivery_authority` | `0070_credential_validation_preference` |
-| Ledger digest | `20b480c7dd694d6e8e243704f14aeb05aa42fda4c5b7e863f6c357bf095a2551` | `174fea1500e62ff0824624beb2e6a20147d2931f494ee7fd03db86685949eca9` |
+| Ledger digest | `20b480c7dd694d6e8e243704f14aeb05aa42fda4c5b7e863f6c357bf095a2551` | `8baecb4eedbb6f55a41b685438f9329197431d72580645c8c01a6017d7cfeeb6` |
 | Capability journal-tag digest | `4b3163fd24c181107a891b42de1095f5137b366f8fb5429a2845753146adba08` | `f29657c9a020854098688b3c9edab9c018b3ac51066f844bd06198d69eca84a2` |
 | Capability snapshot input | `drizzle/meta/0069_snapshot.json` | `drizzle/meta/0070_snapshot.json` |
 | Physical column artifact | `drizzle/meta/0069_public_column_attnums.json` | `drizzle/meta/0070_public_column_attnums.json` |
-| Physical manifest semantic digest | `b64e0934d046eb1cc4b1609ffbaf309cccdc2fa12fd4154ace19c9f63a0859af` | `89496fc9d975fc3941c88c27a94c509efbcbdc053941c9019274c9320f6ac9d4` |
+| Physical manifest semantic digest | `b64e0934d046eb1cc4b1609ffbaf309cccdc2fa12fd4154ace19c9f63a0859af` | `4b9871085224de975a34cee6201687ce9a5d25b4d9cf7cbbad4c68caf06bff3b` |
 | Available capability phase/export | `CURRENT_0069`, `0069-current`, `CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES` | `CURRENT_0070`, `0070-current`, `CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES` |
 | Capability contract/required migration | `codestead-database-runtime-capabilities-0069-current-v1`, 0069 SQL | `codestead-database-runtime-capabilities-0070-current-v1`, 0070 SQL |
 | Enum label count | 78 | 79 (`credential_status.unreachable` added) |
@@ -38,6 +38,16 @@ carries forward the independently reviewed 0069 physical column positions for
 an enum/index extension with an identical column inventory. It refuses column
 or routine migrations; 0071 changes of that kind need independent catalog replay
 and review, not an invented attnum manifest or a blind hash refresh.
+
+For an operator-reviewed correction to the latest SQL migration, first run
+`node scripts/sync-reviewed-migration-hashes.mjs --apply`, then the inventory
+apply/check commands. The hash tool uses the ledger's canonical digest function,
+updates the latest SQL hash and backup/restore digest projections, and refuses
+changes to historical migrations. Review the SQL correction before rebinding it.
+`node scripts/refresh-ai-provider-evidence-bindings.mjs --apply` refreshes this
+PR's affected current-source evidence bindings and preserves replaced values;
+follow it with `--check` and `npm run evidence:verify`. Historical test results
+are preserved, and every evidence delta still requires operator approval.
 
 For the next migration, also advance the Drizzle snapshot/journal, reviewed SQL
 hash and ledger digest, `scripts/backup/common.sh`, and the backup/restore test

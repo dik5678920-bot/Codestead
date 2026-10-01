@@ -52,6 +52,7 @@ const files = [
   "scripts/lib/database-runtime-capability-test-fixture.mjs", "scripts/__tests__/backup-reporter-role-contract.test.ts",
   "infra/tests/database-least-privilege-static.test.mjs", "infra/tests/reviewed-migration-ledger-registration.test.mjs", "infra/tests/validate-static.mjs", "Dockerfile",
   "scripts/verify-restored-backup.ts", "scripts/verify-restored-backup-authority.test.ts", "scripts/verify-restored-backup.test.ts", "scripts/backup/restore-drill-isolated.sh",
+  "docs/reviewed-migration-inventory-pins.md",
 ];
 const replacements = new Map();
 for (const [name, value] of Object.entries(pinValues)) {

@@ -16,7 +16,7 @@ restore_postgres_image=postgres:17-bookworm@sha256:4f736ae292687621d4dbe0d499ffd
 source_release_git_commit=0123456789abcdef0123456789abcdef01234567
 source_database_version='postgres (PostgreSQL) 17.6'
 migration_state_sha256=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-reviewed_migration_ledger_sha256=174fea1500e62ff0824624beb2e6a20147d2931f494ee7fd03db86685949eca9
+reviewed_migration_ledger_sha256=8baecb4eedbb6f55a41b685438f9329197431d72580645c8c01a6017d7cfeeb6
 restore_verifier_sha256="$(sha256sum "$repo_root/scripts/verify-restored-backup.ts" | awk '{print $1}')"
 config="$work/backup.env"
 cat >"$config" <<EOF

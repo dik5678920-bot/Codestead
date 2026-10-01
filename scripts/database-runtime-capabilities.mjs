@@ -17,11 +17,11 @@ export const CURRENT_0070_REVIEWED_MIGRATION_TAG =
   "0070_credential_validation_preference";
 
 const REVIEWED_0070_FULL_LEDGER_SHA256 =
-  "174fea1500e62ff0824624beb2e6a20147d2931f494ee7fd03db86685949eca9";
+  "8baecb4eedbb6f55a41b685438f9329197431d72580645c8c01a6017d7cfeeb6";
 const REVIEWED_0070_JOURNAL_TAGS_SHA256 =
   "f29657c9a020854098688b3c9edab9c018b3ac51066f844bd06198d69eca84a2";
 const REVIEWED_0070_PUBLIC_COLUMN_MANIFEST_SHA256 =
-  "89496fc9d975fc3941c88c27a94c509efbcbdc053941c9019274c9320f6ac9d4";
+  "4b9871085224de975a34cee6201687ce9a5d25b4d9cf7cbbad4c68caf06bff3b";
 const REVIEWED_MIGRATION_TAGS = Object.freeze(
   Array.isArray(journal0070.entries)
     ? journal0070.entries.map((entry) => entry.tag)

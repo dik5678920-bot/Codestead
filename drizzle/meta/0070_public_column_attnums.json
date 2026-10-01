@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "contract": "codestead-public-column-attnums-0070-v1",
   "reviewedMigrationTail": "0070_credential_validation_preference",
-  "reviewedMigrationLedgerSha256": "174fea1500e62ff0824624beb2e6a20147d2931f494ee7fd03db86685949eca9",
+  "reviewedMigrationLedgerSha256": "8baecb4eedbb6f55a41b685438f9329197431d72580645c8c01a6017d7cfeeb6",
   "tables": [
     {
       "identity": "public.access_request",

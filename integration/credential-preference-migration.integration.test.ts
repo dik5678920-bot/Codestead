@@ -1,16 +1,19 @@
 import { readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
+import { Pool } from "pg";
 
-import { pool } from "@/lib/db/client";
+let pool: Pool | undefined;
 
-afterAll(async () => { await pool.end(); });
+afterAll(async () => { await pool?.end(); });
 
 describe("credential preference migration on legacy rows", () => {
   it("repairs duplicate preferences deterministically without changing stored keys or validation outcomes", async () => {
-    if (process.env.INTEGRATION_TEST !== "1" || !/\/learncoding_integration(?:\?|$)/.test(process.env.DATABASE_URL ?? "")) {
+    const ownerUrl = process.env.DATABASE_OWNER_URL;
+    if (process.env.INTEGRATION_TEST !== "1" || !/\/learncoding_integration(?:\?|$)/.test(ownerUrl ?? "")) {
       throw new Error("Migration proof requires the disposable integration database.");
     }
+    pool = new Pool({ connectionString: ownerUrl, max: 1 });
     const schema = `credential_proof_${randomUUID().replaceAll("-", "")}`;
     const client = await pool.connect();
     try {
@@ -27,6 +30,7 @@ describe("credential preference migration on legacy rows", () => {
       const before = (await client.query('select id,status,ciphertext from provider_credential order by id')).rows;
       const sql = (await readFile("drizzle/0070_credential_validation_preference.sql", "utf8")).replaceAll('"public".', `"${schema}".`);
       await client.query('begin');
+      await client.query('set local search_path to pg_catalog');
       await client.query(sql);
       await client.query('commit');
       expect((await client.query('select id,status,ciphertext from provider_credential order by id')).rows).toEqual(before);
