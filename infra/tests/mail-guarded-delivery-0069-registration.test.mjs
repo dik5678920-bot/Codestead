@@ -138,7 +138,7 @@ for (const command of requiredCheckOrder) {
 }
 
 const applicationJob = workflow.match(
-  /^  application:\n([\s\S]*?)(?=^  [a-z][a-z0-9-]*:\n|(?![\s\S]))/mu,
+  /^  quick:\n([\s\S]*?)(?=^  [a-z][a-z0-9-]*:\n|(?![\s\S]))/mu,
 )?.[0] ?? "";
 assertBackupCiApplicationCrossGuard(applicationJob);
 
@@ -337,8 +337,8 @@ for (const [mutated, expected] of [
   ],
   [
     applicationJob.replace(
-      "    timeout-minutes: 70",
-      "    timeout-minutes: 70\n    if: false",
+      "    timeout-minutes: 20",
+      "    timeout-minutes: 20\n    if: false",
     ),
     /unconditional independent gate/u,
   ],
@@ -388,8 +388,8 @@ for (const property of [
     () =>
       assertBackupCiApplicationCrossGuard(
         applicationJob.replace(
-          "    timeout-minutes: 70",
-          `    timeout-minutes: 70\n${property}`,
+          "    timeout-minutes: 20",
+          `    timeout-minutes: 20\n${property}`,
         ),
       ),
     /unconditional independent gate/u,

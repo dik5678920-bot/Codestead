@@ -419,6 +419,9 @@ if (!staticOnly) {
     )?.[0] ?? "";
   const postgresJob =
     projectHistoricalPostgresCiProjection(currentPostgresJob);
+  const liveIntegrationLine =
+    postgresCiProjectionModule.projectPostgresCiProjectionContract()
+      .livePg17IntegrationLine;
   const replaceProjectionExactly = (projection, before, after) => {
     assert.equal(
       projection.split(before).length,
@@ -495,7 +498,7 @@ if (!staticOnly) {
     "the live PostgreSQL 17 integration gate cannot be removed",
     replaceProjectionExactly(
       postgresJob,
-      "      - run: npm run test:integration\n",
+      `${liveIntegrationLine}\n`,
       "",
     ),
     /live PostgreSQL 17 integration gate must appear exactly once/u,
@@ -504,8 +507,11 @@ if (!staticOnly) {
     "the live PostgreSQL 17 integration gate cannot become a PostgreSQL 18 run",
     replaceProjectionExactly(
       postgresJob,
-      "      - run: npm run test:integration",
-      "      - run: POSTGRES_18_BIN=/usr/lib/postgresql/18/bin npm run test:integration",
+      liveIntegrationLine,
+      liveIntegrationLine.replace(
+        "      - run: ",
+        "      - run: POSTGRES_18_BIN=/usr/lib/postgresql/18/bin ",
+      ),
     ),
     /live PostgreSQL 17 integration gate must appear exactly once/u,
   );
@@ -514,12 +520,12 @@ if (!staticOnly) {
     replaceProjectionExactly(
       postgresJob,
       [
-        "      - run: npm run test:integration",
+        liveIntegrationLine,
         "      - run: docker pull postgres:17-bookworm@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f2ccd4c800f047b394",
       ].join("\n"),
       [
         "      - run: docker pull postgres:17-bookworm@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f2ccd4c800f047b394",
-        "      - run: npm run test:integration",
+        liveIntegrationLine,
       ].join("\n"),
     ),
     /live PostgreSQL 17 integration gate must precede the pinned Docker PostgreSQL 17 pull/u,
@@ -621,10 +627,10 @@ if (!staticOnly) {
     "an undeclared registration gate cannot masquerade as evidence",
     replaceProjectionExactly(
       postgresJob,
-      "      - run: npm run test:integration",
+      liveIntegrationLine,
       [
         "      - run: npm run test:future-mail-gate:registration",
-        "      - run: npm run test:integration",
+        liveIntegrationLine,
       ].join("\n"),
     ),
     /registration scripts/u,
@@ -660,12 +666,12 @@ if (!staticOnly) {
           "    timeout-minutes: 20",
           "    timeout-minutes: 35",
         ),
-        "      - run: npm run test:integration",
+        liveIntegrationLine,
         [
           "      - run: npm run test:self-test-0064:registration",
           "      - run: npm run test:self-test-0065:registration",
           "      - run: npm run test:self-test-restore:registration",
-          "      - run: npm run test:integration",
+          liveIntegrationLine,
         ].join("\n"),
       ),
       "      - run: POSTGRES_18_BIN=/usr/lib/postgresql/18/bin npm run test:mail-delivery-scope-0059",

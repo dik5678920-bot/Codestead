@@ -12,7 +12,18 @@ export const postgresCiRuntimePolicy = Object.freeze({
   runner: "ubuntu-24.04",
   baselineTimeoutMinutes: 20,
   maximumTimeoutMinutes: 35,
-  livePg17IntegrationCommand: "npm run test:integration",
+  // Every integration file except the long mail-delivery race suite runs here;
+  // that one file runs in its own parallel job under the same database gate.
+  livePg17IntegrationCommand:
+    "npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name mail-delivery-races.integration.test.ts | LC_ALL=C sort)",
+  mailRacesIntegrationCommand:
+    "npm run test:integration -- integration/mail-delivery-races.integration.test.ts",
+  // Owner decision 2026-10-01: pull requests run the PostgreSQL gates only when
+  // database/server paths change; push to main, nightly and dispatch always do.
+  databaseGateLines: Object.freeze([
+    "    needs: changes",
+    "    if: needs.changes.outputs.database == 'true'",
+  ]),
   installCommand:
     "sudo apt-get install --yes --no-install-recommends postgresql-17 postgresql-18",
   dockerPg17Image:
@@ -355,7 +366,7 @@ function assertCanonicalPostgresInstallAndRuntimeMajors(
   const expected = projectPostgresCiProjectionContract(contract);
   const livePg17IntegrationLines =
     postgresProjection.match(
-      /^      - run: npm run test:integration$/gmu,
+      /^      - run: (?:\S+=\S+ )*npm run test:integration(?: .*)?$/gmu,
     ) ?? [];
   assert.deepEqual(
     livePg17IntegrationLines,
@@ -468,6 +479,24 @@ function assertCanonicalPostgresInstallAndRuntimeMajors(
   );
 }
 
+// The PostgreSQL jobs may carry exactly the reviewed database path gate and no
+// other job-level condition or dependency. The changes job forces that gate on
+// for every non-pull-request event (asserted by backup-ci-registration).
+export function assertReviewedPostgresDatabaseGate(projection, label) {
+  const conditionLines =
+    projection.match(/^    ["']?(?:if|needs)["']?\s*:.*$/gmu) ?? [];
+  assert.deepEqual(
+    conditionLines,
+    [...postgresCiRuntimePolicy.databaseGateLines],
+    `${label} must remain an unconditional independent gate apart from the reviewed database path filter`,
+  );
+  assert.doesNotMatch(
+    projection,
+    /^    <<\s*:/mu,
+    `${label} must not merge job-level keys from an anchor`,
+  );
+}
+
 export function assertPostgresCiProjectionContract(
   postgresProjection,
   contract = canonicalPostgresCiProjectionContract,
@@ -485,10 +514,9 @@ export function assertPostgresCiProjectionContract(
     [expected.timeoutLine],
     "timeout-minutes must match the single canonical PostgreSQL CI policy",
   );
-  assert.doesNotMatch(
+  assertReviewedPostgresDatabaseGate(
     postgresProjection,
-    /^    (?:if|needs):/mu,
-    "the PostgreSQL integration job must remain an unconditional independent gate",
+    "the PostgreSQL integration job",
   );
   assert.doesNotMatch(
     postgresProjection,

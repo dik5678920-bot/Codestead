@@ -32,6 +32,8 @@ jobs:
       images: ${{ github.event_name != 'pull_request' || steps.filter.outputs['images-paths'] == 'true' }}
       backup: ${{ github.event_name != 'pull_request' || steps.filter.outputs['backup-paths'] == 'true' }}
       topology: ${{ github.event_name != 'pull_request' || steps.filter.outputs['topology-paths'] == 'true' }}
+      infra: ${{ github.event_name != 'pull_request' || steps.filter.outputs['infra-paths'] == 'true' }}
+      database: ${{ github.event_name != 'pull_request' || steps.filter.outputs['database-paths'] == 'true' }}
     steps:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
@@ -60,7 +62,7 @@ jobs:
               - services/runner/**
               - content/**
               - scripts/**
-              - src/lib/**
+              - src/lib/content/**
               - docs/evidence/**
             images-paths:
               - .github/workflows/ci.yml
@@ -68,11 +70,7 @@ jobs:
               - package-lock.json
               - Dockerfile
               - .dockerignore
-              - src/**
-              - scripts/**
-              - drizzle/**
-              - content/**
-              - public/**
+              - scripts/app-images/**
               - infra/docker/**
               - next.config.*
             backup-paths:
@@ -88,16 +86,46 @@ jobs:
               - drizzle/**
               - scripts/**
               - infra/**
+            infra-paths:
+              - .github/workflows/**
+              - package.json
+              - package-lock.json
+              - compose.yaml
+              - Dockerfile
+              - scripts/**
+              - infra/**
+            # The six service files are excluded from unit coverage because only
+            # the PostgreSQL integration gate exercises them, so they gate it too.
+            database-paths:
+              - .github/workflows/ci.yml
+              - package.json
+              - package-lock.json
+              - compose.yaml
+              - drizzle/**
+              - integration/**
+              - vitest.integration.config.ts
+              - scripts/**
+              - infra/**
+              - src/lib/db/**
+              - src/lib/notifications/**
+              - src/lib/*notifications.ts
+              - src/lib/daily-review/service.ts
+              - src/lib/learning-service/drizzle-store.ts
+              - src/lib/community/service.ts
+              - src/lib/curriculum-publication/admin-service.ts
+              - src/lib/career/service.ts
+              - src/lib/projects/module-project-service.ts
 
-  application:
+  # Fast static, registration and contract gates. Every pull request runs them.
+  quick:
     runs-on: ubuntu-24.04
-    timeout-minutes: 70
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           persist-credentials: false
-          # release-production.test.sh resolves the reviewed 0064 boundary commit
-          # from real history, which a depth-1 checkout does not contain.
+          # Kept from the historical application job so its contract and ledger
+          # checks see the same full history they were reviewed against.
           fetch-depth: 0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -114,17 +142,12 @@ jobs:
       - run: npm run test:github-runner-context:registration
       - run: npm run test:mail-guarded-delivery-0069:release-rollback
       - run: npm run test:migration-ledger
-      - run: npm run test:database-role-boundaries
       - run: npm run test:backup-status-mail-authority:contract
       - run: npm run test:email-outbox-writer-inventory
       - run: npm run production-load:ci-registration
       - run: npm run production-load:test-control:bundle
       - run: npm run production-load:fixture-runtime:bundle
       - run: npm run production-load:fixture-runtime:systemd
-      - run: CODESTEAD_DISPOSABLE_HOST=1 npm run production-load:fixture-runtime:lifecycle
-      - run: sudo env "PATH=$PATH" CODESTEAD_REQUIRE_LINUX_ROOT=1 npm run production-load:test-control:runtime
-      - run: CODESTEAD_DISPOSABLE_HOST=1 npm run production-load:peer-credentials
-      - run: CODESTEAD_DISPOSABLE_HOST=1 npm run production-load:disposable-sandbox
       - run: npm run lint
       - run: npm run typecheck
       - run: npm run security:dependencies:known
@@ -134,7 +157,6 @@ jobs:
       - run: npm run architecture:check
       - run: npm run ai:eval -- --check
       - run: npm run test:auth-boundary
-      - run: npm run test:coverage
       - run: npm run content:brand:check
       - run: npm run content:validate
       - run: npm run projects:catalog:validate
@@ -145,7 +167,6 @@ jobs:
       - run: npm run web:executable:check
       - run: npm run audit:release
       - run: npm run evidence:verify
-      - run: npm run build
       - run: npm audit --audit-level=moderate
       - run: node infra/tests/validate-static.mjs
       - run: node --test infra/tests/database-secret-ceremony.test.mjs
@@ -157,6 +178,177 @@ jobs:
       - run: node infra/tests/runtime-validator-structure.test.mjs
       - run: node infra/tests/runtime-validator-harness-contract.test.mjs
       - run: node --test infra/tests/runner-egress-gateway.test.mjs infra/tests/runner-egress-gateway-stream-failures.test.mjs
+
+  # The unit suite runs in six coverage shards. Each shard only collects raw
+  # coverage into a blob report; its per-shard threshold check is disabled
+  # because one shard covers only part of the code. unit-coverage merges all
+  # six blobs and enforces the unchanged vitest.config.ts thresholds once.
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run --coverage --maxWorkers=2 --shard=${{ matrix.shard }}/6 --reporter=blob --reporter=default --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0 --coverage.thresholds.statements=0
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: unit-blob-${{ matrix.shard }}
+          path: .vitest-reports/
+          if-no-files-found: error
+          include-hidden-files: true
+          retention-days: 1
+
+  unit-coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: unit
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: unit-blob-*
+          path: .vitest-reports
+          merge-multiple: true
+      - run: npx vitest run --merge-reports --coverage
+
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: docker compose --env-file infra/env/compose.env.example config --quiet
+      - run: node infra/tests/validate-compose.mjs
+
+  docker-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - run: bash infra/tests/install-reviewed-docker-engine.sh
+      - run: docker build --pull=false --tag learncoding-app:ci .
+      - run: docker build --pull=false --target regrade-worker --tag learncoding-regrade-worker:ci .
+
+  db-roles:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - run: npm run test:database-role-boundaries
+
+  # Host-shell infrastructure suites run as four parallel groups. Pull requests
+  # run them only when infra-paths change; main, nightly and dispatch always do.
+  infra-shell-a:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: sudo install -o root -g root -m 0755 "$(command -v node)" /usr/bin/node
+      - run: npm ci
+      - run: sudo apt-get update
+      - run: sudo apt-get install --yes bubblewrap nftables shellcheck
+      - run: python3 infra/tests/existing-container-baseline.test.py
+      - run: python3 infra/tests/capture-existing-containers.test.py
+      - run: sudo env PYTHONDONTWRITEBYTECODE=1 python3 infra/tests/capture-existing-containers-linux.test.py
+      - run: python3 infra/tests/recovery-evidence-helper.test.py
+      - run: python3 infra/tests/recovery-evidence-provenance.test.py
+      - run: python3 infra/tests/recovery-evidence-storage-health.test.py
+      - run: python3 infra/tests/recovery-evidence-atomic.test.py
+      - run: python3 infra/tests/recovery-evidence-collection.test.py
+      - run: python3 infra/tests/host-operations-compatibility.test.py
+      - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-evidence.test.sh
+      - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-recovery-check.test.sh
+      - run: sudo bash infra/tests/systemd-recovery.test.sh
+
+  infra-shell-b:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          # release-production.test.sh resolves the reviewed 0064 boundary commit
+          # from real history, which a depth-1 checkout does not contain.
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: sudo install -o root -g root -m 0755 "$(command -v node)" /usr/bin/node
+      - run: npm ci
+      - run: sudo apt-get update
+      - run: sudo apt-get install --yes bubblewrap nftables shellcheck
+      - run: python3 infra/tests/runner-release-tree.test.py
+      - run: python3 infra/tests/release-tree-packaging.test.py
+      - run: bash infra/tests/install-reviewed-docker-engine.sh
+      - run: bash infra/ops/install-compose-ci.sh
+      - run: bash infra/tests/smoke-production.test.sh
+      - run: sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/release-production.test.sh
+      - run: sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/rollback-production.test.sh
+      - run: REQUIRE_COMPOSE_MAJOR=5 bash infra/tests/compose-release-cli-contract.test.sh
+
+  infra-shell-c:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: sudo install -o root -g root -m 0755 "$(command -v node)" /usr/bin/node
+      - run: npm ci
+      - run: CODESTEAD_DISPOSABLE_HOST=1 npm run production-load:fixture-runtime:lifecycle
+      - run: sudo env "PATH=$PATH" CODESTEAD_REQUIRE_LINUX_ROOT=1 npm run production-load:test-control:runtime
+      - run: CODESTEAD_DISPOSABLE_HOST=1 npm run production-load:peer-credentials
+      - run: CODESTEAD_DISPOSABLE_HOST=1 npm run production-load:disposable-sandbox
       - run: sudo apt-get update
       - run: sudo apt-get install --yes bubblewrap nftables shellcheck
       - run: shellcheck --severity=warning infra/ops/capture-recovery-evidence.sh infra/ops/create-database-secrets.sh infra/ops/install-compose-ci.sh infra/ops/release-production.sh infra/ops/rollback-production.sh infra/ops/smoke-production.sh infra/ops/validate-production-load-fixture-runtime.sh infra/ops/validate-production-load-test-control-runtime.sh infra/runner-vm/install-guest.sh infra/tests/compose-release-cli-contract.test.sh infra/tests/power-evidence.test.sh infra/tests/production-load-disposable-sandbox.test.sh infra/tests/production-load-fixture-lifecycle.test.sh infra/tests/production-load-peer-credentials.test.sh infra/tests/production-load-test-control-runtime.test.sh infra/tests/recovery-evidence-entry.test.sh infra/tests/recovery-evidence-main.test.sh infra/tests/release-production.test.sh infra/tests/rollback-production.test.sh infra/tests/runner-firewall.test.sh infra/tests/runner-firewall-packets.test.sh infra/tests/runner-guest-installer.test.sh infra/tests/runner-vm-provision.test.sh infra/tests/smoke-production.test.sh
@@ -167,11 +359,6 @@ jobs:
       # The recovery harness intentionally mutates a scalar/array candidate and creates disposable parent trees to prove containment rejections.
       - run: shellcheck --severity=warning --exclude=SC2128,SC2174,SC2178 infra/tests/power-recovery-check.test.sh
       - run: bash -n scripts/backup/*.sh infra/docker/entrypoint.sh infra/ops/*.sh infra/runner/*.sh infra/tests/*.sh
-      - run: python3 infra/tests/runner-release-tree.test.py
-      - run: python3 infra/tests/release-tree-packaging.test.py
-      - run: python3 infra/tests/existing-container-baseline.test.py
-      - run: python3 infra/tests/capture-existing-containers.test.py
-      - run: sudo env PYTHONDONTWRITEBYTECODE=1 python3 infra/tests/capture-existing-containers-linux.test.py
       - run: python3 infra/tests/test_production_load_browser_journey.py
       - run: python3 infra/tests/test_production_load_control.py
       - run: python3 infra/tests/test_production_load_peer_credentials.py
@@ -186,28 +373,29 @@ jobs:
       # interface_name, which needs Engine 28.1+, so pin the reviewed engine.
       - run: bash infra/tests/install-reviewed-docker-engine.sh
       - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-firewall-packets.test.sh
-      - run: python3 infra/tests/recovery-evidence-helper.test.py
-      - run: python3 infra/tests/recovery-evidence-provenance.test.py
-      - run: python3 infra/tests/recovery-evidence-storage-health.test.py
-      - run: python3 infra/tests/recovery-evidence-atomic.test.py
-      - run: python3 infra/tests/recovery-evidence-collection.test.py
-      - run: python3 infra/tests/host-operations-compatibility.test.py
-      - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-evidence.test.sh
-      - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-recovery-check.test.sh
-      - run: sudo bash infra/tests/systemd-recovery.test.sh
-      - run: bash infra/ops/install-compose-ci.sh
-      - run: bash infra/tests/smoke-production.test.sh
-      - run: sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/release-production.test.sh
-      - run: sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/rollback-production.test.sh
-      - run: REQUIRE_COMPOSE_MAJOR=5 bash infra/tests/compose-release-cli-contract.test.sh
+
+  infra-shell-d:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.infra == 'true'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: sudo install -o root -g root -m 0755 "$(command -v node)" /usr/bin/node
+      - run: npm ci
+      - run: sudo apt-get update
+      - run: sudo apt-get install --yes bubblewrap nftables shellcheck
+      - run: bash infra/tests/install-reviewed-docker-engine.sh
       - run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - run: sudo -n env "PATH=$PATH" bash infra/tests/runner-reconciliation.test.sh
       - run: bash infra/tests/runtime-validator-network-fixture.test.sh
       - run: bash infra/tests/runtime-config.test.sh
-      - run: docker compose --env-file infra/env/compose.env.example config --quiet
-      - run: node infra/tests/validate-compose.mjs
-      - run: docker build --pull=false --tag learncoding-app:ci .
-      - run: docker build --pull=false --target regrade-worker --tag learncoding-regrade-worker:ci .
 
   production-topology:
     runs-on: ubuntu-24.04
@@ -346,6 +534,14 @@ jobs:
       - run: npm run app-images:test
       - run: npm run app-images:build
       - run: npm run app-images:inspect
+      # Reuse today's Trivy vulnerability and Java databases; the download steps
+      # below still refresh them whenever the cached copy is stale.
+      - run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+        id: trivy-day
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/application-image-trivy-cache
+          key: trivy-db-v0.69.3-${{ steps.trivy-day.outputs.day }}
       - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
         with:
           version: v0.69.3
@@ -461,6 +657,14 @@ jobs:
       - run: npm run runtime:build
       - run: npm run runtime:inspect
       - run: npm run runtime:test
+      # Reuse today's Trivy vulnerability and Java databases; the download steps
+      # below still refresh them whenever the cached copy is stale.
+      - run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+        id: trivy-day
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-db-v0.69.3-${{ steps.trivy-day.outputs.day }}
       - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
         with:
           version: v0.69.3
@@ -487,6 +691,8 @@ jobs:
   postgres-integration:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
+    needs: changes
+    if: needs.changes.outputs.database == 'true'
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -511,7 +717,7 @@ jobs:
       - run: npm run test:mail-durable-replay-0067:roles
       - run: npm run test:mail-retention-redaction-0068:roles
       - run: npm run test:mail-guarded-delivery-0069:roles
-      - run: npm run test:integration
+      - run: npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name mail-delivery-races.integration.test.ts | LC_ALL=C sort)
       - run: docker pull postgres:17-bookworm@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f2ccd4c800f047b394
       - run: docker pull node:22.23.3-alpine3.23@sha256:489418a947387da1c5b4c0c5749c963da56ecaac0ced1da74c67db60e42f2b3a
       - run: CODESTEAD_DISPOSABLE_HOST=1 bash infra/tests/database-least-privilege-integration.sh
@@ -559,6 +765,25 @@ jobs:
       - run: POSTGRES_18_BIN=/usr/lib/postgresql/18/bin npm run test:mail-guarded-delivery-0069:pg18
       - run: POSTGRES_18_BIN=/usr/lib/postgresql/18/bin npm run test:restore-drill-role-boundary:pg18
 
+  # The mail-delivery race suite alone takes about 7.5 minutes, so it runs in
+  # parallel with postgres-integration (which runs every other integration file)
+  # under the same database gate and the same disposable PostgreSQL harness.
+  integration-mail-races:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.database == 'true'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - run: npm run test:integration -- integration/mail-delivery-races.integration.test.ts
+
   curriculum-runtime:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -599,6 +824,14 @@ jobs:
         working-directory: services/runner
       - run: npm run runtime:test
         working-directory: services/runner
+      # Reuse today's Trivy vulnerability and Java databases; the download steps
+      # below still refresh them whenever the cached copy is stale.
+      - run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+        id: trivy-day
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache
+          key: trivy-db-v0.69.3-${{ steps.trivy-day.outputs.day }}
       - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6
         with:
           version: v0.69.3
@@ -609,6 +842,10 @@ jobs:
       - run: npm run runtime:record
         working-directory: services/runner
       - run: npm run curriculum:runtime-pins:check
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-chromium
       - run: npx playwright install --with-deps chromium
       - run: npm run dsa:parity:verify
       - name: Regenerate DSA parity runtime evidence after a failed verification
@@ -666,30 +903,28 @@ jobs:
           node-version: 22.23.1
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium firefox webkit
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ github.event_name == 'pull_request' && 'chromium' || 'chromium-firefox-webkit' }}
+      # Owner-approved trade-off: pull requests exercise the Chromium profile only;
+      # main, nightly and dispatch run every browser durability profile.
+      - run: npx playwright install --with-deps ${{ github.event_name == 'pull_request' && 'chromium' || 'chromium firefox webkit' }}
       - run: npm run test:browser:auth
+        env:
+          BROWSER_DURABILITY_PROFILES: ${{ github.event_name == 'pull_request' && 'chromium' || '' }}
 
   browser:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     needs: changes
     if: needs.changes.outputs.browser == 'true'
+    # Owner-approved trade-off: pull requests run the Chromium project only, in
+    # three shards; main, nightly and dispatch also run the five other projects.
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - project: chromium
-            browser: chromium
-          - project: firefox
-            browser: firefox
-          - project: webkit
-            browser: webkit
-          - project: tablet-safari
-            browser: webkit
-          - project: small-mobile
-            browser: webkit
-          - project: mobile-safari
-            browser: webkit
+        include: ${{ fromJSON(github.event_name == 'pull_request' && '[{"project":"chromium","browser":"chromium","shard":"1/3"},{"project":"chromium","browser":"chromium","shard":"2/3"},{"project":"chromium","browser":"chromium","shard":"3/3"}]' || '[{"project":"chromium","browser":"chromium","shard":"1/3"},{"project":"chromium","browser":"chromium","shard":"2/3"},{"project":"chromium","browser":"chromium","shard":"3/3"},{"project":"firefox","browser":"firefox","shard":"1/1"},{"project":"webkit","browser":"webkit","shard":"1/1"},{"project":"tablet-safari","browser":"webkit","shard":"1/1"},{"project":"small-mobile","browser":"webkit","shard":"1/1"},{"project":"mobile-safari","browser":"webkit","shard":"1/1"}]') }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -699,6 +934,77 @@ jobs:
           node-version: 22.23.1
           cache: npm
       - run: npm ci
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-${{ matrix.browser }}
       - run: npx playwright install --with-deps ${{ matrix.browser }}
       - run: npm run sync:monaco
-      - run: npm run test:e2e -- --project=${{ matrix.project }}
+      - run: npm run test:e2e -- --project=${{ matrix.project }} --shard=${{ matrix.shard }}
+
+  # The single required check. It passes only when every job succeeded, or was
+  # skipped because its own path filter was false (or it is a parked job).
+  ci-ok:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs:
+      - changes
+      - quick
+      - unit
+      - unit-coverage
+      - build
+      - docker-build
+      - db-roles
+      - infra-shell-a
+      - infra-shell-b
+      - infra-shell-c
+      - infra-shell-d
+      - production-topology
+      - application-images
+      - backup-safety
+      - backup-production-e2e
+      - runner
+      - postgres-integration
+      - integration-mail-races
+      - curriculum-runtime
+      - auth-browser
+      - browser
+    if: always()
+    steps:
+      - name: Require every job to pass or be skipped by its own filter
+        run: |
+          set -Eeuo pipefail
+          gate_of() {
+            case "$1" in
+              infra-shell-a|infra-shell-b|infra-shell-c|infra-shell-d) echo infra ;;
+              production-topology) echo topology ;;
+              application-images) echo images ;;
+              runner) echo runner ;;
+              curriculum-runtime) echo curriculum ;;
+              auth-browser|browser) echo browser ;;
+              postgres-integration|integration-mail-races) echo database ;;
+              *) echo '' ;;
+            esac
+          }
+          status=0
+          while IFS=$'\t' read -r job result; do
+            if [[ "$result" == success ]]; then
+              continue
+            fi
+            if [[ "$result" == skipped ]]; then
+              if [[ "$job" == backup-safety || "$job" == backup-production-e2e ]]; then
+                echo "$job is parked (if: false)"
+                continue
+              fi
+              gate="$(gate_of "$job")"
+              if [[ -n "$gate" && "$(jq -r --arg gate "$gate" '.changes.outputs[$gate] // ""' <<<"$NEEDS_JSON")" == false ]]; then
+                echo "$job skipped: its $gate path filter is false"
+                continue
+              fi
+            fi
+            echo "::error::$job finished as $result"
+            status=1
+          done < <(jq -r 'to_entries[] | [.key, .value.result] | @tsv' <<<"$NEEDS_JSON")
+          exit "$status"
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
