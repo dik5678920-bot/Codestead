@@ -78,10 +78,12 @@ add `piston` to `COMPOSE_PROFILES`, then start only that service:
 docker compose -p learncoding --env-file /etc/learncoding/compose.env -f /opt/learncoding/compose.yaml --profile piston up -d --no-deps piston
 ```
 
-It should report `healthy` within about a minute.
+Kata cannot run Docker healthchecks (no exec into the guest), so check the API
+from a throwaway container on the `piston` network. Within about a minute it
+should print `{"run":{...,"stdout":"42\n",...`.
 
 ```bash
-docker inspect -f '{{.State.Health.Status}}' learncoding-piston-1
+docker run --rm --network learncoding_piston alpine:3.22@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 wget -qO- --header content-type:application/json --post-data '{"language":"python","version":"3.12.0","files":[{"content":"print(6*7)"}]}' http://piston:2000/api/v2/execute
 ```
 
 `docker exec` into a Kata container is not supported by this Kata release.
