@@ -227,6 +227,19 @@ export async function loadPublishedExamModule(
   return null;
 }
 
+// Every course a publication pointer selects, at any stage and whether or not it
+// is exam-ready. listPublishedExamCourses() drops ineligible publications (for
+// example owner-mode ones without release evidence); callers that would fall
+// back to filesystem content must use this set so such a course stays closed.
+export async function listPointerSelectedCourseSlugs(): Promise<ReadonlySet<string>> {
+  const result = await pool.query<{ slug: string }>(`
+    select c.slug
+      from curriculum_publication_pointer cpp
+      join course c on c.id = cpp.course_id
+  `);
+  return new Set(result.rows.map((row) => row.slug));
+}
+
 // Stage of the version each course's catalog pointer currently publishes. Course
 // manifests on disk carry the authored status; this is what was actually published.
 export async function listPublishedCourseStages(): Promise<ReadonlyMap<string, "beta" | "verified">> {

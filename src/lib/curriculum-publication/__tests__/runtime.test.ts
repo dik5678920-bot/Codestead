@@ -8,7 +8,12 @@ const mocks = vi.hoisted(() => ({ query: vi.fn() }));
 
 vi.mock("@/lib/db/client", () => ({ pool: { query: mocks.query } }));
 
-import { listPublishedCourseStages, listPublishedExamCourses, loadPublishedExamModule } from "../runtime";
+import {
+  listPointerSelectedCourseSlugs,
+  listPublishedCourseStages,
+  listPublishedExamCourses,
+  loadPublishedExamModule,
+} from "../runtime";
 
 function pointerRow(overrides: Record<string, unknown> = {}) {
   return {
@@ -176,5 +181,14 @@ describe("published curriculum runtime fail-closed boundary", () => {
   it("returns an empty stage map when no publication pointers exist", async () => {
     mocks.query.mockResolvedValue({ rows: [] });
     expect(await listPublishedCourseStages()).toEqual(new Map());
+  });
+
+  it("lists every pointer-selected course, unfiltered by stage or exam readiness", async () => {
+    mocks.query.mockResolvedValue({ rows: [{ slug: "owner-beta" }, { slug: "draft-pointer" }] });
+    expect(await listPointerSelectedCourseSlugs()).toEqual(new Set(["owner-beta", "draft-pointer"]));
+    const sql = mocks.query.mock.calls[0]![0] as string;
+    expect(sql).toContain("from curriculum_publication_pointer cpp");
+    expect(sql).not.toMatch(/where/u);
+    expect(sql).not.toContain("release_evidence");
   });
 });
