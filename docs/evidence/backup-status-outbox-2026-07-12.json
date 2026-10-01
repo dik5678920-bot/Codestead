@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "sourceCommit": "247ce38d62cce6ae97cee04e162c9d25e85f5b8e",
+  "note": "Source pins are anchored to the current origin/main commit whose blobs match the current recorded bindings, not the original proof commit; historical checks were not rerun for this conversion.",
   "generatedAt": "2026-07-12T16:28:00.000Z",
   "revalidatedAt": "2026-09-28T09:00:00.000Z",
   "scope": "Local deterministic validation of nightly backup status reporting through the dedicated least-privilege reporter and current PostgreSQL mail-authority chain on native disposable PostgreSQL 17; no Docker, host PostgreSQL service, real data, real credentials, or external email was used.",

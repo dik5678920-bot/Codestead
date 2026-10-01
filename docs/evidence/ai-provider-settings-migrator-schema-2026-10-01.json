@@ -362,9 +362,9 @@
     }
   ],
   "artifactSha256": {
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "09b347cefe42a7471355b369fb64aee7843acc846134221ce4cf929b1c9eb922",
-    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "8cbcf0b7a95f469e48e50bcd13bdc5185bcd12ebc2aadf2605d945d59d98bf06",
-    "docs/evidence/backup-status-outbox-2026-07-12.json": "ea5dc70728fd98554af73181a8bfc8eabd8113f40e9587af9be4d76811c8604d",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "b7dd20ae4d4deea4b0aefa7f53df93b1a7e01826ea864999d2e3a90a34b08a62",
+    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "447ec9080f6c3d5f7c6b7f034142cd6b7bdf004dcf65cdc16737280cbbcd7668",
+    "docs/evidence/backup-status-outbox-2026-07-12.json": "6772b9a325df624871e51e52023e82692cab02a737e799fb4b9a68d53b273223",
     "docs/reviewed-migration-inventory-pins.md": "cfccee3116a90b6e3e2bf262b77a92b43b7c88b14e2d3d8b888a58e9a2aebfda",
     "drizzle/0070_credential_validation_preference.sql": "a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c",
     "drizzle/meta/0070_public_column_attnums.json": "445e46c714041c037d7474a39d940cf065e92951ba6c2bbd0f2b2fdc73bb2e75",

@@ -138,9 +138,9 @@
     }
   ],
   "artifactSha256": {
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "09b347cefe42a7471355b369fb64aee7843acc846134221ce4cf929b1c9eb922",
-    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "8cbcf0b7a95f469e48e50bcd13bdc5185bcd12ebc2aadf2605d945d59d98bf06",
-    "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json": "dfaf455753bf82ce4fe51fae309d29f72e7e27c113e8b5103f003852aa33838b",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "b7dd20ae4d4deea4b0aefa7f53df93b1a7e01826ea864999d2e3a90a34b08a62",
+    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "447ec9080f6c3d5f7c6b7f034142cd6b7bdf004dcf65cdc16737280cbbcd7668",
+    "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json": "ca27e102c3d39bc1c2321df9c9c7bdeadca7ff37e0677d4abaaea403a593ec59",
     "e2e/assurance.spec.ts": "cd96a09185e4222495c52ffe7e34031ed51ead1e1c05144e99de537f85427985",
     "e2e/access.spec.ts": "d7026f69cb0faf066b39e89b8184434b4c58e521b21a2b9fd6861f1444cb5c75",
     "infra/tests/mail-guarded-delivery-0069.impl.mjs": "77b54c928cc6360bb4a613f122b80696d0be1984111d789482f1dea9cfa0bd54",

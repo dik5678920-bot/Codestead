@@ -10107,12 +10107,21 @@ async function verifyExactClusterCleanup({
     logFile,
     socketDirectory,
   });
+  const cleanupDeadline = createOperationDeadline(CLEANUP_TIMEOUT_MS);
   const status = run(
     executable("pg_ctl"),
     ["-D", dataDirectory, "status"],
     { allowFailure: true, stdio: "ignore", timeoutMs: 5_000 },
   );
   assert.notEqual(status.status, 0, "exact temporary cluster is still active");
+  // pg_ctl -w observes PID-file removal, which precedes OS process exit.
+  const cleanupPid = postmasterPid ?? readExactPostmasterPid(dataDirectory);
+  while (cleanupPid !== undefined && processStillExists(cleanupPid)) {
+    await delay(Math.min(
+      POLL_INTERVAL_MS,
+      remainingDeadlineMs(cleanupDeadline, "temporary PostgreSQL process exit"),
+    ));
+  }
   assert.equal(
     await countLoopbackListeners(port),
     0,
