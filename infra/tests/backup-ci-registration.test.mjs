@@ -1233,7 +1233,8 @@ const topologyDockerProjection = [
   '          [[ -z "$container_ids" ]]',
 ];
 const trivySetupProjection = [
-  "      - run: bash scripts/ci/install-trivy.sh",
+  // These jobs default to working-directory services/runner.
+  "      - run: bash \"$GITHUB_WORKSPACE/scripts/ci/install-trivy.sh\"",
   '      - run: trivy image --cache-dir "$RUNTIME_TRIVY_CACHE_DIR" --download-db-only',
   '      - run: trivy image --cache-dir "$RUNTIME_TRIVY_CACHE_DIR" --download-java-db-only',
 ];

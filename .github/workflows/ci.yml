@@ -668,7 +668,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/trivy-cache
           key: trivy-db-v0.69.3-${{ steps.trivy-day.outputs.day }}
-      - run: bash scripts/ci/install-trivy.sh
+      - run: bash "$GITHUB_WORKSPACE/scripts/ci/install-trivy.sh"
       - run: trivy image --cache-dir "$RUNTIME_TRIVY_CACHE_DIR" --download-db-only
       - run: trivy image --cache-dir "$RUNTIME_TRIVY_CACHE_DIR" --download-java-db-only
       - run: npm run runtime:scan
@@ -864,7 +864,7 @@ jobs:
         with:
           path: ${{ runner.temp }}/trivy-cache
           key: trivy-db-v0.69.3-${{ steps.trivy-day.outputs.day }}
-      - run: bash scripts/ci/install-trivy.sh
+      - run: bash "$GITHUB_WORKSPACE/scripts/ci/install-trivy.sh"
       - run: trivy image --cache-dir "$RUNTIME_TRIVY_CACHE_DIR" --download-db-only
       - run: trivy image --cache-dir "$RUNTIME_TRIVY_CACHE_DIR" --download-java-db-only
       - run: npm run runtime:scan
