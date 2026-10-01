@@ -135,7 +135,7 @@
   "historicalEvidence": "Only current source bindings refreshed in three historical records, with previous hashes retained and annotations distinguishing bindings from the original test dates and results. The API matrix changes only two operation source hashes; its authorization rules and counts are unchanged.",
   "artifactSha256": {
     "docs/evidence/api-authorization-matrix-2026-07-12.json": "dddb32ecd9ece9201fb5f109afb51790b8ceec6460c6f37ed7aa724a70751238",
-    "docs/evidence/backup-status-outbox-2026-07-12.json": "ea5dc70728fd98554af73181a8bfc8eabd8113f40e9587af9be4d76811c8604d",
+    "docs/evidence/backup-status-outbox-2026-07-12.json": "6772b9a325df624871e51e52023e82692cab02a737e799fb4b9a68d53b273223",
     "docs/evidence/provider-outage-fallback-verification-2026-07-12.json": "d939e054c18f841bec6fb2d110076969a302388dd29c9ec9c7862da3ccad154e",
     "docs/evidence/run-008-official-runner-fairness-2026-07-12.json": "3b959497a8d8d2f23b02e78d840e49b9b2b4577103af92e71fe4a69cc9de1872",
     "docs/provider-onboarding.md": "b60bff88b29d242f1fc9eef0ef2053f5ebe7611f14dcfce0026d1eae2c0044f4",
@@ -178,7 +178,7 @@
         "field": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "previousSha256": "c7b65b5e3a32830a8978565131104b98a118f4e645a0c0db2f3112fdf765e840",
-        "sha256": "ea5dc70728fd98554af73181a8bfc8eabd8113f40e9587af9be4d76811c8604d"
+        "sha256": "6772b9a325df624871e51e52023e82692cab02a737e799fb4b9a68d53b273223"
       },
       {
         "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
