@@ -445,7 +445,9 @@ test("0069 runs the strict production runtime proof after final replay repair", 
   assert.match(journal, /CREATE TABLE drizzle[.]__drizzle_migrations/u);
   assert.match(journal, /REVOKE ALL ON SCHEMA drizzle/u);
   assert.match(journal, /REVOKE ALL ON TABLE drizzle[.]__drizzle_migrations/u);
-  assert.match(journal, /journalEntries[.]length,\s*migrationsThrough0069[.]length/u);
+  assert.match(journal, /journalEntries[.]length\s*>=\s*migrationsThrough0069[.]length/u);
+  assert.match(journal, /journalEntries\[69\]\?\.tag,\s*"0069_mail_outbox_guarded_delivery_authority"/u);
+  assert.match(journal, /journalEntries[.]slice\(0,\s*migrationsThrough0069[.]length\)/u);
   assert.match(journal, /reviewedEntries[.]slice[(]0,\s*-1[)]/u);
   assert.match(journal, /reviewedEntries[.]at[(]-1[)]/u);
   assert.match(journal, /return reviewedCandidate/u);

@@ -297,6 +297,29 @@ test("database role bootstrap precedes migration and both contend on the shared 
   assert.match(harness.slice(noSuccess, lockReleased), /database\.roles_bootstrapped[\s\S]*database\.migrated/u);
   assert.match(harness, /wait "\$bootstrap_pid"[\s\S]*wait "\$migrate_pid"/u);
 });
+test("the seed follows an unconditional post-migration role reconciliation, as in release", () => {
+  // Release order: bootstrap -> migrate -> REQUIRE_COMPLETE bootstrap -> seed.
+  // When the contended bootstrap wins the lock, the migrations run after it,
+  // and only this reconciliation grants the runtime roles the new objects.
+  const release = read("infra/ops/release-production.sh");
+  const releaseMigrate = release.indexOf("\nrun_one_shot migrate\n");
+  const releaseReconcile = release.indexOf(
+    "REQUIRE_COMPLETE_MIGRATION_LEDGER=true \\\n  run_one_shot database-role-bootstrap",
+    releaseMigrate,
+  );
+  const releaseSeed = release.indexOf("\nrun_one_shot platform-seed\n", releaseReconcile);
+  assert.ok(releaseMigrate >= 0 && releaseMigrate < releaseReconcile && releaseReconcile < releaseSeed);
+
+  const firstSeed = harness.indexOf("--no-deps platform-seed");
+  const lastMigrationBeforeSeed = harness.lastIndexOf("--no-deps migrate", firstSeed);
+  assert.ok(lastMigrationBeforeSeed >= 0 && lastMigrationBeforeSeed < firstSeed);
+  const beforeSeed = harness.slice(lastMigrationBeforeSeed, firstSeed);
+  // Top level (column 0), so it runs whichever contender won the lock.
+  assert.match(
+    beforeSeed,
+    /^timeout 360 "\$\{compose\[@\]\}" --profile operations run --rm --env PGAPPNAME=codestead-topology-role-bootstrap \\\n  --env REQUIRE_COMPLETE_MIGRATION_LEDGER=true --no-deps database-role-bootstrap \\\n  >"\$workdir\/bootstrap-reconcile\.log" 2>&1\ngrep -F '"event":"database\.roles_bootstrapped"' "\$workdir\/bootstrap-reconcile\.log" >\/dev\/null$/mu,
+  );
+});
 test("topology database fixture passwords are distinct and at least 32 bytes", () => {
   const rawPassword = harness.match(/printf '%s' '([^']+)' >"\$secrets_dir\/postgres_password"/u)?.[1];
   const urlPasswords = [...harness.matchAll(/postgresql:\/\/[^:']+:([^@']+)@postgres:5432\/learncoding/gmu)]

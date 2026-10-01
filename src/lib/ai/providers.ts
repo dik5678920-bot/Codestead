@@ -107,105 +107,117 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
     request.provider === "custom_openai_compatible"
       ? { baseUrl: safeCustomBaseUrl(), protocol: "openai" as const }
       : providerDefinitions[request.provider];
-  const timeoutMs = Math.min(Math.max(request.timeoutMs ?? 30_000, 1_000), 120_000);
+  const timeoutMs = Number.isFinite(request.timeoutMs ?? 30_000)
+    ? Math.min(Math.max(request.timeoutMs ?? 30_000, 1_000), 120_000)
+    : 30_000;
   const requestedOutputTokens = request.maxOutputTokens ?? 1_500;
   const maxOutputTokens = Number.isFinite(requestedOutputTokens)
     ? Math.min(Math.max(Math.trunc(requestedOutputTokens), 1), 32_768)
     : 1_500;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  let timeout: ReturnType<typeof setTimeout>;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => {
+      reject(new ProviderError("Provider request timed out.", "TIMEOUT"));
+      controller.abort();
+    }, timeoutMs);
+  });
 
   try {
-    const isAnthropic = definition.protocol === "anthropic";
-    const system = request.messages
-      .filter((message) => message.role === "system")
-      .map((message) => message.content)
-      .join("\n\n");
-    const url = `${definition.baseUrl}/${isAnthropic ? "messages" : "chat/completions"}`;
-    const headers: Record<string, string> = {
-      "content-type": "application/json",
-      accept: "application/json",
-    };
-    if (isAnthropic) {
-      headers["x-api-key"] = request.apiKey;
-      headers["anthropic-version"] = "2023-06-01";
-    } else {
-      headers.authorization = `Bearer ${request.apiKey}`;
-      if (request.provider === "openrouter") {
-        headers["http-referer"] = process.env.APP_URL ?? "http://localhost:3000";
-        headers["x-title"] = process.env.APP_NAME ?? "Codestead";
-      }
-    }
-
-    const body = isAnthropic
-      ? {
-          model: request.model,
-          system: system || undefined,
-          messages: request.messages
-            .filter((message) => message.role !== "system")
-            .map((message) => ({ role: message.role, content: message.content })),
-          temperature: request.temperature ?? 0.2,
-          max_tokens: maxOutputTokens,
+    // The deadline also bounds body parsing and transports that ignore abort.
+    const invoke = async (): Promise<ProviderResult> => {
+      const isAnthropic = definition.protocol === "anthropic";
+      const system = request.messages
+        .filter((message) => message.role === "system")
+        .map((message) => message.content)
+        .join("\n\n");
+      const url = `${definition.baseUrl}/${isAnthropic ? "messages" : "chat/completions"}`;
+      const headers: Record<string, string> = {
+        "content-type": "application/json",
+        accept: "application/json",
+      };
+      if (isAnthropic) {
+        headers["x-api-key"] = request.apiKey;
+        headers["anthropic-version"] = "2023-06-01";
+      } else {
+        headers.authorization = `Bearer ${request.apiKey}`;
+        if (request.provider === "openrouter") {
+          headers["http-referer"] = process.env.APP_URL ?? "http://localhost:3000";
+          headers["x-title"] = process.env.APP_NAME ?? "Codestead";
         }
-      : {
-          model: request.model,
-          messages: request.messages,
-          temperature: request.temperature ?? 0.2,
-          max_tokens: maxOutputTokens,
-          stream: false,
+      }
+
+      const body = isAnthropic
+        ? {
+            model: request.model,
+            system: system || undefined,
+            messages: request.messages
+              .filter((message) => message.role !== "system")
+              .map((message) => ({ role: message.role, content: message.content })),
+            temperature: request.temperature ?? 0.2,
+            max_tokens: maxOutputTokens,
+          }
+        : {
+            model: request.model,
+            messages: request.messages,
+            temperature: request.temperature ?? 0.2,
+            max_tokens: maxOutputTokens,
+            stream: false,
+          };
+
+      const response = await fetch(url, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+        redirect: "error",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        // Do not include provider response bodies: they can reflect submitted content.
+        throw providerError(response.status, response.headers.get("retry-after"));
+      }
+
+      const raw: unknown = await response.json();
+      if (isAnthropic) {
+        const parsed = anthropicResponseSchema.safeParse(raw);
+        if (!parsed.success) throw new ProviderError("Malformed provider response.", "BAD_RESPONSE");
+        const content = parsed.data.content
+          .filter((part) => part.type === "text")
+          .map((part) => part.text ?? "")
+          .join("\n")
+          .trim();
+        if (!content) throw new ProviderError("Provider returned no tutor text.", "BAD_RESPONSE");
+        return {
+          provider: request.provider,
+          model: parsed.data.model ?? request.model,
+          content,
+          finishReason: parsed.data.stop_reason ?? null,
+          inputTokens: parsed.data.usage?.input_tokens ?? null,
+          outputTokens: parsed.data.usage?.output_tokens ?? null,
+          latencyMs: Math.round(performance.now() - startedAt),
+          requestId: parsed.data.id ?? response.headers.get("request-id"),
         };
+      }
 
-    const response = await fetch(url, {
-      method: "POST",
-      headers,
-      body: JSON.stringify(body),
-      signal: controller.signal,
-      redirect: "error",
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      // Do not include provider response bodies: they can reflect submitted content.
-      throw providerError(response.status, response.headers.get("retry-after"));
-    }
-
-    const raw: unknown = await response.json();
-    if (isAnthropic) {
-      const parsed = anthropicResponseSchema.safeParse(raw);
+      const parsed = openAiResponseSchema.safeParse(raw);
       if (!parsed.success) throw new ProviderError("Malformed provider response.", "BAD_RESPONSE");
-      const content = parsed.data.content
-        .filter((part) => part.type === "text")
-        .map((part) => part.text ?? "")
-        .join("\n")
-        .trim();
+      const choice = parsed.data.choices[0];
+      const content = choice?.message.content?.trim();
       if (!content) throw new ProviderError("Provider returned no tutor text.", "BAD_RESPONSE");
       return {
         provider: request.provider,
         model: parsed.data.model ?? request.model,
         content,
-        finishReason: parsed.data.stop_reason ?? null,
-        inputTokens: parsed.data.usage?.input_tokens ?? null,
-        outputTokens: parsed.data.usage?.output_tokens ?? null,
+        finishReason: choice.finish_reason ?? null,
+        inputTokens: parsed.data.usage?.prompt_tokens ?? null,
+        outputTokens: parsed.data.usage?.completion_tokens ?? null,
         latencyMs: Math.round(performance.now() - startedAt),
-        requestId: parsed.data.id ?? response.headers.get("request-id"),
+        requestId: parsed.data.id ?? response.headers.get("x-request-id"),
       };
-    }
-
-    const parsed = openAiResponseSchema.safeParse(raw);
-    if (!parsed.success) throw new ProviderError("Malformed provider response.", "BAD_RESPONSE");
-    const choice = parsed.data.choices[0];
-    const content = choice?.message.content?.trim();
-    if (!content) throw new ProviderError("Provider returned no tutor text.", "BAD_RESPONSE");
-    return {
-      provider: request.provider,
-      model: parsed.data.model ?? request.model,
-      content,
-      finishReason: choice.finish_reason ?? null,
-      inputTokens: parsed.data.usage?.prompt_tokens ?? null,
-      outputTokens: parsed.data.usage?.completion_tokens ?? null,
-      latencyMs: Math.round(performance.now() - startedAt),
-      requestId: parsed.data.id ?? response.headers.get("x-request-id"),
     };
+    return await Promise.race([invoke(), deadline]);
   } catch (error) {
     if (error instanceof ProviderError) throw error;
     if (error instanceof DOMException && error.name === "AbortError") {
@@ -213,6 +225,6 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
     }
     throw new ProviderError("Provider request failed.", "UNAVAILABLE");
   } finally {
-    clearTimeout(timeout);
+    clearTimeout(timeout!);
   }
 }

@@ -415,6 +415,6 @@ assert.deepEqual(journal.entries[69], {
   tag: "0069_mail_outbox_guarded_delivery_authority",
   breakpoints: true,
 });
-assert.equal(journal.entries.length, 70);
+assert.ok(journal.entries.length >= 70);
 
 console.log("mail-guarded-delivery-0069-registration-tests-ok");

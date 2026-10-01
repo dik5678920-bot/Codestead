@@ -1,5 +1,7 @@
 "use client";
 
+import { credentialValidationReason } from "@/lib/ai/credential-status";
+
 import { Accessibility, Bell, BrainCircuit, KeyRound, Laptop, Plus, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
@@ -24,7 +26,7 @@ import { DeviceSessionsPanel } from "./device-sessions-panel";
 import { PrivacyConsentPanel } from "./privacy-consent-panel";
 import { NotificationPreferencesPanel } from "./notification-preferences-panel";
 
-type Credential = { id: string; provider: string; label: string; lastFour: string; status: string; isPreferred: boolean; routingConsented: boolean; lastValidatedAt?: string | null };
+type Credential = { id: string; provider: string; label: string; lastFour: string; status: string; failureCode?: string | null; isPreferred: boolean; routingConsented: boolean; lastValidatedAt?: string | null };
 const tabs = [
   ["profile", "Profile", UserRound], ["ai", "AI providers", BrainCircuit], ["security", "Security", Shield],
   ["privacy", "Privacy & consent", ShieldCheck], ["accessibility", "Accessibility", Accessibility],
@@ -288,7 +290,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
       <div className={styles.sectionTitle}>
         <div>
           <h2>Your AI providers</h2>
-          <p>NVIDIA NIM is required. Add more providers for automatic failover; the app chooses the model.</p>
+          <p>AI provider keys are optional. Add a supported provider for AI tutoring and more providers for automatic failover; the app chooses the model.</p>
         </div>
         <button
           className="button button-primary"
@@ -307,7 +309,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
       <div className={styles.sideCard}>
         <h3>Verify before changing a key</h3>
         <p>{mfaFresh ? "Authenticator verified for this sign-in; no extra code needed." : "Enter a current authenticator code. Verification stays valid for this sign-in."}</p>
-        <label>
+        {!mfaFresh && <><label>
           Six-digit code
           <input
             aria-label="Authenticator code for provider changes"
@@ -321,9 +323,9 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
             value={mfaCode}
           />
         </label>
-        <button className="button button-secondary" disabled={busy || mfaFresh} onClick={() => void verifyMfaFromPanel()} type="button">
-          <Shield size={15} /> {mfaFresh ? "Verified" : busy ? "Verifying…" : "Verify authenticator"}
-        </button>
+        <button className="button button-secondary" disabled={busy} onClick={() => void verifyMfaFromPanel()} type="button">
+          <Shield size={15} /> {busy ? "Verifying…" : "Verify authenticator"}
+        </button></>}
       </div>
 
       <div className={styles.credentialList} aria-busy={credentialLoadState === "loading" || busy}>
@@ -347,10 +349,11 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
             <span className={styles.providerMark}>{item.provider === "nvidia_nim" ? "NV" : item.provider.slice(0, 2).toUpperCase()}</span>
             <span>
               <strong>{item.label} {item.isPreferred && <i className="pill">preferred</i>}</strong>
-              <small>{item.provider.replaceAll("_", " ")} · •••• {item.lastFour} · {item.status} · {item.routingConsented ? "routing allowed" : "routing withdrawn"}</small>
+              <small>{item.provider.replaceAll("_", " ")} · •••• {item.lastFour} · {item.status === "active" ? "valid" : item.status.replaceAll("_", " ")} · {item.routingConsented ? "routing allowed" : "routing withdrawn"}</small>
+              {credentialValidationReason(item.status, item.failureCode) && <small>{credentialValidationReason(item.status, item.failureCode)}</small>}
             </span>
             <div className={styles.credentialActions}>
-              <button disabled={busy || !item.routingConsented} onClick={() => void action(item.id, "test")} type="button">Test</button>
+              <button disabled={busy || !item.routingConsented} onClick={() => void action(item.id, "test")} type="button">{item.status === "active" ? "Test" : "Validate"}</button>
               <button disabled={busy} onClick={() => { setError(null); setReplaceTarget(item); setOpen(true); }} type="button">Replace</button>
               {!item.isPreferred && <button disabled={busy || !item.routingConsented} onClick={() => void action(item.id, "prefer")} type="button">Prefer</button>}
               <button disabled={busy || (!item.routingConsented && item.status === "disabled")} onClick={() => void action(item.id, item.status === "disabled" ? "enable" : "disable")} type="button">{item.status === "disabled" ? "Enable" : "Disable"}</button>
@@ -360,7 +363,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
         ))}
         {credentialLoadState === "ready" && credentials.length === 0 && (
           <div className={`${styles.empty} card`}>
-            <div><span><KeyRound size={23} /></span><h2>No AI providers yet</h2><p>Add your NVIDIA NIM key. It is encrypted before storage and never returned by this page.</p></div>
+            <div><span><KeyRound size={23} /></span><h2>No AI providers yet</h2><p>Add a key from any supported AI provider. It is encrypted before storage and never returned by this page.</p></div>
           </div>
         )}
       </div>

@@ -10,8 +10,7 @@ import { modelCall, providerPolicy } from "@/lib/db/schema";
 export type CredentialValidationStatus =
   | "active"
   | "invalid"
-  | "rate_limited"
-  | "pending_validation";
+  | "unreachable";
 
 export async function validateProviderCredential(input: {
   userId: string;
@@ -43,8 +42,8 @@ export async function validateProviderCredential(input: {
 
   if (!model) {
     return {
-      status: "pending_validation" as const,
-      failureCode: null,
+      status: "unreachable" as const,
+      failureCode: "POLICY",
       model: null,
     };
   }
@@ -67,9 +66,7 @@ export async function validateProviderCredential(input: {
     const status: CredentialValidationStatus =
       providerError?.code === "AUTHENTICATION"
         ? "invalid"
-        : providerError?.code === "RATE_LIMIT"
-          ? "rate_limited"
-          : "pending_validation";
+        : "unreachable";
     const failureCode = providerError?.code ?? "UNKNOWN";
     await db.insert(modelCall).values({
       userId: input.userId,

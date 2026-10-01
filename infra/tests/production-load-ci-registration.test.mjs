@@ -103,7 +103,7 @@ function validatePackageManifest(source) {
 }
 
 // The split CI runs the four portable gates in `quick` on every pull request and
-// the four host-runtime gates in `infra-shell-c` (infra path changes on pull
+// the four host-runtime gates in `infra-host` (infra path changes on pull
 // requests; always on main, nightly and dispatch). Each half stays ordered.
 const portableCiCommands = ciCommands.slice(0, 4);
 const hostCiCommands = ciCommands.slice(4);
@@ -132,10 +132,10 @@ function validateWorkflow(source) {
     || quick.indexOf(portableBlock) >= quick.indexOf("      - run: npm run lint\n")) {
     fail("security gates must run immediately after install and before whole-tree lint");
   }
-  const hostJob = jobBlock(source, "infra-shell-c");
+  const hostJob = jobBlock(source, "infra-host");
   if (!hostJob.includes("    runs-on: ubuntu-24.04\n")
     || !hostJob.includes("    if: needs.changes.outputs.infra == 'true'\n")) {
-    fail("host security gates are not bound to the reviewed infra-shell-c job");
+    fail("host security gates are not bound to the reviewed infra-host job");
   }
   if (hostJob.indexOf(hostBlock) <= hostJob.indexOf("      - run: npm ci\n")
     || hostJob.indexOf(hostBlock) >= hostJob.indexOf("      - run: sudo apt-get update\n")) {

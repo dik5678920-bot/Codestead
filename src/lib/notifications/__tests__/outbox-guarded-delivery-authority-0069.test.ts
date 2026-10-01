@@ -153,7 +153,7 @@ function schemaCheckSql(source: string, name: string) {
 }
 
 describe("0069 guarded delivery release authority", () => {
-  it("registers the exact 0067-to-0069 snapshot lineage and journal tail", () => {
+  it("registers the exact 0067-to-0069 snapshot lineage and journal entries", () => {
     expect(snapshot0067.id).toBe("2a926997-45e8-45f3-9455-45d0ece8e54d");
     expect(snapshot0068).toMatchObject({
       id: "c42a819d-8944-49e6-913e-ab30d59e1755",
@@ -169,11 +169,11 @@ describe("0069 guarded delivery release authority", () => {
     });
     expect(snapshot0068.id).not.toBe(snapshot0067.id);
     expect(snapshot0069.id).not.toBe(snapshot0068.id);
-    expect(journal.entries).toHaveLength(70);
-    expect(journal.entries.map(({ idx }) => idx)).toEqual(
+    expect(journal.entries.length).toBeGreaterThanOrEqual(70);
+    expect(journal.entries.slice(0, 70).map(({ idx }) => idx)).toEqual(
       Array.from({ length: 70 }, (_, idx) => idx),
     );
-    expect(journal.entries.slice(-2)).toEqual([
+    expect(journal.entries.slice(68, 70)).toEqual([
       {
         idx: 68,
         version: "7",

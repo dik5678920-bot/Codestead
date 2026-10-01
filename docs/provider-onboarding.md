@@ -4,7 +4,7 @@ AI is an optional personalization layer around canonical curriculum and determin
 
 ## Supported providers
 
-Every learner must configure NVIDIA NIM during onboarding. An administrator may also enable OpenRouter, Gemini, OpenAI, Anthropic, DeepSeek, or a future OpenAI-compatible provider with an explicit allowlisted HTTPS host. Learners provide credentials; the administrator selects vetted models and routing order.
+Provider keys are optional during onboarding. Learners can add NVIDIA NIM, OpenRouter, Gemini, OpenAI, Anthropic, or DeepSeek keys. A custom OpenAI-compatible provider requires an administrator-configured allowlisted HTTPS host and model policy. Learners provide credentials; the application chooses the model from provider policy or the supported provider default.
 
 ### NVIDIA hosted-endpoint decision
 
@@ -46,3 +46,11 @@ NGC Personal/Service keys for pulling self-hosted NIM containers are a different
 ## Failure behavior
 
 When all providers fail or consent is withdrawn, show an explicit degraded state and continue authored lessons, deterministic quizzes, code execution, exams, progress, and appeals. Never silently route to a different provider or an administrator key.
+
+## Validation and preference recovery
+
+Credential validation runs synchronously in the add, Test/Validate, replacement, and Enable actions; there is no background validation worker. A successful probe stores `active` (shown as valid), an authentication rejection stores `invalid`, and all other failures store `unreachable` with a safe reason. Requests have a finite deadline covering the provider request and response body. Incomplete additions and interrupted legacy-pending validations remain retryable without re-entering the key.
+
+For an existing `pending_validation` key, select **Validate** in Settings > AI providers. This decrypts and tests that stored key after the existing server-side fresh-MFA and provider-consent checks. It does not require replacing or re-adding the key. Restoring withdrawn routing consent is still required before provider use.
+
+At most one key per learner is preferred across all providers. Migration `0070_credential_validation_preference` repairs duplicate preferences by keeping the most recently updated preferred key, then breaking ties by creation time and UUID. It preserves encrypted material and legacy validation outcomes. Apply this reviewed migration before deploying the application change.

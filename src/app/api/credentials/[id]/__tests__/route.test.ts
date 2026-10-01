@@ -16,10 +16,11 @@ const mocks = vi.hoisted(() => {
   const returning = vi.fn();
   const deleteWhere = vi.fn(() => ({ returning }));
   const deleteCredential = vi.fn(() => ({ where: deleteWhere }));
-  const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({ update }));
+  const execute = vi.fn();
+  const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({ update, execute }));
   return {
     limit, selectWhere, from, select, updateWhere, set, update,
-    returning, deleteWhere, deleteCredential, transaction,
+    returning, deleteWhere, deleteCredential, transaction, execute,
     requireAuth: vi.fn(), requireRecentMfa: vi.fn(), withRateLimit: vi.fn(),
     validateProviderCredential: vi.fn(), openCredential: vi.fn(),
     parseMasterKey: vi.fn(), sealCredential: vi.fn(), writeAuditEvent: vi.fn(),
@@ -102,7 +103,7 @@ describe("credential mutation API", () => {
     mocks.withRateLimit.mockImplementation(async (_config, callback) => callback());
     mocks.limit.mockReset().mockResolvedValue([owned]);
     mocks.updateWhere.mockReset().mockReturnValue({ returning: mocks.returning });
-    mocks.returning.mockReset().mockResolvedValue([{ id: owned.id, provider: owned.provider }]);
+    mocks.returning.mockReset().mockResolvedValue([{ id: owned.id, provider: owned.provider, updatedAtToken: "2026-09-30T00:00:00.000001Z" }]);
     mocks.parseMasterKey.mockReturnValue(Buffer.alloc(32, 7));
     mocks.openCredential.mockReturnValue("synthetic-current-secret");
     mocks.sealCredential.mockReturnValue({
@@ -195,6 +196,58 @@ describe("credential mutation API", () => {
     });
     expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ status: "active" }));
     await expect(response.json()).resolves.toEqual({ ok: true, status: "active" });
+  });
+
+  it("validates an existing pending key without replacing its envelope", async () => {
+    mocks.limit.mockResolvedValueOnce([{ ...owned, status: "pending_validation" }]);
+    const response = await PATCH(request({ action: "test", requestId }), context);
+    expect(response.status).toBe(200);
+    expect(mocks.validateProviderCredential).toHaveBeenCalledTimes(1);
+    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ status: "active", failureCode: null }));
+    expect(mocks.sealCredential).not.toHaveBeenCalled();
+  });
+
+  it("leaves a legacy pending key retryable if validation ledger persistence fails", async () => {
+    mocks.limit.mockResolvedValueOnce([{ ...owned, status: "pending_validation" }]);
+    mocks.validateProviderCredential.mockRejectedValueOnce(new Error("synthetic ledger failure"));
+    await expect(PATCH(request({ action: "test", requestId }), context)).rejects.toThrow("synthetic ledger failure");
+    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ status: "unreachable", failureCode: "VALIDATION_INCOMPLETE" }));
+    expect(mocks.sealCredential).not.toHaveBeenCalled();
+  });
+
+  it("clears preference across providers when preferring an existing key", async () => {
+    const response = await PATCH(request({ action: "prefer", requestId }), context);
+    expect(response.status).toBe(200);
+    const query = new PgDialect().sqlToQuery(mocks.updateWhere.mock.calls[0][0]);
+    expect(query.sql).toContain('"user_id"');
+    expect(query.sql).not.toContain('"provider"');
+  });
+
+  it("rejects a stale preference mutation without committing its audit or notice", async () => {
+    mocks.returning.mockResolvedValueOnce([]);
+    const response = await PATCH(request({ action: "prefer", requestId }), context);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "STALE_CREDENTIAL" });
+    expect(mocks.writeAuditEvent).not.toHaveBeenCalled();
+    expect(mocks.notifyCredentialChanged).not.toHaveBeenCalled();
+  });
+
+  it("validates an enabled key instead of leaving it pending", async () => {
+    const response = await PATCH(request({ action: "enable", requestId }), context);
+    expect(response.status).toBe(200);
+    expect(mocks.openCredential).toHaveBeenCalledTimes(1);
+    expect(mocks.validateProviderCredential).toHaveBeenCalledTimes(1);
+    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ status: "active", disabledAt: null }));
+    expect(mocks.set.mock.calls.some(([patch]) => patch.status === "pending_validation")).toBe(false);
+    expect(await response.json()).toEqual({ ok: true, status: "active" });
+  });
+
+  it("persists an unreachable enabled key with its safe failure reason", async () => {
+    mocks.validateProviderCredential.mockResolvedValueOnce({ status: "unreachable", failureCode: "TIMEOUT", model: "test/model" });
+    const response = await PATCH(request({ action: "enable", requestId }), context);
+    expect(response.status).toBe(200);
+    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ status: "unreachable", failureCode: "TIMEOUT", disabledAt: null }));
+    expect(mocks.writeAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ outcome: "failure" }));
   });
 
   it("blocks provider use after consent withdrawal while preserving disable/delete controls", async () => {

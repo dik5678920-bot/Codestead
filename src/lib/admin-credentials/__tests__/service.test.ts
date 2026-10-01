@@ -416,19 +416,19 @@ describe("atomic administrator credential service", () => {
     }));
   });
 
-  it("keeps lastValidatedAt null when validation is pending without a provider model", async () => {
+  it("records an unreachable configuration outcome as a failed validation attempt", async () => {
     mocks.validateProviderCredential.mockResolvedValueOnce({
-      status: "pending_validation",
-      failureCode: null,
+      status: "unreachable",
+      failureCode: "POLICY",
       model: null,
     });
 
     const result = await performAdminCredentialOperation({ ...base, action: "test" });
 
-    expect(result.status).toBe("pending_validation");
-    expect(mocks.txSet).toHaveBeenCalledWith(expect.objectContaining({ lastValidatedAt: null }));
+    expect(result.status).toBe("unreachable");
+    expect(mocks.txSet).toHaveBeenCalledWith(expect.objectContaining({ lastValidatedAt: expect.any(Date) }));
     expect(mocks.writeAuditEventInTransaction).toHaveBeenLastCalledWith(mocks.tx, expect.objectContaining({
-      outcome: "success",
+      outcome: "failure",
     }));
   });
 
@@ -461,17 +461,20 @@ describe("atomic administrator credential service", () => {
     expect(mocks.writeAuditEventInTransaction).toHaveBeenCalledTimes(1);
   });
 
-  it("enables a credential as pending validation and clears its prior disable failure", async () => {
+  it("validates an enabled credential and clears its prior disable failure", async () => {
     process.env.APP_URL = "https://learning.example.test";
     const mixedCaseTarget = { ...target, ownerEmail: "Learner@Example.TEST" };
     mocks.dbLimit.mockReset().mockResolvedValueOnce([actor]).mockResolvedValueOnce([mixedCaseTarget]);
-    mocks.txLimit.mockReset().mockResolvedValueOnce([actor]).mockResolvedValueOnce([mixedCaseTarget]);
+    mocks.txLimit.mockReset()
+      .mockResolvedValueOnce([actor]).mockResolvedValueOnce([mixedCaseTarget])
+      .mockResolvedValueOnce([actor]).mockResolvedValueOnce([mixedCaseTarget]);
 
     const result = await performAdminCredentialOperation({ ...base, action: "enable" });
 
-    expect(result).toMatchObject({ action: "enable", status: "pending_validation" });
+    expect(mocks.validateProviderCredential).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ action: "enable", status: "active" });
     expect(mocks.txSet).toHaveBeenCalledWith(expect.objectContaining({
-      status: "pending_validation",
+      status: "active",
       disabledAt: null,
       failureCode: null,
     }));
