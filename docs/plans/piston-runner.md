@@ -202,7 +202,24 @@ packages (PR5). Plan:
 
 ## Speed and resources
 
-Measured per tuning on the KVM runner (see the results table added with PR1):
+Measured on a GitHub KVM runner (run 36905595755). Every variant starts from zero Kata VMs, and the
+guest's vCPU count is printed to prove the setting applied. Latency is the p50 of 10 warm runs
+(stdin echo + print) in ms. RSS is the host RSS of qemu + shim + virtiofsd in MB.
+
+| Variant | Cold start | C | C++ | Java | Python | JS | RSS idle | RSS load | RSS +30 s |
+|---|---|---|---|---|---|---|---|---|---|
+| Job dirs on virtio-fs (before) | 3162 | 347 | 679 | 1045 | 79 | 116 | 396 | 692 | 831 |
+| Job dirs on guest tmpfs (PR1 compose) | 3192 | 320 | 664 | 1014 | 71 | 102 | 397 | 695 | 831 |
+| + 2 vCPUs (max 4) | 3097 | 410 | 770 | 626 | 88 | 137 | 411 | 941 | 958 |
+| + virtio-fs cache `always`, 4 virtiofsd threads | 3095 | 296 | 612 | 547 | 48 | 60 | 396 | 761 | 849 |
+| + free-page reporting (**adopted**) | 3150 | 292 | 616 | 552 | 50 | 58 | 406 | 818 | 900 |
+
+Before → adopted: C -16%, C++ -9%, Java -47%, Python -37%, JS -50%. Cold start (container up → first
+successful run) is about 3.1 s in every variant. Free-page reporting returned no memory within 30 s,
+but it is kept for long idle periods. Shared-runner noise is roughly ±15%; one earlier run measured
+every variant about 30% faster.
+
+What each item does:
 
 1. Per-job directories (`/piston/jobs`, isolate's box root `/var/local/lib/isolate`, `/tmp`) are tmpfs
    inside the guest, so compiling and running never round-trips through virtio-fs.

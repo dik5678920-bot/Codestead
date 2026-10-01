@@ -14,7 +14,7 @@ Plan and measurements: [docs/plans/piston-runner.md](../plans/piston-runner.md).
 - Docker Engine as installed. Do not change the engine version; Kata plugs in
   through containerd's shim interface and needs no daemon change.
 - About 1.5 GB of RAM for the micro-VM. The host RSS measured on a KVM runner
-  was ~450 MB idle and ~880 MB under two concurrent jobs.
+  was about 400 MB idle and 750-900 MB under load (tuned config).
 
 ## Install Kata 4.2.0 (one time)
 
@@ -43,22 +43,39 @@ zstd -dc /var/tmp/kata-static-4.2.0-amd64.tar.zst | tar -x -C / && rm /var/tmp/k
 ln -sf /opt/kata/runtime-rs/bin/containerd-shim-kata-v2 /usr/local/bin/containerd-shim-kata-v2
 ```
 
-Size the micro-VM. Kata reads `/etc/kata-containers/runtime-rs/configuration.toml`
-before its shipped default, so a copy there survives Kata upgrades. 1024 MB was
-measured as too small: Piston never finished starting.
+Tune the micro-VM. Keep the settings in a copy under `/etc` so a Kata upgrade
+does not overwrite them. The values were measured on a KVM runner (see the plan's
+tuning table):
+
+- `default_memory = 1536`: a ceiling, not a reservation. 1024 MB was too small
+  for Piston to start.
+- `default_vcpus = 2`, `default_maxvcpus = 4`: idle vCPUs cost the host nothing.
+- `virtio_fs_cache = "always"` and 4 virtiofsd threads: the image is read-only,
+  so caching it in the guest is safe. Together with the vCPUs this halved Java
+  and cut Python/JavaScript by about 40%.
+- `reclaim_guest_freed_memory = true`: balloon free-page reporting. No RSS drop
+  was measured within 30 s, but it lets the host take back memory a long idle
+  guest has freed.
 
 ```bash
 install -d /etc/kata-containers/runtime-rs && cp "$(readlink -f /opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml)" /etc/kata-containers/runtime-rs/configuration.toml
 ```
 
 ```bash
-sed -i -E 's/^(\s*default_memory\s*=).*/\1 1536/' /etc/kata-containers/runtime-rs/configuration.toml && grep -E '^\s*default_memory' /etc/kata-containers/runtime-rs/configuration.toml
+sed -i -E -e 's/^(\s*default_memory\s*=).*/\1 1536/' -e 's/^(\s*default_vcpus\s*=).*/\1 2/' -e 's/^(\s*default_maxvcpus\s*=).*/\1 4/' -e 's/^(\s*virtio_fs_cache\s*=).*/\1 "always"/' -e 's/^(\s*virtio_fs_extra_args\s*=).*/\1 ["--thread-pool-size=4", "-o", "announce_submounts"]/' -e 's/^(\s*reclaim_guest_freed_memory\s*=).*/\1 true/' /etc/kata-containers/runtime-rs/configuration.toml
 ```
 
-Smoke test. The kernel printed must differ from the host's `uname -r`.
+```bash
+grep -E '^\s*(default_memory|default_vcpus|default_maxvcpus|virtio_fs_cache|virtio_fs_extra_args|reclaim_guest_freed_memory)\s*=' /etc/kata-containers/runtime-rs/configuration.toml
+```
+
+Smoke test. The kernel printed must differ from the host's `uname -r`, and
+`nproc` must print `2`. A `1` means Kata did not read the `/etc` copy; in that
+case apply the same `sed` to
+`/opt/kata/share/defaults/kata-containers/runtime-rs/configuration.toml`.
 
 ```bash
-docker run --rm --runtime io.containerd.kata.v2 alpine:3.22@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 uname -r
+docker run --rm --runtime io.containerd.kata.v2 alpine:3.22@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 sh -c 'uname -r; nproc'
 ```
 
 ## Build and start Piston
