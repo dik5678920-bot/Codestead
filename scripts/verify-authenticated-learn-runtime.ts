@@ -11,6 +11,7 @@ import AxeBuilder from "@axe-core/playwright";
 import {
   chromium,
   devices,
+  expect,
   firefox,
   type Browser,
   type BrowserContext,
@@ -34,6 +35,10 @@ import {
   verifyDisposableIntegrationRoleBoundaries as verifyDisposableRoleBoundaryAdapter,
 } from "./lib/disposable-role-boundary-adapter";
 import { minimalNodeTestEnvironment } from "./lib/disposable-integration-environment";
+import {
+  hasAuthenticationCookies,
+  waitForCommittedExamAnswer,
+} from "./lib/authenticated-browser-readiness";
 
 const { Client, Pool } = pg;
 const repoRoot = process.cwd();
@@ -835,13 +840,22 @@ class KillablePersistentProfile {
     const server = this.server;
     const oldPid = this.currentPid;
     assert(context && browser && server && oldPid, "Persistent browser is not open.");
+    const process = server.process();
+    const exited = process.exitCode !== null
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => process.once("exit", () => resolve()));
+    const disconnected = browser.isConnected()
+      ? new Promise<void>((resolve) => browser.once("disconnected", () => resolve()))
+      : Promise.resolve();
+    // Close the owned process gracefully, rather than closing its remote default
+    // context (whose reply can race the browser disconnect). Its exit is the
+    // checkpoint boundary for cookie persistence, not addCookies' completion.
+    await server.close();
+    await bounded(Promise.all([exited, disconnected]).then(() => undefined), 15_000, "Authentication checkpoint browser exit");
     this.context = null;
     this.browser = null;
     this.server = null;
     this.currentPid = null;
-    await context.close().catch(() => undefined);
-    await browser.close().catch(() => undefined);
-    await server.close().catch(() => undefined);
     await this.open();
     assert(this.pid !== oldPid, "Authentication checkpoint reused the closed browser PID.");
   }
@@ -939,7 +953,7 @@ function requireDraftMutationBody(
   return body as DraftMutationBody;
 }
 
-async function setMonacoValue(page: Page, value: string) {
+async function waitForPracticeEditor(page: Page) {
   const editorSurface = page.locator(".monaco-editor").first();
   await editorSurface.waitFor({ state: "visible" });
   const accessibleEditor = page.locator('[aria-label="Practice source code editor"]');
@@ -951,6 +965,10 @@ async function setMonacoValue(page: Page, value: string) {
     };
     return monacoGlobal.monaco?.editor?.getModels?.().length === 1;
   });
+}
+
+async function setMonacoValue(page: Page, value: string) {
+  await waitForPracticeEditor(page);
   await page.evaluate((expected) => {
     const monacoGlobal = globalThis as typeof globalThis & {
       monaco?: { editor?: { getModels?: () => Array<{ setValue(value: string): void }> } };
@@ -1049,11 +1067,21 @@ async function signInSyntheticContext(context: BrowserContext, input: {
     },
   });
   assert(signIn.ok(), "Synthetic sign-in failed with HTTP " + String(signIn.status()) + ".");
-  // Nothing is retained or copied across relaunches; this flushes the authenticated
-  // request jar into the same browser profile before its setup-only clean checkpoint.
+  // Bridge the request jar into the browser's cookie store, then observe the
+  // actual session cookie there. addCookies is not a disk-flush acknowledgment;
+  // the subsequent graceful browser close checkpoints the persistent profile.
   const authenticatedCookies = (await context.request.storageState()).cookies;
   assert(authenticatedCookies.length > 0, "Synthetic sign-in did not populate the browser-context cookie jar.");
+  const sessionCookies = authenticatedCookies.filter((cookie) => (
+    cookie.name.endsWith(".session_token") && cookie.expires > 0
+  ));
+  assert(sessionCookies.length > 0, "Synthetic sign-in did not issue a persistent authentication cookie.");
   await context.addCookies(authenticatedCookies);
+  await expect.poll(async () => hasAuthenticationCookies(await context.cookies(canonicalOrigin), sessionCookies), {
+    timeout: 15_000,
+    message: "Synthetic sign-in did not reach the browser's persistent authentication cookie store.",
+  }).toBe(true);
+  return sessionCookies;
 }
 type ExamAnswerMutationBody = Readonly<{
   clientMutationId: string;
@@ -1194,36 +1222,6 @@ async function waitForExamSaveState(page: Page, state: string) {
     timeout: 15_000,
   });
 }
-async function startExamSaveStateObservation(page: Page) {
-  await page.evaluate(() => {
-    const root = globalThis as typeof globalThis & {
-      __task6ExamSaveStates?: string[];
-      __task6ExamSaveObserver?: MutationObserver;
-    };
-    root.__task6ExamSaveObserver?.disconnect();
-    const status = document.querySelector<HTMLElement>('[data-durability-status="true"]');
-    if (!status) throw new Error("Exam durability status was not rendered.");
-    root.__task6ExamSaveStates = [status.dataset.state ?? ""];
-    const observer = new MutationObserver(() => {
-      const state = status.dataset.state;
-      if (state && !root.__task6ExamSaveStates?.includes(state)) {
-        root.__task6ExamSaveStates?.push(state);
-      }
-    });
-    observer.observe(status, { attributes: true, attributeFilter: ["data-state"] });
-    root.__task6ExamSaveObserver = observer;
-  });
-}
-
-async function waitForObservedExamSaveState(page: Page, state: string) {
-  await page.waitForFunction((expected) => {
-    const root = globalThis as typeof globalThis & {
-      __task6ExamSaveStates?: string[];
-    };
-    return root.__task6ExamSaveStates?.includes(expected) === true;
-  }, state, { timeout: 15_000 });
-}
-
 async function waitForExamEditor(page: Page, input: { artifactDirectory: string; scenario: string }) {
   const editor = page.getByLabel("Your response");
   try {
@@ -1331,11 +1329,12 @@ async function runExamAnswerCrash(input: {
     scenario: "exam-answer-before-crash",
   });
   await waitForExamSaveState(page, "server-saved");
-  await startExamSaveStateObservation(page);
   await editor.fill(answerMarker);
-  await waitForObservedExamSaveState(page, "saving-local");
-  await waitForObservedExamSaveState(page, "saved-local");
+  const localAnswer = await waitForCommittedExamAnswer(page, {
+    sessionId: input.exam.sessionId, itemId: input.exam.itemId, answer: answerMarker,
+  });
   const commit = await bounded(committed.promise, 15_000, "Initial exam autosave response-loss commit");
+  assert(localAnswer.clientMutationId === commit.body.clientMutationId, "Committed local answer and autosave mutation identifiers diverged.");
   await waitForExamSaveState(page, "offline-saved-local");
   const beforeDatabase = await assertExamAnswerCommitted({
     attemptId: input.exam.attemptId,
@@ -1705,18 +1704,56 @@ async function runPersistentDraftCrash(input: {
   await reopenedPage.goto("/playground", { waitUntil: "domcontentloaded" });
   await bounded(heldGet.promise, 15_000, "Held authoritative draft GET");
   await reopenedPage.getByRole("heading", { name: "Code lab." }).waitFor();
-  await reopenedPage.waitForFunction((expected) => {
-    const monacoGlobal = globalThis as typeof globalThis & {
-      monaco?: { editor?: { getModels?: () => Array<{ getValue(): string }> } };
-    };
-    if (monacoGlobal.monaco?.editor?.getModels?.()
-      .some((model) => model.getValue().includes(expected))) return true;
-    const textbox = document.querySelector<HTMLTextAreaElement>(
-      '[aria-label="Practice source code editor"]',
-    );
-    const rendered = document.querySelector(".monaco-editor .view-lines");
-    return textbox?.value.includes(expected) || rendered?.textContent?.includes(expected);
-  }, marker, { timeout: 15_000 });
+  try {
+    // The server-rendered heading can precede the lazily loaded editor. Start
+    // the recovery assertion only once the existing editor-ready signal holds.
+    await waitForPracticeEditor(reopenedPage);
+    await reopenedPage.waitForFunction((expected) => {
+      const monacoGlobal = globalThis as typeof globalThis & {
+        monaco?: { editor?: { getModels?: () => Array<{ getValue(): string }> } };
+      };
+      if (monacoGlobal.monaco?.editor?.getModels?.()
+        .some((model) => model.getValue().includes(expected))) return true;
+      const textbox = document.querySelector<HTMLTextAreaElement>(
+        '[aria-label="Practice source code editor"]',
+      );
+      const rendered = document.querySelector(".monaco-editor .view-lines");
+      return textbox?.value.includes(expected) || rendered?.textContent?.includes(expected);
+    }, marker, { timeout: 15_000 });
+  } catch (error) {
+    const diagnostic = await reopenedPage.evaluate(async (expected) => {
+      const stored = await new Promise<unknown[]>((resolve, reject) => {
+        const request = indexedDB.open("codestead-browser-outbox-v1");
+        request.onupgradeneeded = () => request.transaction?.abort();
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          if (!db.objectStoreNames.contains("entries")) { db.close(); resolve([]); return; }
+          const transaction = db.transaction("entries", "readonly");
+          const entries = transaction.objectStore("entries").getAll();
+          transaction.oncomplete = () => { db.close(); resolve(entries.result); };
+          transaction.onabort = () => { db.close(); reject(transaction.error); };
+        };
+      });
+      const monacoGlobal = globalThis as typeof globalThis & {
+        monaco?: { editor?: { getModels?: () => Array<{ getValue(): string }> } };
+      };
+      return {
+        readyState: document.readyState,
+        bodyText: document.body?.innerText.slice(-4_000),
+        modelValues: monacoGlobal.monaco?.editor?.getModels?.().map((model) => model.getValue()),
+        expectedMarker: expected,
+        stored,
+      };
+    }, marker).catch((diagnosticError) => ({ error: String(diagnosticError) }));
+    const diagnosticFile = path.join(input.profile.artifactDirectory, "draft-after-reopen-diagnostic.json");
+    await writeFile(diagnosticFile, JSON.stringify(diagnostic, null, 2) + "\n", "utf8");
+    await reopenedPage.screenshot({ path: path.join(input.profile.artifactDirectory, "draft-after-reopen-failure.png"), fullPage: true }).catch(() => undefined);
+    await reopened.tracing.stop({ path: traceAfterReopen }).catch(() => undefined);
+    throw new Error("Draft recovery marker timed out before the authoritative GET was released; diagnostics: "
+      + path.relative(repoRoot, diagnosticFile).replaceAll("\\", "/") + ". "
+      + (error instanceof Error ? error.message : String(error)));
+  }
   assert(
     await monacoContains(reopenedPage, marker),
     "Recovered draft marker was missing before the held authoritative GET was released after relaunch.",
@@ -1965,11 +2002,12 @@ async function runSignOutPurge(input: {
       scenario: "purge-exam-local-only",
     });
     await waitForExamSaveState(page, "server-saved");
-    await startExamSaveStateObservation(page);
     await editor.fill(expectedAnswerMarker);
-    await waitForObservedExamSaveState(page, "saving-local");
-    await waitForObservedExamSaveState(page, "saved-local");
+    const localAnswer = await waitForCommittedExamAnswer(page, {
+      sessionId: exam.sessionId, itemId: exam.itemId, answer: expectedAnswerMarker,
+    });
     examAnswerIdentity = await bounded(answerCaptured.promise, 15_000, "Local-only exam autosave capture");
+    assert(localAnswer.clientMutationId === examAnswerIdentity.body.clientMutationId, "Local-only answer and autosave mutation identifiers diverged.");
     await waitForExamSaveState(page, "offline-saved-local");
     eventArmed = true;
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
@@ -2517,7 +2555,7 @@ async function main() {
     try {
       let context = profile.getContext();
       const browserVersionBefore = profile.getBrowserVersion();
-      await signInSyntheticContext(context, {
+      const signedInSessionCookies = await signInSyntheticContext(context, {
         baseURL,
         email,
         password: syntheticPassword,
@@ -2540,6 +2578,12 @@ async function main() {
       });
       await profile.checkpointAuthenticationAndReopen();
       context = profile.getContext();
+      // Read the reopened profile's own storage. Never copy the setup cookies
+      // into it: doing so would hide a broken stay-logged-in guarantee.
+      await expect.poll(async () => hasAuthenticationCookies(await context.cookies(baseURL), signedInSessionCookies), {
+        timeout: 15_000,
+        message: definition.name + " did not restore its durable authentication cookie.",
+      }).toBe(true);
       const durableSessionCookies = await context.cookies();
       assert(durableSessionCookies.length > 0, definition.name + " did not restore its durable authentication cookie.");
 
