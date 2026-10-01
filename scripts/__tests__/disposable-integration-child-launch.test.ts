@@ -3,10 +3,11 @@ import {
   existsSync,
   readFileSync,
   writeFileSync,
+  watch,
 } from "node:fs";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 import { buildDisposableIntegrationChildLaunch } from
   "../lib/disposable-integration-child-launch";
@@ -14,6 +15,113 @@ import { createDisposableIntegrationTaskHome } from
   "../lib/disposable-integration-task-home";
 import { buildDisposableToolEnvironment } from
   "../lib/disposable-tool-environment";
+
+const npmTaskHome = process.platform === "win32"
+  ? createDisposableIntegrationTaskHome()
+  : undefined;
+afterAll(() => npmTaskHome?.cleanup());
+
+
+async function prepareNpmCanary() {
+  const home = npmTaskHome!;
+  const target = "integration/daily-review.integration.test.ts";
+  const artifactPath = path.join(
+    home.path,
+    "runner result artifact.json",
+  );
+  const packagePath = path.join(home.path, "package.json");
+  const canaryPath = path.join(home.path, "canary.cjs");
+  const signalPath = artifactPath + ".signal";
+  const readyPath = artifactPath + ".ready";
+  writeFileSync(signalPath, "", "utf8");
+  writeFileSync(packagePath, JSON.stringify({
+    private: true,
+    scripts: { canary: "node canary.cjs" },
+  }), "utf8");
+  writeFileSync(canaryPath, [
+    'const { writeFileSync, readFileSync, watch } = require("node:fs");',
+    "const [artifactPath, target] = process.argv.slice(2);",
+    "const signalPath = artifactPath + '.signal';",
+    "let released = false;",
+    "const watcher = watch(signalPath, () => {",
+    "  if (released || readFileSync(signalPath, 'utf8') !== 'RUN') return;",
+    "  released = true; watcher.close();",
+    "  writeFileSync(artifactPath, JSON.stringify({",
+    "    argv: process.argv.slice(2),",
+    "    cwd: process.cwd(),",
+    `    targetExecuted: target === ${JSON.stringify(target)},`,
+    '}), "utf8");',
+    "  process.exitCode = 37;",
+    "});",
+    "writeFileSync(artifactPath + '.ready', 'READY');",
+  ].join("\n"), "utf8");
+  const npmCli = process.env.npm_execpath ?? path.join(
+    path.dirname(process.execPath),
+    "node_modules",
+    "npm",
+    "bin",
+    "npm-cli.js",
+  );
+  const environment = buildDisposableToolEnvironment(
+    process.env,
+    home.path,
+  );
+  const launch = buildDisposableIntegrationChildLaunch({
+    command: process.execPath,
+    args: [
+      npmCli,
+      "run",
+      "canary",
+      "--",
+      artifactPath,
+      target,
+    ],
+    environment,
+    platform: "win32",
+  });
+
+  let child!: ReturnType<typeof spawn>;
+  let markReady!: () => void;
+  const ready = new Promise<void>((resolve) => { markReady = resolve; });
+  const readyWatcher = watch(home.path, (_event, filename) => {
+    if (filename?.toString() === path.basename(readyPath) && existsSync(readyPath)
+      && readFileSync(readyPath, "utf8") === "READY") markReady();
+  });
+  const finished = new Promise<{
+    code: number | null;
+    signal: NodeJS.Signals | null;
+  }>((resolve, reject) => {
+    child = spawn(
+      launch.command,
+      [...launch.args],
+      {
+        cwd: home.path,
+        detached: launch.detached,
+        env: launch.environment,
+        stdio: "ignore",
+        windowsHide: true,
+      },
+    );
+    child.once("error", reject);
+    child.once("close", (code, signal) => {
+      resolve({ code, signal });
+    });
+  });
+
+
+  try {
+    await Promise.race([
+      ready,
+      finished.then((result) => { throw new Error("npm canary exited before readiness: " + JSON.stringify(result)); }),
+    ]);
+  } finally { readyWatcher.close(); }
+  return { home, target, artifactPath, launch, signalPath, finished, child };
+}
+
+const npmCanary = process.platform === "win32" ? await prepareNpmCanary() : undefined;
+afterAll(() => {
+  if (npmCanary?.child.exitCode === null && npmCanary.child.signalCode === null) npmCanary.child.kill("SIGKILL");
+});
 
 describe("disposable integration child launch", () => {
   it("keeps the direct detached process-group launch on POSIX", () => {
@@ -75,73 +183,11 @@ describe("disposable integration child launch", () => {
   it.skipIf(process.platform !== "win32")(
     "executes the exact npm target from the requested cwd and propagates its status",
     async () => {
-      const home = createDisposableIntegrationTaskHome();
+      const home = npmTaskHome!;
       try {
-        const target = "integration/daily-review.integration.test.ts";
-        const artifactPath = path.join(
-          home.path,
-          "runner result artifact.json",
-        );
-        const packagePath = path.join(home.path, "package.json");
-        const canaryPath = path.join(home.path, "canary.cjs");
-        writeFileSync(packagePath, JSON.stringify({
-          private: true,
-          scripts: { canary: "node canary.cjs" },
-        }), "utf8");
-        writeFileSync(canaryPath, [
-          'const { writeFileSync } = require("node:fs");',
-          "const [artifactPath, target] = process.argv.slice(2);",
-          "writeFileSync(artifactPath, JSON.stringify({",
-          "  argv: process.argv.slice(2),",
-          "  cwd: process.cwd(),",
-          `  targetExecuted: target === ${JSON.stringify(target)},`,
-          '}), "utf8");',
-          "process.exitCode = 37;",
-        ].join("\n"), "utf8");
-        const npmCli = process.env.npm_execpath ?? path.join(
-          path.dirname(process.execPath),
-          "node_modules",
-          "npm",
-          "bin",
-          "npm-cli.js",
-        );
-        const environment = buildDisposableToolEnvironment(
-          process.env,
-          home.path,
-        );
-        const launch = buildDisposableIntegrationChildLaunch({
-          command: process.execPath,
-          args: [
-            npmCli,
-            "run",
-            "canary",
-            "--",
-            artifactPath,
-            target,
-          ],
-          environment,
-          platform: "win32",
-        });
-        const result = await new Promise<{
-          code: number | null;
-          signal: NodeJS.Signals | null;
-        }>((resolve, reject) => {
-          const child = spawn(
-            launch.command,
-            [...launch.args],
-            {
-              cwd: home.path,
-              detached: launch.detached,
-              env: launch.environment,
-              stdio: "ignore",
-              windowsHide: true,
-            },
-          );
-          child.once("error", reject);
-          child.once("close", (code, signal) => {
-            resolve({ code, signal });
-          });
-        });
+        const { target, artifactPath, launch, signalPath, finished } = npmCanary!;
+        writeFileSync(signalPath, "RUN", "utf8");
+        const result = await finished;
 
         expect(result).toEqual({
           code: 37,

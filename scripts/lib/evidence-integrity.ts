@@ -3,12 +3,16 @@ import { access, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { TextDecoder } from "node:util";
 
+import { DSA_PARITY_LANGUAGES } from "../../src/lib/content/dsa-parity";
+
 export type EvidenceIntegrityIssueKind =
   | "BROKEN_LINK"
   | "INVALID_EVIDENCE_PATH"
   | "INVALID_JSON"
   | "MISSING_EVIDENCE_PATH"
-  | "STALE_HASH";
+  | "STALE_HASH"
+  | "INVALID_RUNTIME_DECLARATION"
+  | "STALE_RUNTIME_DIGEST";
 
 export type EvidenceIntegrityIssue = Readonly<{
   kind: EvidenceIntegrityIssueKind;
@@ -59,6 +63,9 @@ const repositoryRootFiles = new Set([
 ]);
 
 const sha256Pattern = /^[0-9a-f]{64}$/i;
+const runtimeDigestPattern = /^sha256:[0-9a-f]{64}$/;
+const dsaDeclarationPath = "docs/evidence/dsa-parity-declaration-2026-07-12.json";
+const runtimePinsPath = "scripts/curriculum-runtime-pins.json";
 
 const byteExactExtensions = new Set([
   ".gif",
@@ -176,6 +183,64 @@ async function digests(target: string) {
     accepted: canonical ? new Set([raw, canonical]) : new Set([raw]),
     reported: canonical ?? raw,
   };
+}
+
+function object(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+async function verifyDsaRuntimeDigests(
+  root: string,
+  declaration: unknown,
+  issues: EvidenceIntegrityIssue[],
+) {
+  const invalid = (detail: string) => issues.push({
+    kind: "INVALID_RUNTIME_DECLARATION", source: dsaDeclarationPath, detail,
+  });
+  const value = object(declaration);
+  const declared = object(value?.runtimeDigests);
+  const expectedLanguages = [...DSA_PARITY_LANGUAGES].sort();
+  if (!value || value.courseId !== "dsa" || !declared
+    || !Array.isArray(value.languages)
+    || JSON.stringify([...value.languages].sort()) !== JSON.stringify(expectedLanguages)
+    || JSON.stringify(Object.keys(declared).sort()) !== JSON.stringify(expectedLanguages)
+    || DSA_PARITY_LANGUAGES.some((language) =>
+      typeof declared[language] !== "string" || !runtimeDigestPattern.test(declared[language]))
+  ) {
+    invalid("DSA declaration must contain exactly C, C++, Java, and Python languages and valid sha256 runtime digests.");
+    return;
+  }
+
+  let pins: Record<string, unknown> | null;
+  try {
+    pins = object(JSON.parse(await readFile(path.join(root, runtimePinsPath), "utf8")));
+  } catch {
+    invalid(`${runtimePinsPath} could not be read as JSON.`);
+    return;
+  }
+  if (!pins || pins.schemaVersion !== 1 || !Array.isArray(pins.records)) {
+    invalid(`${runtimePinsPath} must contain a version-1 records array.`);
+    return;
+  }
+  const expected = new Map<string, string>();
+  for (const language of DSA_PARITY_LANGUAGES) {
+    const records = pins.records.map(object).filter((record) => record?.language === language);
+    const digest = records[0]?.digest;
+    if (records.length !== 1 || typeof digest !== "string" || !runtimeDigestPattern.test(digest)) {
+      invalid(`${runtimePinsPath} must contain exactly one valid sha256 pin for ${language}.`);
+      return;
+    }
+    expected.set(language, digest);
+  }
+  for (const language of DSA_PARITY_LANGUAGES) {
+    const pinned = expected.get(language)!;
+    if (declared[language] !== pinned) issues.push({
+      kind: "STALE_RUNTIME_DIGEST", source: dsaDeclarationPath,
+      detail: `${language} declared=${declared[language]} pinned=${pinned} (${runtimePinsPath}); regenerate with npm run dsa:parity:generate`,
+    });
+  }
 }
 
 async function verifyMarkdown(
@@ -301,7 +366,9 @@ async function verifyEvidence(
   for (const file of files) {
     const source = relative(root, file);
     try {
-      await walk(source, JSON.parse(await readFile(file, "utf8")) as unknown);
+      const value: unknown = JSON.parse(await readFile(file, "utf8"));
+      if (source === dsaDeclarationPath) await verifyDsaRuntimeDigests(root, value, issues);
+      await walk(source, value);
     } catch (error) {
       issues.push({
         kind: "INVALID_JSON",

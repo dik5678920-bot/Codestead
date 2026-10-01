@@ -36,6 +36,8 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
   vi.restoreAllMocks();
 });
 
@@ -95,7 +97,10 @@ describe("lesson workspace interactions", () => {
   });
 
   it("sends valid idempotent Codestead requests and keeps later messages in the same thread", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // Testing Library detects fake timers through its Jest-compatible adapter.
+    vi.stubGlobal("jest", vi);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const threadId = "b3000000-0000-4000-8000-000000000001";
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(new Response(
@@ -119,9 +124,13 @@ describe("lesson workspace interactions", () => {
     await user.click(screen.getByRole("button", { name: "Open Patch" }));
     expect(screen.getByRole("dialog", { name: "Patch" })).toBeInTheDocument();
     const input = screen.getByRole("textbox", { name: "Message Patch" });
-    await user.type(input, "Why are they different?{enter}");
+    await user.click(input);
+    await user.paste("Why are they different?");
+    await user.keyboard("{Enter}");
     expect(await screen.findByText(/Start by naming the method/i, undefined, { timeout: 3000 })).toBeInTheDocument();
-    await user.type(input, "What is source code?{enter}");
+    await user.click(input);
+    await user.paste("What is source code?");
+    await user.keyboard("{Enter}");
     expect(await screen.findByText(/source file stores/i, undefined, { timeout: 3000 })).toBeInTheDocument();
 
     const firstBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as Record<string, string>;
@@ -164,14 +173,19 @@ describe("lesson workspace interactions", () => {
   });
 
   it("shows Patch thinking while a mentor response is in flight", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // Testing Library detects fake timers through its Jest-compatible adapter.
+    vi.stubGlobal("jest", vi);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     let resolveResponse!: (response: Response) => void;
     const response = new Promise<Response>((resolve) => { resolveResponse = resolve; });
     vi.spyOn(globalThis, "fetch").mockReturnValueOnce(response);
     renderWithPatch(<LessonWorkspace {...baseProps()} authoredLesson={authoredLesson} />);
 
     await user.click(screen.getByRole("button", { name: "Open Patch" }));
-    await user.type(screen.getByRole("textbox", { name: "Message Patch" }), "Help me understand{enter}");
+    await user.click(screen.getByRole("textbox", { name: "Message Patch" }));
+    await user.paste("Help me understand");
+    await user.keyboard("{Enter}");
 
     expect(screen.getByTestId("codestead-mentor-pet")).toHaveAttribute("data-state", "thinking");
     expect(screen.getByText("Reading…")).toBeInTheDocument();
@@ -201,7 +215,10 @@ describe("lesson workspace interactions", () => {
   });
 
   it("reuses the exact Codestead request when the first transport response is lost", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // Testing Library detects fake timers through its Jest-compatible adapter.
+    vi.stubGlobal("jest", vi);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockRejectedValueOnce(new Error("connection reset"))
       .mockResolvedValueOnce(new Response(
@@ -214,7 +231,9 @@ describe("lesson workspace interactions", () => {
     renderWithPatch(<LessonWorkspace {...baseProps()} authoredLesson={authoredLesson} />);
 
     await user.click(screen.getByRole("button", { name: "Open Patch" }));
-    await user.type(screen.getByRole("textbox", { name: "Message Patch" }), "Please explain again{enter}");
+    await user.click(screen.getByRole("textbox", { name: "Message Patch" }));
+    await user.paste("Please explain again");
+    await user.keyboard("{Enter}");
 
     expect(await screen.findByText(/recover with one small question/i, undefined, { timeout: 3000 })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledTimes(2);

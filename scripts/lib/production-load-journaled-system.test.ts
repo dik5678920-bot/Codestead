@@ -167,18 +167,24 @@ describe("journaled production load system adapter", () => {
 
   it("serializes concurrent fault mutations so only one active journal exists", async () => {
     const events: string[] = [];
+    let markFirstStarted!: () => void;
+    const firstStarted = new Promise<void>((resolve) => { markFirstStarted = resolve; });
     let releaseFirst!: () => void;
     const firstBlocked = new Promise<void>((resolve) => { releaseFirst = resolve; });
     const setup = await create({
       async injectAndReleaseFault(faultId) {
         events.push(`start:${faultId}`);
-        if (faultId === "app_container_restart") await firstBlocked;
+        if (faultId === "app_container_restart") {
+          markFirstStarted();
+          await firstBlocked;
+        }
         events.push(`end:${faultId}`);
       },
     });
 
     const first = setup.system.injectAndReleaseFault("app_container_restart", "learncoding", VM_ID);
-    await vi.waitFor(() => expect(events).toEqual(["start:app_container_restart"]));
+    await Promise.race([firstStarted, first]);
+    expect(events).toEqual(["start:app_container_restart"]);
     const second = setup.system.injectAndReleaseFault("email_worker_restart", "learncoding", VM_ID);
     await Promise.resolve();
     expect(events).toEqual(["start:app_container_restart"]);

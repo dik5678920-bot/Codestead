@@ -64,7 +64,10 @@ function detailFor(item: typeof queueItems[number]) {
 }
 
 describe("administrator curriculum editorial queue", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   it("shows cross-course outstanding counts and opens any staged artifact", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
@@ -402,7 +405,10 @@ describe("administrator curriculum editorial queue", () => {
       throw new Error(`Unexpected request: ${url}`);
     });
     vi.stubGlobal("fetch", fetchMock);
-    const user = userEvent.setup();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // Testing Library detects fake timers through its Jest-compatible adapter.
+    vi.stubGlobal("jest", vi);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
 
     render(<AdminCurriculumPublication detailedReviewChecklist />);
 
@@ -410,8 +416,10 @@ describe("administrator curriculum editorial queue", () => {
     await screen.findByText("Seven-dimension human checklist");
     for (const name of REVIEW_DIMENSIONS) {
       await user.click(screen.getByRole("checkbox", { name: humanize(name) }));
-      await user.type(screen.getByLabelText(`${name} evidence reference`), "See commit abc123.");
-      await user.type(screen.getByLabelText(`${name} review note`), "Reviewed carefully in detail.");
+      await user.click(screen.getByLabelText(`${name} evidence reference`));
+      await user.paste("See commit abc123.");
+      await user.click(screen.getByLabelText(`${name} review note`));
+      await user.paste("Reviewed carefully in detail.");
     }
     await user.click(screen.getByRole("checkbox", { name: "lesson.python.variables.v1" }));
     await user.selectOptions(screen.getByLabelText("Decision"), "approved");

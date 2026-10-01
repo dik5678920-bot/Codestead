@@ -19,17 +19,22 @@ function productionSourceFiles(root: string, workspaceRoot: string): string[] {
 }
 
 function expectProductionSourceNotToMatch(
-  files: readonly string[],
+  files: ReadonlyArray<Readonly<{ file: string; text: string }>>,
   workspaceRoot: string,
   pattern: RegExp,
   boundary: string,
 ) {
-  const offender = files.find((file) => pattern.test(readFileSync(file, "utf8")));
+  const offender = files.find(({ text }) => pattern.test(text))?.file;
   expect(
     offender ? path.relative(workspaceRoot, offender).replaceAll("\\", "/") : undefined,
     boundary,
   ).toBeUndefined();
 }
+
+const workspaceRoot = process.cwd();
+const sourceSnapshot = productionSourceFiles(path.join(workspaceRoot, "src"), workspaceRoot)
+  .concat(productionSourceFiles(path.join(workspaceRoot, "public"), workspaceRoot))
+  .map((file) => ({ file, text: readFileSync(file, "utf8") }));
 
 describe("page-context browser-durability boundary", () => {
   it("does not add a PWA shell, install surface, background delivery, or authenticated Cache API", () => {
@@ -43,8 +48,7 @@ describe("page-context browser-durability boundary", () => {
       "src/app/manifest.webmanifest",
     ]) expect(existsSync(path.join(root, relative)), relative).toBe(false);
 
-    const productionSource = productionSourceFiles(path.join(root, "src"), root)
-      .concat(productionSourceFiles(path.join(root, "public"), root));
+    const productionSource = sourceSnapshot;
     const boundaries: ReadonlyArray<readonly [RegExp, string]> = [
       [/\bnavigator\s*\.\s*serviceWorker\b/i, "navigator.serviceWorker must remain absent"],
       [/\bserviceWorker\s*\.\s*register\s*\(/i, "service-worker registration must remain absent"],

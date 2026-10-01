@@ -27,28 +27,29 @@ function source(relativePath: string) {
   return readFileSync(resolve(process.cwd(), relativePath), "utf8");
 }
 
+const repositoryRoot = process.cwd();
+const writers = [
+  ...productionFiles(resolve(repositoryRoot, "src"), PRODUCTION_SOURCE_FILE),
+  ...productionFiles(
+    resolve(repositoryRoot, "scripts"),
+    /\.(?:[cm]?[jt]sx?|sh)$/u,
+  ),
+]
+  .map((path) => ({
+    relativePath: relative(repositoryRoot, path).replaceAll("\\", "/"),
+    source: readFileSync(path, "utf8"),
+  }))
+  .filter(({ source: fileSource }) =>
+    DIRECT_OUTBOX_INSERT.test(fileSource)
+    || fileSource.includes(".insert(emailOutbox)")
+  )
+  .sort((left, right) =>
+    left.relativePath.localeCompare(right.relativePath)
+  );
+
+
 describe("production email stable-event writer inventory", () => {
   it("keeps five physical writers event-v1-native and release-composed while centralizing admin mail", () => {
-    const repositoryRoot = process.cwd();
-    const writers = [
-      ...productionFiles(resolve(repositoryRoot, "src"), PRODUCTION_SOURCE_FILE),
-      ...productionFiles(
-        resolve(repositoryRoot, "scripts"),
-        /\.(?:[cm]?[jt]sx?|sh)$/u,
-      ),
-    ]
-      .map((path) => ({
-        relativePath: relative(repositoryRoot, path).replaceAll("\\", "/"),
-        source: readFileSync(path, "utf8"),
-      }))
-      .filter(({ source: fileSource }) =>
-        DIRECT_OUTBOX_INSERT.test(fileSource)
-        || fileSource.includes(".insert(emailOutbox)")
-      )
-      .sort((left, right) =>
-        left.relativePath.localeCompare(right.relativePath)
-      );
-
     expect(writers.map(({ relativePath }) => relativePath)).toEqual([
 
       "src/lib/appeals/admin-service.ts",

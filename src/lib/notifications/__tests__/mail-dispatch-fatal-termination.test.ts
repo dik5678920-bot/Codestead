@@ -1,48 +1,26 @@
 // @vitest-environment node
 
-import { spawn } from "node:child_process";
+import { prepareChild, prepareSequentially } from "../../../../scripts/__tests__/helpers/prepared-child";
 import path from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 
 const fixture = path.resolve(
   process.cwd(),
   "src/lib/notifications/__tests__/fixtures/mail-dispatch-fatal-termination.mjs",
 );
 
+const fixtureModes = ["exit", "park", "exit-returns", "exit-throws", "shared-array-buffer-throws", "atomics-wait-throws"];
+const fixtures = new Map(await prepareSequentially(fixtureModes, async (mode) => [
+  mode,
+  await prepareChild(["--import", "tsx", fixture, mode], { cwd: process.cwd() }),
+] as const));
+afterAll(() => { for (const run of fixtures.values()) run.kill(); });
+
 function startFixture(mode: string) {
-  const child = spawn(
-    process.execPath,
-    ["--import", "tsx", fixture, mode],
-    {
-      cwd: process.cwd(),
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-    },
-  );
-  let stdout = "";
-  let stderr = "";
-  child.stdout.setEncoding("utf8");
-  child.stderr.setEncoding("utf8");
-  child.stdout.on("data", (chunk: string) => {
-    stdout += chunk;
-  });
-  child.stderr.on("data", (chunk: string) => {
-    stderr += chunk;
-  });
-  const exit = new Promise<Readonly<{
-    code: number | null;
-    signal: NodeJS.Signals | null;
-  }>>((resolve, reject) => {
-    child.once("error", reject);
-    child.once("exit", (code, signal) => resolve({ code, signal }));
-  });
-  return {
-    child,
-    exit,
-    stdout: () => stdout,
-    stderr: () => stderr,
-  };
+  const run = fixtures.get(mode)!;
+  run.start();
+  return run;
 }
 
 async function waitForEntry(run: ReturnType<typeof startFixture>) {

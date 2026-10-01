@@ -1,4 +1,3 @@
-import { execFile as execFileCallback } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   mkdir,
@@ -11,10 +10,22 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { promisify } from "node:util";
 
 import ts from "typescript";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { prepareChild } from "./helpers/prepared-child";
+
+const parsedSources = new Map<string, ts.SourceFile>();
+const parseSourceFile: typeof ts.createSourceFile = (...args) => {
+  const key = JSON.stringify(args);
+  let source = parsedSources.get(key);
+  if (!source) {
+    source = ts.createSourceFile(...args);
+    parsedSources.set(key, source);
+  }
+  return source;
+};
 
 const pgMock = vi.hoisted(() => ({
   Pool: vi.fn(),
@@ -82,7 +93,6 @@ const WORKSPACE_ROOT = path.resolve(
   "..",
 );
 const WORKSPACE_MIGRATIONS_FOLDER = path.resolve(WORKSPACE_ROOT, "drizzle");
-const execFile = promisify(execFileCallback);
 const REVIEWED_MIGRATIONS = [
   { folderMillis: 1_780_000_000_001, hash: "a".repeat(64) },
   { folderMillis: 1_780_000_000_002, hash: "b".repeat(64) },
@@ -375,7 +385,7 @@ function staticStringValues(
 }
 
 function scanOwnerAuthoritySource(sourceText: string, fileName: string) {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = parseSourceFile(
     fileName,
     sourceText,
     ts.ScriptTarget.Latest,
@@ -458,7 +468,7 @@ function scanOwnerAuthoritySource(sourceText: string, fileName: string) {
 }
 
 function validateReadOnlyOwnerTopologySource(sourceText: string, fileName: string) {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = parseSourceFile(
     fileName,
     sourceText,
     ts.ScriptTarget.Latest,
@@ -683,7 +693,7 @@ function extractFaultInjectionInput(
   fileName: string,
   expectedContext?: string,
 ): ExtractedFaultInjectionInput {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = parseSourceFile(
     fileName,
     sourceText,
     ts.ScriptTarget.Latest,
@@ -765,7 +775,7 @@ function extractVariableLengthFaultInjectionInput(
   expectedInstallCount: number,
   expectedCleanupCount: number,
 ) {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = parseSourceFile(
     fileName,
     sourceText,
     ts.ScriptTarget.Latest,
@@ -869,7 +879,7 @@ function validateFaultInjectionSource(
   fileName: string,
   contract: SourceFixtureContract,
 ) {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = parseSourceFile(
     fileName,
     sourceText,
     ts.ScriptTarget.Latest,
@@ -1105,6 +1115,50 @@ afterEach(() => {
   }
 });
 
+const decoyRoot = await mkdtemp(path.join(tmpdir(), "codestead-owner-launch-decoy-"));
+const helperModuleUrl = pathToFileURL(path.resolve(
+  WORKSPACE_ROOT,
+  "integration/support/with-validated-owner-fault-injection.ts",
+)).href;
+const tsxLoaderUrl = pathToFileURL(path.resolve(
+  WORKSPACE_ROOT,
+  "node_modules/tsx/dist/loader.mjs",
+)).href;
+const childEnvironment = Object.fromEntries(
+  ["HOME", "PATH", "SystemRoot", "TEMP", "TMP"].flatMap((name) => (
+    process.env[name] === undefined ? [] : [[name, process.env[name]]]
+  )),
+) as NodeJS.ProcessEnv;
+const childSource = `
+      void import(${JSON.stringify(helperModuleUrl)}).then(async (ownerFaultModule) => {
+        const { waitForFixtureStart } = await import(${JSON.stringify(pathToFileURL(path.resolve(WORKSPACE_ROOT, "scripts/__tests__/helpers/prepared-fixture.mjs")).href)});
+        await waitForFixtureStart();
+        try {
+          const ownerFaultApi = ownerFaultModule.runValidatedIntegrationMigrations
+            ? ownerFaultModule
+            : ownerFaultModule.default;
+          await ownerFaultApi.runValidatedIntegrationMigrations({
+            databaseTarget: {
+              databaseApplicationUrl: "invalid-app-url",
+              databaseOwnerUrl: "invalid-owner-url",
+            },
+            migrationsFolder: ${JSON.stringify(WORKSPACE_MIGRATIONS_FOLDER)},
+          });
+          process.stdout.write("unexpected-success");
+          process.exitCode = 2;
+        } catch (error) {
+          process.stdout.write(error instanceof Error ? error.message : String(error));
+        }
+      });
+    `;
+
+const decoyFixture = await prepareChild(["--import", tsxLoaderUrl, "--eval", childSource], {
+  cwd: decoyRoot, env: childEnvironment,
+});
+afterAll(async () => { decoyFixture.kill(); await rm(decoyRoot, { force: true, recursive: true }); });
+
+const workspaceOwnerBaseline = await scanWorkspaceOwnerAuthority();
+
 describe("validated disposable owner fault injection", () => {
   it.each([
     ["missing owner URL", ""],
@@ -1306,9 +1360,11 @@ describe("validated disposable owner fault injection", () => {
         )),
         release: vi.fn(),
       };
+      let markPoolClosing!: () => void;
+      const poolClosing = new Promise<void>((resolve) => { markPoolClosing = resolve; });
       const ownerPool = {
         connect: vi.fn(async () => client),
-        end: vi.fn(() => poolClose),
+        end: vi.fn(() => { markPoolClosing(); return poolClose; }),
       };
       pgMock.Pool.mockImplementation(function PoolMock() {
         return ownerPool;
@@ -1322,9 +1378,7 @@ describe("validated disposable owner fault injection", () => {
         },
       });
       void pending.catch(() => undefined);
-      for (let attempt = 0; attempt < 10 && ownerPool.end.mock.calls.length === 0; attempt += 1) {
-        await Promise.resolve();
-      }
+      await poolClosing;
       expect(ownerPool.end).toHaveBeenCalledOnce();
       await vi.advanceTimersByTimeAsync(5_000);
       let failure: unknown;
@@ -1782,58 +1836,11 @@ describe("validated disposable owner fault injection", () => {
   });
 
   it("anchors the migration folder when a fresh process launches from a decoy cwd", async () => {
-    const decoyRoot = await mkdtemp(path.join(tmpdir(), "codestead-owner-launch-decoy-"));
-    const helperModuleUrl = pathToFileURL(path.resolve(
-      WORKSPACE_ROOT,
-      "integration/support/with-validated-owner-fault-injection.ts",
-    )).href;
-    const tsxLoaderUrl = pathToFileURL(path.resolve(
-      WORKSPACE_ROOT,
-      "node_modules/tsx/dist/loader.mjs",
-    )).href;
-    const childEnvironment = Object.fromEntries(
-      ["HOME", "PATH", "SystemRoot", "TEMP", "TMP"]
-        .flatMap((name) => (
-          process.env[name] === undefined ? [] : [[name, process.env[name]]]
-        )),
-    ) as NodeJS.ProcessEnv;
-    const childSource = `
-      void import(${JSON.stringify(helperModuleUrl)}).then(async (ownerFaultModule) => {
-        try {
-          const ownerFaultApi = ownerFaultModule.runValidatedIntegrationMigrations
-            ? ownerFaultModule
-            : ownerFaultModule.default;
-          await ownerFaultApi.runValidatedIntegrationMigrations({
-            databaseTarget: {
-              databaseApplicationUrl: "invalid-app-url",
-              databaseOwnerUrl: "invalid-owner-url",
-            },
-            migrationsFolder: ${JSON.stringify(WORKSPACE_MIGRATIONS_FOLDER)},
-          });
-          process.stdout.write("unexpected-success");
-          process.exitCode = 2;
-        } catch (error) {
-          process.stdout.write(error instanceof Error ? error.message : String(error));
-        }
-      });
-    `;
-
-    try {
-      const { stdout } = await execFile(
-        process.execPath,
-        ["--import", tsxLoaderUrl, "--eval", childSource],
-        {
-          cwd: decoyRoot,
-          env: childEnvironment,
-          timeout: 15_000,
-          windowsHide: true,
-        },
-      );
-      expect(stdout).not.toContain("exact workspace drizzle folder");
-      expect(stdout).toContain("requires a valid frozen disposable database target");
-    } finally {
-      await rm(decoyRoot, { force: true, recursive: true });
-    }
+    const { stdout, status, signal } = await decoyFixture.run(15_000);
+    expect(status).toBe(0);
+    expect(signal).toBe(null);
+    expect(stdout).not.toContain("exact workspace drizzle folder");
+    expect(stdout).toContain("requires a valid frozen disposable database target");
   });
 
   it("keeps the PostgreSQL integration migration callsite module-root anchored", async () => {
@@ -2065,7 +2072,7 @@ describe("validated disposable owner fault injection", () => {
     );
     expect(helperSource).not.toMatch(/\bdisable\s+trigger\s+user\b/i);
     expect(helperSource).toMatch(/run:\s*\(\)\s*=>\s*Promise<T>/);
-    const helperFile = ts.createSourceFile(
+    const helperFile = parseSourceFile(
       "with-validated-owner-fault-injection.ts",
       helperSource,
       ts.ScriptTarget.Latest,
@@ -2219,7 +2226,7 @@ describe("validated disposable owner fault injection", () => {
   });
 
   it("anchors the workspace owner-authority scan against cwd decoys", async () => {
-    const baseline = await scanWorkspaceOwnerAuthority();
+    const baseline = workspaceOwnerBaseline;
     const originalCwd = process.cwd();
     const decoyRoot = await mkdtemp(path.join(tmpdir(), "codestead-owner-decoy-"));
     await mkdir(path.join(decoyRoot, "integration"));
@@ -2298,7 +2305,7 @@ describe("validated disposable owner fault injection", () => {
       if (typeof entry !== "string" || !entry.endsWith(".ts")) continue;
       const relativePath = `integration/${entry.replaceAll("\\", "/")}`;
       const sourceText = await readFile(path.join(integrationRoot, entry), "utf8");
-      const sourceFile = ts.createSourceFile(
+      const sourceFile = parseSourceFile(
         relativePath,
         sourceText,
         ts.ScriptTarget.Latest,

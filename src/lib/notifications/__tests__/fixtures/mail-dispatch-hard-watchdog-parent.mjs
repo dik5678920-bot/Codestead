@@ -1,10 +1,13 @@
 import { writeSync } from "node:fs";
+import { waitForFixtureStart } from "../../../../../scripts/__tests__/helpers/prepared-fixture.mjs";
+import { awaitWatchdogReady } from "../../../../../scripts/__tests__/helpers/watchdog-fixture-clock.mjs";
 
 import {
   startMailDispatchHardWatchdog,
 } from "../../mail-dispatch-hard-watchdog.ts";
 
-const watchdog = await startMailDispatchHardWatchdog();
+const watchdog = await awaitWatchdogReady(startMailDispatchHardWatchdog);
+await waitForFixtureStart();
 await watchdog.arm();
 
 process.once("exit", () => {

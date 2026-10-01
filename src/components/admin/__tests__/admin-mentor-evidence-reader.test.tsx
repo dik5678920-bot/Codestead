@@ -262,11 +262,14 @@ describe("audited mentor evidence reader", () => {
       throw new Error(`Unexpected request: ${url}`);
     }));
 
-    const user = userEvent.setup();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.stubGlobal("jest", vi);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<AdminMentorEvidenceReader learnerId={LEARNER_ID} />);
     await user.selectOptions(screen.getByLabelText("Mentor evidence category"), "code_submissions");
     await user.selectOptions(screen.getByLabelText("Mentoring purpose"), "safety_review");
-    await user.type(screen.getByLabelText("Mentor evidence reason"), "Investigate the quarantined practice runner state before operator recovery.");
+    await user.click(screen.getByLabelText("Mentor evidence reason"));
+    await user.paste("Investigate the quarantined practice runner state before operator recovery.");
     await user.type(screen.getByLabelText("Mentor evidence authenticator code"), "123456");
     await user.click(screen.getByRole("button", { name: /Read and audit evidence/i }));
 
@@ -276,7 +279,8 @@ describe("audited mentor evidence reader", () => {
     expect(recoveryForm).toHaveTextContent(/dedicated runner VM/i);
     expect(recoveryForm).toHaveTextContent(/practice-idempotency-key-1/i);
     expect(recoveryForm).toHaveTextContent(/trusted application host deliberately has no Docker socket/i);
-    await user.type(screen.getByLabelText("Practice recovery resolution reason"), "Restarted the isolated runner and reconciled its durable journal entry.");
+    await user.click(screen.getByLabelText("Practice recovery resolution reason"));
+    await user.paste("Restarted the isolated runner and reconciled its durable journal entry.");
     await user.type(screen.getByLabelText("Practice recovery authenticator code"), "654321");
     await user.click(screen.getByLabelText(/I stopped and restarted the dedicated runner VM/i));
     await user.click(screen.getByLabelText(/I confirmed the durable journal/i));

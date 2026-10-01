@@ -197,11 +197,11 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "a5f9f874cc4454463ddf224e15c3ba861c69a60483a9239c546f7694ce0fdcd1"
+      "sha256": "43dc1fb7ad8933e14e189f116c032c5148bbac41c15f2a29c246b42b765c22b1"
     },
     {
       "path": "infra/tests/backup-ci-registration.test.mjs",
-      "sha256": "37927fa9afe41d4a3f4da0368d31badda01a142d7be262929b76101b7abcbb20"
+      "sha256": "f40086c21123e162e3b665a705a9d48c22e50f27c865b51a3233fa5c5bf46b45"
     }
   ],
   "supersededDigests": [

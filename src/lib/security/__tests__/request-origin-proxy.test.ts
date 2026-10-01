@@ -8,6 +8,8 @@ import { config, proxy } from "../../../proxy";
 import { auditApiSurface } from "../api-surface";
 
 const CANONICAL_ORIGIN = "https://codestead.example.test";
+// Prepare the repository-wide route inventory before the per-test clock starts.
+const apiSurfaceReport = await auditApiSurface(process.cwd());
 
 function production(appUrl: string | null = CANONICAL_ORIGIN) {
   vi.stubEnv("NODE_ENV", "production");
@@ -21,7 +23,7 @@ afterEach(() => {
 
 describe("Next request-origin proxy", () => {
   it("covers the complete API route surface with no route exemptions", async () => {
-    const report = await auditApiSurface(process.cwd());
+    const report = apiSurfaceReport;
     expect(report.errors).toEqual([]);
     expect(report.entries.length).toBeGreaterThanOrEqual(80);
     expect(report.entries.every((entry) => entry.route.startsWith("/api/"))).toBe(true);
