@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-01",
+  "status": "locally-verified",
+  "pr": "https://github.com/thebrownhuman/Codestead/pull/85",
+  "scope": "CI repair for reviewed-current database inventory and restore contracts through migration 0070. No SQL, privileges, MFA, networking, egress, compose, secrets, or production state changes.",
+  "history": {
+    "migrationIntroduction": "d4bc135",
+    "migrationCompletion": [
+      "7eeafd7",
+      "c5a9c6a"
+    ],
+    "closedWorldInventoryIntroduction": "894f1ee"
+  },
+  "pinInventory": "docs/reviewed-migration-inventory-pins.md",
+  "generator": "scripts/sync-reviewed-database-inventory.mjs",
+  "generation": {
+    "commands": [
+      "node scripts/sync-reviewed-database-inventory.mjs --apply",
+      "node scripts/sync-reviewed-database-inventory.mjs --check"
+    ],
+    "physicalColumns": "Carry forward reviewed 0069 attnums only after exact column-inventory equality; enum/index-only SQL extension. No new live-catalog proof is claimed."
+  },
+  "verification": {
+    "red": "Reproduced inventory-pin error, restore contract rejection, and historical journal-tail failure before repair. Broad Vitest then exposed an additional restore smoke count assertion, which was fixed before repeating the same broad gate. The final invocation uses npm run test so the Windows canary receives npm_execpath; direct bundled-Node Vitest invocations lacked that npm context.",
+    "databaseRoleBoundaries": {
+      "command": "npm run test:database-role-boundaries",
+      "passed": 145,
+      "failed": 0,
+      "lanes": [
+        "manifest-metadata",
+        "manifest-phase",
+        "manifest-inventory",
+        "manifest-reconciliation",
+        "manifest-diff",
+        "bootstrap-missing-grants",
+        "bootstrap-core",
+        "bootstrap-catalog",
+        "standalone-verifier",
+        "role-boundary"
+      ]
+    },
+    "leastPrivilegeStatic": {
+      "command": "node --test infra/tests/database-least-privilege-static.test.mjs",
+      "passed": 12,
+      "failed": 0
+    },
+    "vitest": {
+      "command": "npm run test -- scripts/ src/lib/notifications/ --maxWorkers=2",
+      "files": 169,
+      "passed": 2078,
+      "failed": 0,
+      "skipped": 10,
+      "node": "24.19.0"
+    },
+    "checks": {
+      "typecheck": "passed",
+      "lint": "passed; own temporary .agent2 artifacts excluded",
+      "reviewedLedgerBackupRestoreContracts": "passed",
+      "historical0069Registration": "passed",
+      "productionTopologyStatic": "passed; node infra/tests/validate-static.mjs",
+      "generatorIdempotence": "passed",
+      "generatorReplay": "passed; regenerated matching artifacts from committed 0069 capability sources in an isolated directory inside own worktree",
+      "diffWhitespace": "passed"
+    },
+    "limits": {
+      "fullVitestSuiteRun": false,
+      "fullProductionBuildRun": false,
+      "fullReleaseCheckRun": false,
+      "postgresIntegrationRerun": false,
+      "productionTopologyRerun": false,
+      "liveProviderCalls": 0,
+      "productionDeployments": 0
+    }
+  },
+  "evidenceChanges": [
+    {
+      "evidence": "docs/evidence/backup-status-outbox-2026-07-12.json",
+      "field": "sha256",
+      "path": "scripts/__tests__/backup-reporter-role-contract.test.ts",
+      "previousSha256": "1011a93b7e0c8b07492d445870de1eea07f41ee153d755cd9653720b9cb75cca",
+      "sha256": "9c9dca0c0fb9929e3807a916276cdda09e7405b9e96c52a6c4f497fa80604e47"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
+      "field": "docs/evidence/backup-status-outbox-2026-07-12.json",
+      "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
+      "previousSha256": "c7b65b5e3a32830a8978565131104b98a118f4e645a0c0db2f3112fdf765e840",
+      "sha256": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
+      "field": "infra/tests/reviewed-migration-ledger-registration.test.mjs",
+      "path": "infra/tests/reviewed-migration-ledger-registration.test.mjs",
+      "previousSha256": "c1a2ab7c0e9d8e50fbc0e21d59bfad1b5d0033ee359438cff124816aa32b6aaf",
+      "sha256": "ad39dd85c0e55dd04cbf0b219905c1eb3cc631d6cf1d1b6e21de1f88842eebec"
+    }
+  ],
+  "artifactSha256": {
+    "Dockerfile": "891fb214ac486fb484ebcaae1587046e6a397e63a12e2d1b044734809b54ff79",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "c73995029ee42887538c985d863eb3ffc86b62a8d36aaf604a92e1374aefdb32",
+    "docs/evidence/backup-status-outbox-2026-07-12.json": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe",
+    "docs/reviewed-migration-inventory-pins.md": "c0d99fe71aa793d292ef4dc05ab12a57d9338cb471c2500aaeb12831d2358f31",
+    "drizzle/meta/0070_public_column_attnums.json": "ccb570feacc782971c12564d4eaeec176a9b6cc4fd746cea21fd3d93d252e4c0",
+    "infra/tests/database-least-privilege-static.test.mjs": "b309b1692aa7c2e705db2f4c1c85e2423d00c795bb9292ff76e6ccfb6232513c",
+    "infra/tests/mail-guarded-delivery-0069-registration.test.mjs": "d85a864fa06e9405d61a0c1d56171043b2df0a3e3e7a94ea27fa9a3cdc0b5df5",
+    "infra/tests/reviewed-migration-ledger-registration.test.mjs": "ad39dd85c0e55dd04cbf0b219905c1eb3cc631d6cf1d1b6e21de1f88842eebec",
+    "infra/tests/validate-static.mjs": "692cb2215569c8d47116426ed2b7bee7bbf0940972554d1dbbb565970db691fa",
+    "scripts/__tests__/backup-reporter-role-contract.test.ts": "9c9dca0c0fb9929e3807a916276cdda09e7405b9e96c52a6c4f497fa80604e47",
+    "scripts/backup/restore-drill-isolated.sh": "82fab97f993001a43f47cff08b291857eac896390c760a5c2cfd4338f2d60013",
+    "scripts/bootstrap-database-runtime-capabilities.mjs": "a170e8a4a14ee4971972e7152b4be5755eb4209dbb575181a1eceff4cf279913",
+    "scripts/bootstrap-database-runtime-capabilities.test.mjs": "32573d89581f17ac661b0907ff75123c40f5140feafb0be08afc67bd891dcee0",
+    "scripts/database-runtime-capabilities.d.mts": "a71dd8a0fab60f27fa900311b41538a00486467e979c99fc2b19cb51312595ba",
+    "scripts/database-runtime-capabilities.mjs": "e2512d97a65cb36cb20eb7835172180659c73a5c46499cd78a78d66a7b10af28",
+    "scripts/database-runtime-capabilities.test.mjs": "499d4ca3af55ac6fe5045ddb6044df764eefc17a68c6a37cb834d313ff8415d0",
+    "scripts/lib/database-runtime-capability-test-fixture.mjs": "792d872f9d01207e8e8abc70c593ee6a5377dfab050964a224c37a15d1073cde",
+    "scripts/sync-reviewed-database-inventory.mjs": "deefd37b3c62fee9a880fd6e651f5762c197c7241e31305f65392a1ef1dfb0c0",
+    "scripts/verify-database-runtime-capabilities.mjs": "dbc8fd678bed502a33ee9bfb64b0ade2561f9393ba2d2edec3e5e9aef6b27c77",
+    "scripts/verify-database-runtime-capabilities.test.mjs": "e209271ad3c54fdae33410d6bf4609463a7318e1335a4a18af803ccf3483dfb9",
+    "scripts/verify-restored-backup-authority.test.ts": "01dbaa67c8c4e448fe7d377649c97ba099a04b4417b9b15d202719def26e5e8f",
+    "scripts/verify-restored-backup.test.ts": "62e954041712d4e4fa3ea018059f295401321a740b3320012b814e36c91d54ab",
+    "scripts/verify-restored-backup.ts": "fc4d276c4b289912df3755d88d8a4713977fc5e9fee5018b34124d64d3ffe154",
+    "src/lib/notifications/__tests__/outbox-guarded-delivery-authority-0069.test.ts": "4dace4685c4add222fc1760ce14fdc60b4bc5367452d565cc9a02a4048e933a7"
+  }
+}

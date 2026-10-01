@@ -135,7 +135,7 @@
   "historicalEvidence": "Only current source bindings refreshed in three historical records, with previous hashes retained and annotations distinguishing bindings from the original test dates and results. The API matrix changes only two operation source hashes; its authorization rules and counts are unchanged.",
   "artifactSha256": {
     "docs/evidence/api-authorization-matrix-2026-07-12.json": "25e499dec80e020d60e9a05a9a9c1536484a6238be5de6938ea71ed327840e07",
-    "docs/evidence/backup-status-outbox-2026-07-12.json": "c7b65b5e3a32830a8978565131104b98a118f4e645a0c0db2f3112fdf765e840",
+    "docs/evidence/backup-status-outbox-2026-07-12.json": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe",
     "docs/evidence/provider-outage-fallback-verification-2026-07-12.json": "d939e054c18f841bec6fb2d110076969a302388dd29c9ec9c7862da3ccad154e",
     "docs/evidence/run-008-official-runner-fairness-2026-07-12.json": "7f2aa6fc3f086fc425cd12f2df84d28bb8bb54500fdabc289f5ef47e6401fccf",
     "docs/provider-onboarding.md": "b60bff88b29d242f1fc9eef0ef2053f5ebe7611f14dcfce0026d1eae2c0044f4",
@@ -146,7 +146,7 @@
     "infra/tests/backup-production-e2e.test.sh": "fe18804d70da2b6b58ceffd62c48f0d19cfd309ee6d8fcfd223c38cc9754a856",
     "infra/tests/recovery-evidence-verifier.test.sh": "24f4642fb1f78a2dcd56bb987a674ed393f54561affd569fd3945bb0a2f820c5",
     "infra/tests/restore-drill-reminder.test.sh": "92996ccacf49db494249c268c62cf311522084924516cda9940212be66678df5",
-    "infra/tests/reviewed-migration-ledger-registration.test.mjs": "c1a2ab7c0e9d8e50fbc0e21d59bfad1b5d0033ee359438cff124816aa32b6aaf",
+    "infra/tests/reviewed-migration-ledger-registration.test.mjs": "ad39dd85c0e55dd04cbf0b219905c1eb3cc631d6cf1d1b6e21de1f88842eebec",
     "integration/credential-preference-migration.integration.test.ts": "5f89db49892720542dec39f33e98e1b220a5c9620b808ef09c8b2433bc66c040",
     "integration/credential-preference.integration.test.ts": "b194dc0c4ad0758674aa546c3658cfd5c574473ad82243abd07ed63ac7e9ae00",
     "scripts/backup/common.sh": "4a41eacd95beebab9cb7ac035b776f30b70710a6706bebe482d9f013829241fe",
@@ -167,5 +167,26 @@
     "src/lib/ai/credential-validation.ts": "8a7f9ee4630d189ae7136cd88f5af69ea9b75f41f27a39f0aae99057cdea41e2",
     "src/lib/ai/providers.ts": "31f4af50dce6005bb49de5a3c9190c2dda0dcb73ac9b19331dd3e63077a3a6cd",
     "src/lib/db/schema.ts": "3a8ff39ee033be76170a126769e04f40d1b01dbb573f0ef35cc7638af1a681e4"
+  },
+  "ciPinFollowup": {
+    "date": "2026-10-01",
+    "scope": "Source bindings refreshed following CI pin repair; new gate results are recorded separately.",
+    "reviewRecord": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
+    "changes": [
+      {
+        "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
+        "field": "docs/evidence/backup-status-outbox-2026-07-12.json",
+        "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
+        "previousSha256": "c7b65b5e3a32830a8978565131104b98a118f4e645a0c0db2f3112fdf765e840",
+        "sha256": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe"
+      },
+      {
+        "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
+        "field": "infra/tests/reviewed-migration-ledger-registration.test.mjs",
+        "path": "infra/tests/reviewed-migration-ledger-registration.test.mjs",
+        "previousSha256": "c1a2ab7c0e9d8e50fbc0e21d59bfad1b5d0033ee359438cff124816aa32b6aaf",
+        "sha256": "ad39dd85c0e55dd04cbf0b219905c1eb3cc631d6cf1d1b6e21de1f88842eebec"
+      }
+    ]
   }
 }

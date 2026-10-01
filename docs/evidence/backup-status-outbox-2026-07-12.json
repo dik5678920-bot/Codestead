@@ -181,7 +181,7 @@
     },
     {
       "path": "scripts/__tests__/backup-reporter-role-contract.test.ts",
-      "sha256": "1011a93b7e0c8b07492d445870de1eea07f41ee153d755cd9653720b9cb75cca"
+      "sha256": "9c9dca0c0fb9929e3807a916276cdda09e7405b9e96c52a6c4f497fa80604e47"
     },
     {
       "path": "scripts/run-integration-tests.ts",
@@ -477,6 +477,20 @@
         "path": "infra/tests/backup-ci-registration.test.mjs",
         "previousSha256": "8ff5095a2a6385a9f5a42498af21490c98f29c000f02bb86c4feb50d58cbbeac",
         "sha256": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc"
+      }
+    ]
+  },
+  "ciPinFollowup": {
+    "date": "2026-10-01",
+    "scope": "Current source binding only; original historical run dates, results, and scope are preserved.",
+    "reviewRecord": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
+    "changes": [
+      {
+        "evidence": "docs/evidence/backup-status-outbox-2026-07-12.json",
+        "field": "sha256",
+        "path": "scripts/__tests__/backup-reporter-role-contract.test.ts",
+        "previousSha256": "1011a93b7e0c8b07492d445870de1eea07f41ee153d755cd9653720b9cb75cca",
+        "sha256": "9c9dca0c0fb9929e3807a916276cdda09e7405b9e96c52a6c4f497fa80604e47"
       }
     ]
   }
