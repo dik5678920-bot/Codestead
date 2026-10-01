@@ -99,7 +99,7 @@
       "evidence": "docs/evidence/backup-status-outbox-2026-07-12.json",
       "path": "infra/tests/backup-ci-registration.test.mjs",
       "previousSha256": "8ff5095a2a6385a9f5a42498af21490c98f29c000f02bb86c4feb50d58cbbeac",
-      "sha256": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
+      "sha256": "f128a90f9598e06e27d5f50513a37fd1724dd95f1abbe69b77587e89c7814d85"
     },
     {
       "evidence": "docs/evidence/api-authorization-matrix-2026-07-12.json",
@@ -135,14 +135,14 @@
   "historicalEvidence": "Only current source bindings refreshed in three historical records, with previous hashes retained and annotations distinguishing bindings from the original test dates and results. The API matrix changes only two operation source hashes; its authorization rules and counts are unchanged.",
   "artifactSha256": {
     "docs/evidence/api-authorization-matrix-2026-07-12.json": "dddb32ecd9ece9201fb5f109afb51790b8ceec6460c6f37ed7aa724a70751238",
-    "docs/evidence/backup-status-outbox-2026-07-12.json": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8",
+    "docs/evidence/backup-status-outbox-2026-07-12.json": "ea5dc70728fd98554af73181a8bfc8eabd8113f40e9587af9be4d76811c8604d",
     "docs/evidence/provider-outage-fallback-verification-2026-07-12.json": "d939e054c18f841bec6fb2d110076969a302388dd29c9ec9c7862da3ccad154e",
     "docs/evidence/run-008-official-runner-fairness-2026-07-12.json": "3b959497a8d8d2f23b02e78d840e49b9b2b4577103af92e71fe4a69cc9de1872",
     "docs/provider-onboarding.md": "b60bff88b29d242f1fc9eef0ef2053f5ebe7611f14dcfce0026d1eae2c0044f4",
     "drizzle/0070_credential_validation_preference.sql": "a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c",
     "drizzle/meta/0070_snapshot.json": "24c987e88a0664c9b74a5f3f8c2fe727bf4470410a6564c4d0f2289dd6599d1a",
     "drizzle/meta/_journal.json": "24338841f3566bc53b0c3bcdd6afef060b1ff79471246ffc165d5ee21dc727e2",
-    "infra/tests/backup-ci-registration.test.mjs": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5",
+    "infra/tests/backup-ci-registration.test.mjs": "f128a90f9598e06e27d5f50513a37fd1724dd95f1abbe69b77587e89c7814d85",
     "infra/tests/backup-production-e2e.test.sh": "fe18804d70da2b6b58ceffd62c48f0d19cfd309ee6d8fcfd223c38cc9754a856",
     "infra/tests/recovery-evidence-verifier.test.sh": "55718a4d326cedb14bec8028ab4a7a954b4203062c96b075ef9ceba29a82e084",
     "infra/tests/restore-drill-reminder.test.sh": "2e04284ae5f37c93e869a585488fc073ad8c409c0be355e2148e4026fbb5fa18",
@@ -178,7 +178,7 @@
         "field": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "previousSha256": "c7b65b5e3a32830a8978565131104b98a118f4e645a0c0db2f3112fdf765e840",
-        "sha256": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
+        "sha256": "ea5dc70728fd98554af73181a8bfc8eabd8113f40e9587af9be4d76811c8604d"
       },
       {
         "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
@@ -196,7 +196,7 @@
       {
         "path": "infra/tests/backup-ci-registration.test.mjs",
         "previousDigest": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc",
-        "currentDigest": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
+        "currentDigest": "f128a90f9598e06e27d5f50513a37fd1724dd95f1abbe69b77587e89c7814d85"
       },
       {
         "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
@@ -206,7 +206,7 @@
       {
         "path": "infra/tests/backup-ci-registration.test.mjs",
         "previousDigest": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc",
-        "currentDigest": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
+        "currentDigest": "f128a90f9598e06e27d5f50513a37fd1724dd95f1abbe69b77587e89c7814d85"
       },
       {
         "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
@@ -222,7 +222,7 @@
         "field": "/artifactSha256/docs~1evidence~1backup-status-outbox-2026-07-12.json",
         "artifact": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "previousDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
-        "currentDigest": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
+        "currentDigest": "ea5dc70728fd98554af73181a8bfc8eabd8113f40e9587af9be4d76811c8604d"
       },
       {
         "field": "/artifactSha256/drizzle~10070_credential_validation_preference.sql",
@@ -276,7 +276,7 @@
         "field": "/ciPinFollowup/changes/0/sha256",
         "artifact": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "previousDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
-        "currentDigest": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
+        "currentDigest": "ea5dc70728fd98554af73181a8bfc8eabd8113f40e9587af9be4d76811c8604d"
       },
       {
         "field": "/migration/sqlSha256",
