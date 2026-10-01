@@ -30,6 +30,7 @@ import {
   type LocalRuntimeIdentityEvidence,
 } from "./lib/local-runtime-identity";
 import { verifyOrApplyDeterministicEvidence } from "./lib/deterministic-evidence";
+import { recordedConsoleErrors } from "./lib/web-console-noise";
 
 interface RuntimeImageRecord {
   readonly language: string;
@@ -494,7 +495,7 @@ async function executeBrowser(args: {
     ];
     const unexpectedConsole = consoleErrors.filter((message) => !allowed.some((fragment) => message.includes(fragment)));
     if (unexpectedConsole.length) throw new Error(`unexpected console errors: ${unexpectedConsole.join(" | ")}`);
-    return { stdout: "pass\n", consoleErrors };
+    return { stdout: "pass\n", consoleErrors: recordedConsoleErrors(consoleErrors) };
   } finally {
     await context.close();
   }
