@@ -1149,7 +1149,7 @@
       "admin": "allowed",
       "objectAuthorization": "no-user-object",
       "ownershipProof": "authenticated runner availability probe",
-      "operationSourceSha256": "4dea4f586dc6ea4d77cb3a01e48da917503f46aba79020a028f0348ff52a8037"
+      "operationSourceSha256": "e1b09ad51920117b97ecc54622caebdc6dca319886f924d509cb1254ff5d5fc8"
     },
     {
       "operation": "POST /api/code/run",
@@ -1162,7 +1162,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "7c22753650483b215bb01bb43bfbbd5723987179ffeec87cce562870ea1c3ded"
+      "operationSourceSha256": "961622a7c43b12c5baf45576743f795f48c93045efb53b177d5559b77c5269bc"
     },
     {
       "operation": "GET /api/community/discussions",
