@@ -61,14 +61,14 @@ assert.ok(writerInventoryCheckIndex > registrationCheckIndex);
 assert.ok(roleContractCheckIndex > writerInventoryCheckIndex);
 
 const applicationJob = workflow.match(
-  /^  application:\n([\s\S]*?)(?=^  [a-z][a-z0-9-]*:\n|(?![\s\S]))/mu,
+  /^  quick:\n([\s\S]*?)(?=^  [a-z][a-z0-9-]*:\n|(?![\s\S]))/mu,
 )?.[0] ?? "";
 const writerInventoryApplicationLine =
   `      - run: npm run ${writerInventoryScript}`;
 assert.equal(
   applicationJob.split(writerInventoryApplicationLine).length,
   2,
-  "the application job must execute the writer inventory exactly once",
+  "the quick job (split from application) must execute the writer inventory exactly once",
 );
 assert.ok(
   applicationJob.indexOf(writerInventoryApplicationLine)

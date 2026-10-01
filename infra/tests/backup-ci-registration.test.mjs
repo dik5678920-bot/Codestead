@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { postgresCiProjectionThrough0069 } from "./mail-guarded-delivery-0069-ci-contract.mjs";
 import {
   assertPostgresCiProjectionContract,
+  postgresCiRuntimePolicy,
   projectPostgresCiProjectionContract,
 } from "./mail-retention-redaction-0063-ci-contract.mjs";
 
@@ -932,15 +933,198 @@ const expectedApplicationRuns = [
   "docker build --pull=false --tag learncoding-app:ci .",
   "docker build --pull=false --target regrade-worker --tag learncoding-regrade-worker:ci .",
 ];
+// The historical serial `application` job above is now split into parallel jobs.
+// expectedApplicationRuns stays the reviewed inventory: every non-setup line must
+// land in exactly one new job, except the reviewed replacements listed below.
+const rootNodeInstallRun =
+  'sudo install -o root -g root -m 0755 "$(command -v node)" /usr/bin/node';
+const reviewedDockerEngineRun = "bash infra/tests/install-reviewed-docker-engine.sh";
+const infraAptRuns = [
+  "sudo apt-get update",
+  "sudo apt-get install --yes bubblewrap nftables shellcheck",
+];
+const applicationSetupRuns = new Set([
+  rootNodeInstallRun,
+  "npm ci",
+  ...infraAptRuns,
+  reviewedDockerEngineRun,
+]);
+const unitShardRun =
+  "npx vitest run --coverage --maxWorkers=2 --shard=${{ matrix.shard }}/6 --reporter=blob --reporter=default --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0 --coverage.thresholds.statements=0";
+const unitCoverageMergeRun = "npx vitest run --merge-reports --coverage";
+const retiredApplicationRuns = new Map([
+  ["npm run test:coverage", [unitShardRun, unitCoverageMergeRun]],
+]);
+const applicationPartition = new Map([
+  [
+    "quick",
+    [
+      registrationRun,
+      "npm run test:github-runner-context:registration",
+      releaseRollbackRun,
+      "npm run test:migration-ledger",
+      "npm run test:backup-status-mail-authority:contract",
+      "npm run test:email-outbox-writer-inventory",
+      "npm run production-load:ci-registration",
+      "npm run production-load:test-control:bundle",
+      "npm run production-load:fixture-runtime:bundle",
+      "npm run production-load:fixture-runtime:systemd",
+      "npm run lint",
+      "npm run typecheck",
+      "npm run security:dependencies:known",
+      "npm run security:secrets",
+      "npm run security:encoding",
+      "npm run security:api-surface",
+      "npm run architecture:check",
+      "npm run ai:eval -- --check",
+      "npm run test:auth-boundary",
+      "npm run content:brand:check",
+      "npm run content:validate",
+      "npm run projects:catalog:validate",
+      "npm run dsa:parity:check",
+      "npm run c-cpp:executable:check",
+      "npm run java-python:executable:check",
+      "npm run ai-code:executable:check",
+      "npm run web:executable:check",
+      "npm run audit:release",
+      "npm run evidence:verify",
+      "npm audit --audit-level=moderate",
+      "node infra/tests/validate-static.mjs",
+      "node --test infra/tests/database-secret-ceremony.test.mjs",
+      "node --test infra/tests/database-least-privilege-static.test.mjs",
+      "node --test infra/tests/runtime-validator-ingress-policy.test.mjs",
+      "node --test infra/tests/production-load-peer-preflight.test.mjs infra/tests/production-load-postgres-socket.test.mjs infra/tests/production-load-systemd.test.mjs",
+      "node --test infra/tests/runner-power-rehearsal-control.test.mjs",
+      "node --test infra/tests/ingress-control-ci-registration.test.mjs infra/tests/ingress-systemd.test.mjs",
+      "node infra/tests/runtime-validator-structure.test.mjs",
+      "node infra/tests/runtime-validator-harness-contract.test.mjs",
+      "node --test infra/tests/runner-egress-gateway.test.mjs infra/tests/runner-egress-gateway-stream-failures.test.mjs",
+    ],
+  ],
+  ["unit", []],
+  ["unit-coverage", []],
+  [
+    "build",
+    [
+      "npm run build",
+      "docker compose --env-file infra/env/compose.env.example config --quiet",
+      "node infra/tests/validate-compose.mjs",
+    ],
+  ],
+  [
+    "docker-build",
+    [
+      "docker build --pull=false --tag learncoding-app:ci .",
+      "docker build --pull=false --target regrade-worker --tag learncoding-regrade-worker:ci .",
+    ],
+  ],
+  ["db-roles", ["npm run test:database-role-boundaries"]],
+  [
+    "infra-shell-a",
+    [
+      "python3 infra/tests/existing-container-baseline.test.py",
+      "python3 infra/tests/capture-existing-containers.test.py",
+      "sudo env PYTHONDONTWRITEBYTECODE=1 python3 infra/tests/capture-existing-containers-linux.test.py",
+      "python3 infra/tests/recovery-evidence-helper.test.py",
+      "python3 infra/tests/recovery-evidence-provenance.test.py",
+      "python3 infra/tests/recovery-evidence-storage-health.test.py",
+      "python3 infra/tests/recovery-evidence-atomic.test.py",
+      "python3 infra/tests/recovery-evidence-collection.test.py",
+      "python3 infra/tests/host-operations-compatibility.test.py",
+      "sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-evidence.test.sh",
+      "sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-recovery-check.test.sh",
+      "sudo bash infra/tests/systemd-recovery.test.sh",
+    ],
+  ],
+  [
+    "infra-shell-b",
+    [
+      "python3 infra/tests/runner-release-tree.test.py",
+      "python3 infra/tests/release-tree-packaging.test.py",
+      "bash infra/ops/install-compose-ci.sh",
+      "bash infra/tests/smoke-production.test.sh",
+      releaseProductionRun,
+      rollbackProductionRun,
+      "REQUIRE_COMPOSE_MAJOR=5 bash infra/tests/compose-release-cli-contract.test.sh",
+    ],
+  ],
+  [
+    "infra-shell-c",
+    [
+      "CODESTEAD_DISPOSABLE_HOST=1 npm run production-load:fixture-runtime:lifecycle",
+      'sudo env "PATH=$PATH" CODESTEAD_REQUIRE_LINUX_ROOT=1 npm run production-load:test-control:runtime',
+      "CODESTEAD_DISPOSABLE_HOST=1 npm run production-load:peer-credentials",
+      "CODESTEAD_DISPOSABLE_HOST=1 npm run production-load:disposable-sandbox",
+      "shellcheck --severity=warning infra/ops/capture-recovery-evidence.sh infra/ops/create-database-secrets.sh infra/ops/install-compose-ci.sh infra/ops/release-production.sh infra/ops/rollback-production.sh infra/ops/smoke-production.sh infra/ops/validate-production-load-fixture-runtime.sh infra/ops/validate-production-load-test-control-runtime.sh infra/runner-vm/install-guest.sh infra/tests/compose-release-cli-contract.test.sh infra/tests/power-evidence.test.sh infra/tests/production-load-disposable-sandbox.test.sh infra/tests/production-load-fixture-lifecycle.test.sh infra/tests/production-load-peer-credentials.test.sh infra/tests/production-load-test-control-runtime.test.sh infra/tests/recovery-evidence-entry.test.sh infra/tests/recovery-evidence-main.test.sh infra/tests/release-production.test.sh infra/tests/rollback-production.test.sh infra/tests/runner-firewall.test.sh infra/tests/runner-firewall-packets.test.sh infra/tests/runner-guest-installer.test.sh infra/tests/runner-vm-provision.test.sh infra/tests/smoke-production.test.sh",
+      "shellcheck --severity=warning infra/tests/ingress-control-linux.test.sh",
+      "shellcheck --severity=warning infra/ops/start-production-stack.sh infra/ops/recover-production-ingress.sh infra/tests/start-production-stack.test.sh infra/tests/start-production-stack-adversarial.test.sh infra/tests/ingress-recovery.test.sh",
+      "shellcheck --severity=warning --exclude=SC2034 infra/ops/check-recovery.sh",
+      "shellcheck --severity=warning --exclude=SC2128,SC2174,SC2178 infra/tests/power-recovery-check.test.sh",
+      "bash -n scripts/backup/*.sh infra/docker/entrypoint.sh infra/ops/*.sh infra/runner/*.sh infra/tests/*.sh",
+      "python3 infra/tests/test_production_load_browser_journey.py",
+      "python3 infra/tests/test_production_load_control.py",
+      "python3 infra/tests/test_production_load_peer_credentials.py",
+      "sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/ingress-control-linux.test.sh",
+      "sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/start-production-stack.test.sh",
+      "sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/start-production-stack-adversarial.test.sh",
+      "sudo -n env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/ingress-recovery.test.sh",
+      "bash infra/tests/runner-vm-provision.test.sh",
+      "sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-guest-installer.test.sh",
+      "sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-firewall.test.sh",
+      "sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-firewall-packets.test.sh",
+    ],
+  ],
+  [
+    "infra-shell-d",
+    [
+      "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0",
+      "sudo -n env \"PATH=$PATH\" bash infra/tests/runner-reconciliation.test.sh",
+      "bash infra/tests/runtime-validator-network-fixture.test.sh",
+      "bash infra/tests/runtime-config.test.sh",
+    ],
+  ],
+]);
+
+function requireApplicationPartition() {
+  const placed = [...applicationPartition.values()].flat();
+  if (new Set(placed).size !== placed.length) {
+    fail("a historical application step is placed in more than one split job");
+  }
+  for (const command of placed) {
+    if (applicationSetupRuns.has(command)) {
+      fail(`setup step ${command} must not be counted as a partitioned gate`);
+    }
+  }
+  const expected = expectedApplicationRuns
+    .filter((command) => !applicationSetupRuns.has(command))
+    .sort();
+  const actual = [...placed, ...retiredApplicationRuns.keys()].sort();
+  if (actual.join("\n") !== expected.join("\n")) {
+    fail("split CI jobs no longer cover the historical application steps exactly once");
+  }
+}
+requireApplicationPartition();
+
 const reviewedJobNames = [
   "changes",
-  "application",
+  "quick",
+  "unit",
+  "unit-coverage",
+  "build",
+  "docker-build",
+  "db-roles",
+  "infra-shell-a",
+  "infra-shell-b",
+  "infra-shell-c",
+  "infra-shell-d",
+  "ci-ok",
   "application-images",
   "production-topology",
   "backup-safety",
   "backup-production-e2e",
   "runner",
   "postgres-integration",
+  "integration-mail-races",
   "curriculum-runtime",
   "auth-browser",
   "browser",
@@ -1101,6 +1285,162 @@ function runtimeEvidenceUploadProjection(artifactName) {
 const canonicalPostgresProjection = projectPostgresCiProjectionContract(
   postgresCiProjectionThrough0069,
 );
+
+// Files excluded from unit coverage are exercised only by the PostgreSQL
+// integration gate, so every one of them must trigger that gate on PRs.
+const integrationOnlyCoverageFiles = [
+  "src/lib/daily-review/service.ts",
+  "src/lib/learning-service/drizzle-store.ts",
+  "src/lib/community/service.ts",
+  "src/lib/curriculum-publication/admin-service.ts",
+  "src/lib/career/service.ts",
+  "src/lib/projects/module-project-service.ts",
+];
+const databasePathFilterProjection = [
+  "            database-paths:",
+  "              - .github/workflows/ci.yml",
+  "              - package.json",
+  "              - package-lock.json",
+  "              - compose.yaml",
+  "              - drizzle/**",
+  "              - integration/**",
+  "              - vitest.integration.config.ts",
+  "              - scripts/**",
+  "              - infra/**",
+  "              - src/lib/db/**",
+  "              - src/lib/notifications/**",
+  "              - src/lib/*notifications.ts",
+  ...integrationOnlyCoverageFiles.map((file) => `              - ${file}`),
+];
+function requireIntegrationOnlyFilesGateDatabase() {
+  const vitestConfig = readFileSync(resolve(repoRoot, "vitest.config.ts"), "utf8");
+  const excludeBlock = /coverage:\s*\{[\s\S]*?exclude:\s*\[([\s\S]*?)\]/u.exec(
+    vitestConfig,
+  )?.[1];
+  if (excludeBlock === undefined) {
+    fail("vitest.config.ts coverage.exclude list is missing");
+  }
+  const excluded = [...excludeBlock.matchAll(/"([^"]+)"/gu)]
+    .map((match) => match[1])
+    .filter((file) => !file.startsWith("src/lib/db/"))
+    .sort();
+  if (excluded.join("\n") !== [...integrationOnlyCoverageFiles].sort().join("\n")) {
+    fail("every unit-coverage exclusion must be listed in the database path gate");
+  }
+}
+requireIntegrationOnlyFilesGateDatabase();
+
+const reviewedDatabaseGateLines = [...postgresCiRuntimePolicy.databaseGateLines];
+const mailRacesIntegrationFile =
+  "integration/mail-delivery-races.integration.test.ts";
+if (
+  postgresCiRuntimePolicy.mailRacesIntegrationCommand !==
+    `npm run test:integration -- ${mailRacesIntegrationFile}` ||
+  !postgresCiRuntimePolicy.livePg17IntegrationCommand.includes(
+    `! -name ${mailRacesIntegrationFile.slice("integration/".length)} `,
+  )
+) {
+  fail("the integration split must run the race suite exactly once, in its own job");
+}
+readFileSync(resolve(repoRoot, mailRacesIntegrationFile), "utf8");
+
+const rootNodeInstallProjection = [`      - run: ${rootNodeInstallRun}`];
+const playwrightCacheProjection = (suffix) => [
+  "      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0",
+  "        with:",
+  "          path: ~/.cache/ms-playwright",
+  `          key: playwright-\${{ runner.os }}-\${{ hashFiles('package-lock.json') }}-${suffix}`,
+];
+const trivyCacheProjection = (directory) => [
+  '      - run: echo "day=$(date -u +%F)" >> "$GITHUB_OUTPUT"',
+  "        id: trivy-day",
+  "      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0",
+  "        with:",
+  `          path: \${{ runner.temp }}/${directory}`,
+  "          key: trivy-db-v0.69.3-${{ steps.trivy-day.outputs.day }}",
+];
+const infraGateLines = [
+  "    needs: changes",
+  "    if: needs.changes.outputs.infra == 'true'",
+];
+const partitionRuns = (job) =>
+  applicationPartition.get(job).map((command) => `      - run: ${command}`);
+const infraShellPrelude = [
+  ...setupNodeProjection,
+  ...rootNodeInstallProjection,
+  "      - run: npm ci",
+];
+const ciOkNeeds = [
+  "changes",
+  "quick",
+  "unit",
+  "unit-coverage",
+  "build",
+  "docker-build",
+  "db-roles",
+  "infra-shell-a",
+  "infra-shell-b",
+  "infra-shell-c",
+  "infra-shell-d",
+  "production-topology",
+  "application-images",
+  "backup-safety",
+  "backup-production-e2e",
+  "runner",
+  "postgres-integration",
+  "integration-mail-races",
+  "curriculum-runtime",
+  "auth-browser",
+  "browser",
+];
+const ciOkScript = [
+  "      - run: |",
+  "          set -Eeuo pipefail",
+  "          gate_of() {",
+  '            case "$1" in',
+  "              infra-shell-a|infra-shell-b|infra-shell-c|infra-shell-d) echo infra ;;",
+  "              production-topology) echo topology ;;",
+  "              application-images) echo images ;;",
+  "              runner) echo runner ;;",
+  "              curriculum-runtime) echo curriculum ;;",
+  "              auth-browser|browser) echo browser ;;",
+  "              postgres-integration|integration-mail-races) echo database ;;",
+  "              *) echo '' ;;",
+  "            esac",
+  "          }",
+  "          status=0",
+  "          while IFS=$'\\t' read -r job result; do",
+  '            if [[ "$result" == success ]]; then',
+  "              continue",
+  "            fi",
+  '            if [[ "$result" == skipped ]]; then',
+  '              if [[ "$job" == backup-safety || "$job" == backup-production-e2e ]]; then',
+  '                echo "$job is parked (if: false)"',
+  "                continue",
+  "              fi",
+  '              gate="$(gate_of "$job")"',
+  `              if [[ -n "$gate" && "$(jq -r --arg gate "$gate" '.changes.outputs[$gate] // ""' <<<"$NEEDS_JSON")" == false ]]; then`,
+  '                echo "$job skipped: its $gate path filter is false"',
+  "                continue",
+  "              fi",
+  "            fi",
+  '            echo "::error::$job finished as $result"',
+  "            status=1",
+  "          done < <(jq -r 'to_entries[] | [.key, .value.result] | @tsv' <<<\"$NEEDS_JSON\")",
+  '          exit "$status"',
+  "        env:",
+  "          NEEDS_JSON: ${{ toJSON(needs) }}",
+];
+// ci-ok is the single required check, so it must depend on every other job.
+if (
+  [...ciOkNeeds].sort().join("\n") !==
+  reviewedJobNames.filter((name) => name !== "ci-ok").sort().join("\n")
+) {
+  fail("ci-ok must need every reviewed CI job");
+}
+const browserMatrixInclude =
+  `        include: \${{ fromJSON(github.event_name == 'pull_request' && '[{"project":"chromium","browser":"chromium","shard":"1/3"},{"project":"chromium","browser":"chromium","shard":"2/3"},{"project":"chromium","browser":"chromium","shard":"3/3"}]' || '[{"project":"chromium","browser":"chromium","shard":"1/3"},{"project":"chromium","browser":"chromium","shard":"2/3"},{"project":"chromium","browser":"chromium","shard":"3/3"},{"project":"firefox","browser":"firefox","shard":"1/1"},{"project":"webkit","browser":"webkit","shard":"1/1"},{"project":"tablet-safari","browser":"webkit","shard":"1/1"},{"project":"small-mobile","browser":"webkit","shard":"1/1"},{"project":"mobile-safari","browser":"webkit","shard":"1/1"}]') }}`;
+
 const reviewedJobContracts = new Map([
   [
     "changes",
@@ -1117,6 +1457,8 @@ const reviewedJobContracts = new Map([
       "      images: ${{ github.event_name != 'pull_request' || steps.filter.outputs['images-paths'] == 'true' }}",
       "      backup: ${{ github.event_name != 'pull_request' || steps.filter.outputs['backup-paths'] == 'true' }}",
       "      topology: ${{ github.event_name != 'pull_request' || steps.filter.outputs['topology-paths'] == 'true' }}",
+      "      infra: ${{ github.event_name != 'pull_request' || steps.filter.outputs['infra-paths'] == 'true' }}",
+      "      database: ${{ github.event_name != 'pull_request' || steps.filter.outputs['database-paths'] == 'true' }}",
       "    steps:",
       "      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3",
       "        id: filter",
@@ -1145,7 +1487,7 @@ const reviewedJobContracts = new Map([
       "              - services/runner/**",
       "              - content/**",
       "              - scripts/**",
-      "              - src/lib/**",
+      "              - src/lib/content/**",
       "              - docs/evidence/**",
       "            images-paths:",
       "              - .github/workflows/ci.yml",
@@ -1153,11 +1495,7 @@ const reviewedJobContracts = new Map([
       "              - package-lock.json",
       "              - Dockerfile",
       "              - .dockerignore",
-      "              - src/**",
-      "              - scripts/**",
-      "              - drizzle/**",
-      "              - content/**",
-      "              - public/**",
+      "              - scripts/app-images/**",
       "              - infra/docker/**",
       "              - next.config.*",
       "            backup-paths:",
@@ -1173,17 +1511,187 @@ const reviewedJobContracts = new Map([
       "              - drizzle/**",
       "              - scripts/**",
       "              - infra/**",
+      "            infra-paths:",
+      "              - .github/workflows/**",
+      "              - package.json",
+      "              - package-lock.json",
+      "              - compose.yaml",
+      "              - Dockerfile",
+      "              - scripts/**",
+      "              - infra/**",
+      ...databasePathFilterProjection,
     ],
   ],
   [
-    "application",
+    "quick",
     [
       "    runs-on: ubuntu-24.04",
-      "    timeout-minutes: 70",
+      "    timeout-minutes: 20",
       "    steps:",
       ...applicationCheckoutProjection,
       ...setupNodeProjection,
-      ...expectedApplicationRuns.map((command) => `      - run: ${command}`),
+      ...rootNodeInstallProjection,
+      "      - run: npm ci",
+      ...partitionRuns("quick"),
+    ],
+  ],
+  [
+    "unit",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 20",
+      "    strategy:",
+      "      fail-fast: false",
+      "      matrix:",
+      "        shard: [1, 2, 3, 4, 5, 6]",
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      `      - run: ${unitShardRun}`,
+      "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2",
+      "        with:",
+      "          name: unit-blob-${{ matrix.shard }}",
+      "          path: .vitest-reports/",
+      "          if-no-files-found: error",
+      "          include-hidden-files: true",
+      "          retention-days: 1",
+    ],
+  ],
+  [
+    "unit-coverage",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 15",
+      "    needs: unit",
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      "      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0",
+      "        with:",
+      "          pattern: unit-blob-*",
+      "          path: .vitest-reports",
+      "          merge-multiple: true",
+      `      - run: ${unitCoverageMergeRun}`,
+    ],
+  ],
+  [
+    "build",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 20",
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      ...partitionRuns("build"),
+    ],
+  ],
+  [
+    "docker-build",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      "    steps:",
+      ...checkoutProjection,
+      `      - run: ${reviewedDockerEngineRun}`,
+      ...partitionRuns("docker-build"),
+    ],
+  ],
+  [
+    "db-roles",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 20",
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      ...partitionRuns("db-roles"),
+    ],
+  ],
+  [
+    "infra-shell-a",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      ...infraGateLines,
+      "    steps:",
+      ...checkoutProjection,
+      ...infraShellPrelude,
+      ...infraAptRuns.map((command) => `      - run: ${command}`),
+      ...partitionRuns("infra-shell-a"),
+    ],
+  ],
+  [
+    "infra-shell-b",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      ...infraGateLines,
+      "    steps:",
+      ...applicationCheckoutProjection,
+      ...infraShellPrelude,
+      ...infraAptRuns.map((command) => `      - run: ${command}`),
+      ...partitionRuns("infra-shell-b").slice(0, 2),
+      `      - run: ${reviewedDockerEngineRun}`,
+      ...partitionRuns("infra-shell-b").slice(2),
+    ],
+  ],
+  [
+    "infra-shell-c",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      ...infraGateLines,
+      "    steps:",
+      ...checkoutProjection,
+      ...infraShellPrelude,
+      ...partitionRuns("infra-shell-c").slice(0, 4),
+      ...infraAptRuns.map((command) => `      - run: ${command}`),
+      ...partitionRuns("infra-shell-c").slice(4, -1),
+      `      - run: ${reviewedDockerEngineRun}`,
+      ...partitionRuns("infra-shell-c").slice(-1),
+    ],
+  ],
+  [
+    "infra-shell-d",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      ...infraGateLines,
+      "    steps:",
+      ...checkoutProjection,
+      ...infraShellPrelude,
+      ...infraAptRuns.map((command) => `      - run: ${command}`),
+      `      - run: ${reviewedDockerEngineRun}`,
+      ...partitionRuns("infra-shell-d"),
+    ],
+  ],
+  [
+    "integration-mail-races",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      ...reviewedDatabaseGateLines,
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      `      - run: ${postgresCiRuntimePolicy.mailRacesIntegrationCommand}`,
+    ],
+  ],
+  [
+    "ci-ok",
+    [
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 5",
+      "    needs:",
+      ...ciOkNeeds.map((job) => `      - ${job}`),
+      "    if: always()",
+      "    steps:",
+      ...ciOkScript,
     ],
   ],
   [
@@ -1208,6 +1716,7 @@ const reviewedJobContracts = new Map([
       "      - run: npm run app-images:test",
       "      - run: npm run app-images:build",
       "      - run: npm run app-images:inspect",
+      ...trivyCacheProjection("application-image-trivy-cache"),
       ...applicationImageTrivyProjection,
       "      - run: npm run app-images:scan",
       "      - run: npm run app-images:record",
@@ -1297,6 +1806,7 @@ const reviewedJobContracts = new Map([
       "      - run: npm run runtime:build",
       "      - run: npm run runtime:inspect",
       "      - run: npm run runtime:test",
+      ...trivyCacheProjection("trivy-cache"),
       ...trivySetupProjection,
       "      - run: npm run runtime:scan",
       "      - run: npm run runtime:record",
@@ -1309,6 +1819,7 @@ const reviewedJobContracts = new Map([
     [
       canonicalPostgresProjection.runnerLine,
       canonicalPostgresProjection.timeoutLine,
+      ...reviewedDatabaseGateLines,
       "    steps:",
       ...checkoutProjection,
       ...setupNodeProjection,
@@ -1379,12 +1890,14 @@ const reviewedJobContracts = new Map([
       "        working-directory: services/runner",
       "      - run: npm run runtime:test",
       "        working-directory: services/runner",
+      ...trivyCacheProjection("trivy-cache"),
       ...trivySetupProjection,
       "      - run: npm run runtime:scan",
       "        working-directory: services/runner",
       "      - run: npm run runtime:record",
       "        working-directory: services/runner",
       "      - run: npm run curriculum:runtime-pins:check",
+      ...playwrightCacheProjection("chromium"),
       "      - run: npx playwright install --with-deps chromium",
       "      - run: npm run dsa:parity:verify",
       "      - run: npm run dsa:parity:evidence:apply",
@@ -1423,8 +1936,13 @@ const reviewedJobContracts = new Map([
       ...checkoutProjection,
       ...setupNodeProjection,
       "      - run: npm ci",
-      "      - run: npx playwright install --with-deps chromium firefox webkit",
+      ...playwrightCacheProjection(
+        "${{ github.event_name == 'pull_request' && 'chromium' || 'chromium-firefox-webkit' }}",
+      ),
+      "      - run: npx playwright install --with-deps ${{ github.event_name == 'pull_request' && 'chromium' || 'chromium firefox webkit' }}",
       "      - run: npm run test:browser:auth",
+      "        env:",
+      "          BROWSER_DURABILITY_PROFILES: ${{ github.event_name == 'pull_request' && 'chromium' || '' }}",
     ],
   ],
   [
@@ -1437,26 +1955,15 @@ const reviewedJobContracts = new Map([
       "    strategy:",
       "      fail-fast: false",
       "      matrix:",
-      "        include:",
-      "          - project: chromium",
-      "            browser: chromium",
-      "          - project: firefox",
-      "            browser: firefox",
-      "          - project: webkit",
-      "            browser: webkit",
-      "          - project: tablet-safari",
-      "            browser: webkit",
-      "          - project: small-mobile",
-      "            browser: webkit",
-      "          - project: mobile-safari",
-      "            browser: webkit",
+      browserMatrixInclude,
       "    steps:",
       ...checkoutProjection,
       ...setupNodeProjection,
       "      - run: npm ci",
+      ...playwrightCacheProjection("${{ matrix.browser }}"),
       "      - run: npx playwright install --with-deps ${{ matrix.browser }}",
       "      - run: npm run sync:monaco",
-      "      - run: npm run test:e2e -- --project=${{ matrix.project }}",
+      "      - run: npm run test:e2e -- --project=${{ matrix.project }} --shard=${{ matrix.shard }}",
     ],
   ],
 ]);
@@ -1975,7 +2482,7 @@ function withApplicationRun(document, command) {
 }
 
 function withApplicationJobLine(document, line) {
-  const anchor = "  application:\n";
+  const anchor = "  quick:\n";
   return replaceExactly(document, anchor, `${anchor}${line}\n`);
 }
 
@@ -2214,12 +2721,12 @@ function runAdversarialSelfTests(document) {
   );
   expectRejected(
     "production e2e without the reviewed Docker Engine",
-    // Anchored on the job checkout: the application job runs the same installer,
-    // and only the production e2e job copy is removed here.
+    // Anchored on the job header and checkout: docker-build and the infra-shell
+    // jobs run the same installer, and only the production e2e copy is removed.
     replaceExactly(
       document,
-      `${productionCheckout}\n${productionEngineStep}\n`,
-      `${productionCheckout}\n`,
+      `${productionStepsAnchor}${productionCheckout}\n${productionEngineStep}\n`,
+      `${productionStepsAnchor}${productionCheckout}\n`,
     ),
   );
   expectRejected(
@@ -2242,24 +2749,24 @@ function runAdversarialSelfTests(document) {
     "production e2e checkout credentials persistence enabled",
     replaceExactly(
       document,
-      `${productionCheckout}\n${productionEngineStep}`,
-      `${checkoutStep}\n        with:\n          persist-credentials: true\n${productionEngineStep}`,
+      `${productionStepsAnchor}${productionCheckout}\n${productionEngineStep}`,
+      `${productionStepsAnchor}${checkoutStep}\n        with:\n          persist-credentials: true\n${productionEngineStep}`,
     ),
   );
   expectRejected(
     "production e2e checkout credentials setting missing",
     replaceExactly(
       document,
-      `${productionCheckout}\n${productionEngineStep}`,
-      `${checkoutStep}\n${productionEngineStep}`,
+      `${productionStepsAnchor}${productionCheckout}\n${productionEngineStep}`,
+      `${productionStepsAnchor}${checkoutStep}\n${productionEngineStep}`,
     ),
   );
   expectRejected(
     "production e2e checkout extra properties",
     replaceExactly(
       document,
-      `${productionCheckout}\n${productionEngineStep}`,
-      `${productionCheckout}\n          fetch-depth: 0\n${productionEngineStep}`,
+      `${productionStepsAnchor}${productionCheckout}\n${productionEngineStep}`,
+      `${productionStepsAnchor}${productionCheckout}\n          fetch-depth: 0\n${productionEngineStep}`,
     ),
   );
   for (const indicator of ["|", "|-", "|+", ">", ">-", ">+"]) {
@@ -2348,8 +2855,8 @@ function runAdversarialSelfTests(document) {
     "browser step environment",
     replaceExactly(
       document,
-      "      - run: npm run test:e2e -- --project=${{ matrix.project }}\n",
-      "      - run: npm run test:e2e -- --project=${{ matrix.project }}\n        env:\n          CODESTEAD_DISPOSABLE_HOST: 1\n",
+      "      - run: npm run test:e2e -- --project=${{ matrix.project }} --shard=${{ matrix.shard }}\n",
+      "      - run: npm run test:e2e -- --project=${{ matrix.project }} --shard=${{ matrix.shard }}\n        env:\n          CODESTEAD_DISPOSABLE_HOST: 1\n",
     ),
     "browser executable contract changed",
   );

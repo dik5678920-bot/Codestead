@@ -133,7 +133,7 @@ export function assertBackupCiApplicationCrossGuard(applicationProjection) {
     {
       expectedJobProperties: [
         "    runs-on: ubuntu-24.04",
-        "    timeout-minutes: 70",
+        "    timeout-minutes: 20",
         "    steps:",
       ],
       allowedStepProperties: ["with:"],
@@ -184,6 +184,8 @@ export function assertMailGuardedDelivery0069PostgresProjection(
       expectedJobProperties: [
         "    runs-on: ubuntu-24.04",
         "    timeout-minutes: 35",
+        "    needs: changes",
+        "    if: needs.changes.outputs.database == 'true'",
         "    steps:",
       ],
       allowedStepProperties: ["with:", "run: |"],

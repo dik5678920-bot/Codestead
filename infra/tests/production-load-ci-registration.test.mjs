@@ -102,19 +102,44 @@ function validatePackageManifest(source) {
   }
 }
 
+// The split CI runs the four portable gates in `quick` on every pull request and
+// the four host-runtime gates in `infra-shell-c` (infra path changes on pull
+// requests; always on main, nightly and dispatch). Each half stays ordered.
+const portableCiCommands = ciCommands.slice(0, 4);
+const hostCiCommands = ciCommands.slice(4);
+const commandBlock = (commands) =>
+  commands.map((command) => `      - run: ${command}`).join("\n");
+
+function jobBlock(source, name) {
+  return source.match(
+    new RegExp(`^  ${name}:\\n([\\s\\S]*?)(?=^  [a-z][a-z0-9-]*:\\n|(?![\\s\\S]))`, "m"),
+  )?.[0] ?? "";
+}
+
 function validateWorkflow(source) {
-  const block = ciCommands.map((command) => `      - run: ${command}`).join("\n");
-  exactlyOnce(source, block, "security gates are missing, duplicated, or reordered");
+  const portableBlock = commandBlock(portableCiCommands);
+  const hostBlock = commandBlock(hostCiCommands);
+  exactlyOnce(source, portableBlock, "security gates are missing, duplicated, or reordered");
+  exactlyOnce(source, hostBlock, "host security gates are missing, duplicated, or reordered");
   for (const command of ciCommands) {
     exactlyOnce(source, `      - run: ${command}`, `CI command is ambiguous: ${command}`);
   }
-  const application = source.match(/^  application:\n([\s\S]*?)(?=^  [a-z][a-z0-9-]*:\n)/m)?.[0] ?? "";
-  if (!application.includes("    runs-on: ubuntu-24.04\n")) {
-    fail("security gates are not bound to the Ubuntu application job");
+  const quick = jobBlock(source, "quick");
+  if (!quick.includes("    runs-on: ubuntu-24.04\n")) {
+    fail("security gates are not bound to the Ubuntu quick job");
   }
-  if (application.indexOf(block) <= application.indexOf("      - run: npm ci\n")
-    || application.indexOf(block) >= application.indexOf("      - run: npm run lint\n")) {
+  if (quick.indexOf(portableBlock) <= quick.indexOf("      - run: npm ci\n")
+    || quick.indexOf(portableBlock) >= quick.indexOf("      - run: npm run lint\n")) {
     fail("security gates must run immediately after install and before whole-tree lint");
+  }
+  const hostJob = jobBlock(source, "infra-shell-c");
+  if (!hostJob.includes("    runs-on: ubuntu-24.04\n")
+    || !hostJob.includes("    if: needs.changes.outputs.infra == 'true'\n")) {
+    fail("host security gates are not bound to the reviewed infra-shell-c job");
+  }
+  if (hostJob.indexOf(hostBlock) <= hostJob.indexOf("      - run: npm ci\n")
+    || hostJob.indexOf(hostBlock) >= hostJob.indexOf("      - run: sudo apt-get update\n")) {
+    fail("host security gates must run immediately after install");
   }
   const shellcheckLine = source.split("\n").find((line) =>
     line.includes("shellcheck --severity=warning ")) ?? "";
@@ -306,8 +331,16 @@ assert.throws(
 assert.throws(
   () => validateWorkflow(replaceExactly(
     workflowSource,
-    ciCommands.map((command) => `      - run: ${command}`).join("\n"),
-    [...ciCommands].reverse().map((command) => `      - run: ${command}`).join("\n"),
+    commandBlock(portableCiCommands),
+    commandBlock([...portableCiCommands].reverse()),
+  )),
+  RegistrationError,
+);
+assert.throws(
+  () => validateWorkflow(replaceExactly(
+    workflowSource,
+    commandBlock(hostCiCommands),
+    commandBlock([...hostCiCommands].reverse()),
   )),
   RegistrationError,
 );

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import {
   assertPostgresCiProjectionContract,
+  assertReviewedPostgresDatabaseGate,
   composeCanonicalPostgresCiProjectionContract,
   definePostgresCiProjectionExtension,
 } from "./mail-retention-redaction-0063-ci-contract.mjs";
@@ -48,10 +49,9 @@ export function assertMailDispatchBinding0064PostgresProjection(
     /^    runs-on: ubuntu-24\.04$/mu,
     "the 0064 gates must remain in the Ubuntu PostgreSQL integration job",
   );
-  assert.doesNotMatch(
+  assertReviewedPostgresDatabaseGate(
     postgresProjection,
-    /^    (?:if|needs):/mu,
-    "the PostgreSQL integration job must remain unconditional",
+    "the PostgreSQL integration job",
   );
   assert.doesNotMatch(
     postgresProjection,

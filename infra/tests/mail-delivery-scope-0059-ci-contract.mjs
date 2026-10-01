@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { assertReviewedPostgresDatabaseGate } from "./mail-retention-redaction-0063-ci-contract.mjs";
 
 const registrationScript = "test:mail-delivery-scope-0059:registration";
 const harnessScript = "test:mail-delivery-scope-0059";
@@ -11,10 +12,9 @@ export function assertMailDeliveryScope0059PostgresProjection(
     /^    runs-on: ubuntu-24\.04$/mu,
     "the mail-scope gate must remain in the Ubuntu PostgreSQL integration job",
   );
-  assert.doesNotMatch(
+  assertReviewedPostgresDatabaseGate(
     postgresProjection,
-    /^    (?:if|needs):/mu,
-    "the PostgreSQL integration job must remain an unconditional independent gate",
+    "the PostgreSQL integration job",
   );
   assert.doesNotMatch(
     postgresProjection,
