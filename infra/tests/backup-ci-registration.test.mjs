@@ -1233,9 +1233,7 @@ const topologyDockerProjection = [
   '          [[ -z "$container_ids" ]]',
 ];
 const trivySetupProjection = [
-  "      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6",
-  "        with:",
-  "          version: v0.69.3",
+  "      - run: bash scripts/ci/install-trivy.sh",
   '      - run: trivy image --cache-dir "$RUNTIME_TRIVY_CACHE_DIR" --download-db-only',
   '      - run: trivy image --cache-dir "$RUNTIME_TRIVY_CACHE_DIR" --download-java-db-only',
 ];
@@ -1247,9 +1245,7 @@ function runnerCacheInitializationProjection(variable, suffix) {
   ];
 }
 const applicationImageTrivyProjection = [
-  "      - uses: aquasecurity/setup-trivy@3fb12ec12f41e471780db15c232d5dd185dcb514 # v0.2.6",
-  "        with:",
-  "          version: v0.69.3",
+  "      - run: bash scripts/ci/install-trivy.sh",
   '      - run: trivy image --cache-dir "$APP_IMAGE_TRIVY_CACHE_DIR" --download-db-only',
   '      - run: trivy image --cache-dir "$APP_IMAGE_TRIVY_CACHE_DIR" --download-java-db-only',
 ];
