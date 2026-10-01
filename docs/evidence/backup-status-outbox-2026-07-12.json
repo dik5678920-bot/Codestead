@@ -105,7 +105,7 @@
   "sourceHashes": [
     {
       "path": "scripts/backup/common.sh",
-      "sha256": "4a41eacd95beebab9cb7ac035b776f30b70710a6706bebe482d9f013829241fe"
+      "sha256": "1fdc86e957a5523da851faa63fecc05e9b9c339931224282c4b53a1d05cafd49"
     },
     {
       "path": "scripts/backup/backup.sh",
@@ -141,7 +141,7 @@
     },
     {
       "path": "scripts/lib/reviewed-migration-ledger.mjs",
-      "sha256": "c6196ca09009a192534fb99b53ffb59fac453e8b652c36f05dfb08cc9e64260e"
+      "sha256": "b472f3384219f0490423b043e2078fd5d5afedd2480cb65837a9c79525fbfef2"
     },
     {
       "path": "scripts/migrate-production.mjs",
@@ -461,7 +461,7 @@
       {
         "path": "scripts/backup/common.sh",
         "previousSha256": "78d5dd6f317e2b54b468efa08a9eef39a310484f7274bb744e5e79b79eafa01c",
-        "sha256": "4a41eacd95beebab9cb7ac035b776f30b70710a6706bebe482d9f013829241fe"
+        "sha256": "1fdc86e957a5523da851faa63fecc05e9b9c339931224282c4b53a1d05cafd49"
       },
       {
         "path": "drizzle/meta/_journal.json",
@@ -471,7 +471,7 @@
       {
         "path": "scripts/lib/reviewed-migration-ledger.mjs",
         "previousSha256": "ea6edf83dd8ee770013a4be83b6bd9806b08f63e083d449926b6423bd648acd3",
-        "sha256": "c6196ca09009a192534fb99b53ffb59fac453e8b652c36f05dfb08cc9e64260e"
+        "sha256": "b472f3384219f0490423b043e2078fd5d5afedd2480cb65837a9c79525fbfef2"
       },
       {
         "path": "infra/tests/backup-ci-registration.test.mjs",
@@ -502,6 +502,35 @@
         "path": "infra/tests/backup-ci-registration.test.mjs",
         "previousDigest": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc",
         "currentDigest": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
+      }
+    ]
+  },
+  "schemaQualificationRefresh": {
+    "scope": "Current-source bindings and current 0070 migration identity only. Historical results are preserved; restricted-migrator verification is recorded separately.",
+    "changes": [
+      {
+        "field": "/sourceHashes/0/sha256",
+        "artifact": "scripts/backup/common.sh",
+        "previousDigest": "4a41eacd95beebab9cb7ac035b776f30b70710a6706bebe482d9f013829241fe",
+        "currentDigest": "1fdc86e957a5523da851faa63fecc05e9b9c339931224282c4b53a1d05cafd49"
+      },
+      {
+        "field": "/sourceHashes/9/sha256",
+        "artifact": "scripts/lib/reviewed-migration-ledger.mjs",
+        "previousDigest": "c6196ca09009a192534fb99b53ffb59fac453e8b652c36f05dfb08cc9e64260e",
+        "currentDigest": "b472f3384219f0490423b043e2078fd5d5afedd2480cb65837a9c79525fbfef2"
+      },
+      {
+        "field": "/artifactBindingRefresh/changes/0/sha256",
+        "artifact": "scripts/backup/common.sh",
+        "previousDigest": "4a41eacd95beebab9cb7ac035b776f30b70710a6706bebe482d9f013829241fe",
+        "currentDigest": "1fdc86e957a5523da851faa63fecc05e9b9c339931224282c4b53a1d05cafd49"
+      },
+      {
+        "field": "/artifactBindingRefresh/changes/2/sha256",
+        "artifact": "scripts/lib/reviewed-migration-ledger.mjs",
+        "previousDigest": "c6196ca09009a192534fb99b53ffb59fac453e8b652c36f05dfb08cc9e64260e",
+        "currentDigest": "b472f3384219f0490423b043e2078fd5d5afedd2480cb65837a9c79525fbfef2"
       }
     ]
   }
