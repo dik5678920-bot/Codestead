@@ -1,7 +1,8 @@
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { access, readFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import { TextDecoder } from "node:util";
+import { TextDecoder, promisify } from "node:util";
 
 import { DSA_PARITY_LANGUAGES } from "../../src/lib/content/dsa-parity";
 
@@ -13,7 +14,10 @@ export type EvidenceIntegrityIssueKind =
   | "STALE_HASH"
   | "INVALID_SOURCE_DECLARATION"
   | "INVALID_RUNTIME_DECLARATION"
-  | "STALE_RUNTIME_DIGEST";
+  | "STALE_RUNTIME_DIGEST"
+  | "INVALID_SOURCE_COMMIT"
+  | "SOURCE_COMMIT_UNAVAILABLE"
+  | "SOURCE_COMMIT_NOT_ANCESTOR";
 
 export type EvidenceIntegrityIssue = Readonly<{
   kind: EvidenceIntegrityIssueKind;
@@ -179,7 +183,10 @@ async function exists(target: string) {
 }
 
 async function digests(target: string) {
-  const bytes = await readFile(target);
+  return digestsOf(target, await readFile(target));
+}
+
+function digestsOf(target: string, bytes: Buffer) {
   const raw = sha256(bytes);
   const canonical = canonicalCrLfDigest(target, bytes);
   return {
@@ -282,6 +289,40 @@ async function verifyMarkdown(
   return { files: files.length, links: checked };
 }
 
+const execFileAsync = promisify(execFile);
+const sourceCommitPattern = /^[0-9a-f]{40}$/;
+
+// A historical record may declare `sourceCommit`, the commit its proof ran
+// against. Its path pins are then checked against that commit's blobs instead
+// of the working tree, so later edits to the pinned files do not make the
+// record stale. The commit must exist locally and be an ancestor of HEAD;
+// anything else fails closed.
+async function git(root: string, args: readonly string[]) {
+  return execFileAsync("git", ["-C", root, ...args], {
+    encoding: "buffer",
+    maxBuffer: 256 * 1024 * 1024,
+    env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_TERMINAL_PROMPT: "0" },
+  });
+}
+
+async function gitSucceeds(root: string, args: readonly string[]) {
+  try {
+    await git(root, args);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function isRepositoryRoot(root: string) {
+  try {
+    const { stdout } = await git(root, ["rev-parse", "--show-toplevel"]);
+    return path.resolve(stdout.toString("utf8").trim()) === path.resolve(root);
+  } catch {
+    return false;
+  }
+}
+
 async function verifyEvidence(
   root: string,
   evidenceRoot: string,
@@ -302,68 +343,127 @@ async function verifyEvidence(
     return true;
   }
 
-  async function checkPath(source: string, value: string) {
+  const sourceCommitStatus = new Map<string, Promise<EvidenceIntegrityIssueKind | null>>();
+  let repositoryRoot: Promise<boolean> | undefined;
+
+  function resolveSourceCommit(commit: string) {
+    let status = sourceCommitStatus.get(commit);
+    if (!status) {
+      status = (async (): Promise<EvidenceIntegrityIssueKind | null> => {
+        repositoryRoot ??= isRepositoryRoot(root);
+        if (!await repositoryRoot) return "SOURCE_COMMIT_UNAVAILABLE";
+        if (!await gitSucceeds(root, ["cat-file", "-e", `${commit}^{commit}`])) return "SOURCE_COMMIT_UNAVAILABLE";
+        if (!await gitSucceeds(root, ["merge-base", "--is-ancestor", commit, "HEAD"])) return "SOURCE_COMMIT_NOT_ANCESTOR";
+        return null;
+      })();
+      sourceCommitStatus.set(commit, status);
+    }
+    return status;
+  }
+
+  // undefined: the record declares an unusable anchor and an issue was reported.
+  async function sourceCommitOf(source: string, value: unknown): Promise<string | null | undefined> {
+    if (!value || typeof value !== "object" || Array.isArray(value) || !Object.hasOwn(value, "sourceCommit")) {
+      return null;
+    }
+    const commit = (value as Record<string, unknown>).sourceCommit;
+    if (typeof commit !== "string" || !sourceCommitPattern.test(commit)) {
+      issues.push({ kind: "INVALID_SOURCE_COMMIT", source, detail: "sourceCommit must be a full lowercase 40-hex commit id" });
+      return undefined;
+    }
+    const failure = await resolveSourceCommit(commit);
+    if (failure === "SOURCE_COMMIT_UNAVAILABLE") {
+      issues.push({ kind: failure, source, detail: `${commit} is not available; fetch full history (fetch-depth: 0)` });
+      return undefined;
+    }
+    if (failure) {
+      issues.push({ kind: failure, source, detail: `${commit} is not an ancestor of HEAD` });
+      return undefined;
+    }
+    return commit;
+  }
+
+  async function anchoredBlob(commit: string, candidate: string) {
+    if (!await gitSucceeds(root, ["cat-file", "-e", `${commit}:${candidate}`])) return null;
+    return (await git(root, ["cat-file", "blob", `${commit}:${candidate}`])).stdout;
+  }
+
+  async function checkPath(source: string, value: string, commit: string | null) {
     if (rejectTraversal(source, value)) return;
     const candidate = repositoryPath(root, value);
     if (!candidate) return;
     const key = `${source}\0${candidate}`;
     if (checkedPaths.has(key)) return;
     checkedPaths.add(key);
-    if (!await exists(path.join(root, candidate))) {
-      issues.push({ kind: "MISSING_EVIDENCE_PATH", source, detail: candidate });
+    const present = commit
+      ? await gitSucceeds(root, ["cat-file", "-e", `${commit}:${candidate}`])
+      : await exists(path.join(root, candidate));
+    if (!present) {
+      issues.push({ kind: "MISSING_EVIDENCE_PATH", source, detail: commit ? `${candidate}@${commit}` : candidate });
     }
   }
 
-  async function checkHash(source: string, value: string, expected: string) {
+  async function checkHash(source: string, value: string, expected: string, commit: string | null) {
     if (rejectTraversal(source, value)) return;
     const candidate = repositoryPath(root, value);
     if (!candidate || !sha256Pattern.test(expected)) return;
-    const key = `${source}\0${candidate}\0${expected.toLowerCase()}`;
+    const key = `${source}\0${candidate}\0${expected.toLowerCase()}\0${commit ?? ""}`;
     if (checkedHashes.has(key)) return;
     checkedHashes.add(key);
     const target = path.join(root, candidate);
-    if (!await exists(target)) {
-      issues.push({ kind: "MISSING_EVIDENCE_PATH", source, detail: candidate });
-      return;
+    const label = commit ? `${candidate}@${commit}` : candidate;
+    let actual: ReturnType<typeof digestsOf>;
+    if (commit) {
+      const blob = await anchoredBlob(commit, candidate);
+      if (!blob) {
+        issues.push({ kind: "MISSING_EVIDENCE_PATH", source, detail: label });
+        return;
+      }
+      actual = digestsOf(target, blob);
+    } else {
+      if (!await exists(target)) {
+        issues.push({ kind: "MISSING_EVIDENCE_PATH", source, detail: label });
+        return;
+      }
+      actual = await digests(target);
     }
-    const actual = await digests(target);
     if (!actual.accepted.has(expected.toLowerCase())) {
       issues.push({
         kind: "STALE_HASH",
         source,
-        detail: `${candidate} expected=${expected.toLowerCase()} actual=${actual.reported}`,
+        detail: `${label} expected=${expected.toLowerCase()} actual=${actual.reported}`,
       });
     }
   }
 
-  async function walk(source: string, value: unknown): Promise<void> {
+  async function walk(source: string, value: unknown, commit: string | null): Promise<void> {
     if (Array.isArray(value)) {
-      for (const item of value) await walk(source, item);
+      for (const item of value) await walk(source, item, commit);
       return;
     }
     if (!value || typeof value !== "object") return;
     const record = value as Record<string, unknown>;
     if (typeof record.path === "string") {
-      await checkPath(source, record.path);
-      if (typeof record.sha256 === "string") await checkHash(source, record.path, record.sha256);
+      await checkPath(source, record.path, commit);
+      if (typeof record.sha256 === "string") await checkHash(source, record.path, record.sha256, commit);
     }
     for (const [key, expected] of Object.entries(record)) {
       if (!key.endsWith("Sha256") || typeof expected !== "string") continue;
       const candidate = record[key.slice(0, -"Sha256".length)];
-      if (typeof candidate === "string") await checkHash(source, candidate, expected);
+      if (typeof candidate === "string") await checkHash(source, candidate, expected, commit);
     }
     for (const key of ["report", "inventory"] as const) {
-      if (typeof record[key] === "string") await checkPath(source, record[key]);
+      if (typeof record[key] === "string") await checkPath(source, record[key], commit);
     }
     for (const key of ["artifactSha256", "sha256"] as const) {
       const hashes = record[key];
       if (hashes && typeof hashes === "object" && !Array.isArray(hashes)) {
         for (const [candidate, expected] of Object.entries(hashes as Record<string, unknown>)) {
-          if (typeof expected === "string") await checkHash(source, candidate, expected);
+          if (typeof expected === "string") await checkHash(source, candidate, expected, commit);
         }
       }
     }
-    for (const child of Object.values(record)) await walk(source, child);
+    for (const child of Object.values(record)) await walk(source, child, commit);
   }
 
   for (const file of files) {
@@ -379,10 +479,12 @@ async function verifyEvidence(
             detail: `Auth recovery evidence must pin ${outboxWorkerPath} in sourceSha256 with a valid sha256 hash.`,
           });
         } else {
-          await checkHash(source, outboxWorkerPath, pinned);
+          // This gate always binds the live worker, even if the record is anchored.
+          await checkHash(source, outboxWorkerPath, pinned, null);
         }
       }
-      await walk(source, value);
+      const commit = await sourceCommitOf(source, value);
+      if (commit !== undefined) await walk(source, value, commit);
     } catch (error) {
       issues.push({
         kind: "INVALID_JSON",
