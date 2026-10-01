@@ -24,8 +24,8 @@ const release = read("infra/ops/release-production.sh");
 const restore = read("scripts/backup/restore-drill-isolated.sh");
 const backupProductionE2e = read("infra/tests/backup-production-e2e.test.sh");
 
-assert.equal(REVIEWED_MIGRATION_LEDGER.length, 70);
-assert.equal(REVIEWED_MIGRATION_LEDGER.at(-1)?.idx, 69);
+assert.equal(REVIEWED_MIGRATION_LEDGER.length, 71);
+assert.equal(REVIEWED_MIGRATION_LEDGER.at(-1)?.idx, 70);
 assert.match(REVIEWED_MIGRATION_LEDGER_SHA256, /^[0-9a-f]{64}$/u);
 assert.equal(
   verifyReviewedMigrationRepository().ledgerSha256,

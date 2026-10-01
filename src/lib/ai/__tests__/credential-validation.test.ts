@@ -62,9 +62,9 @@ describe("provider credential validation", () => {
     expect(JSON.stringify(mocks.values.mock.calls)).not.toContain(base.secret);
   });
 
-  it("returns pending without transmitting a custom provider key when the administrator has not configured one", async () => {
+  it("finishes as unreachable without transmitting an unconfigured custom provider key", async () => {
     const result = await validateProviderCredential({ ...base, provider: "custom_openai_compatible" });
-    expect(result).toEqual({ status: "pending_validation", failureCode: null, model: null });
+    expect(result).toEqual({ status: "unreachable", failureCode: "POLICY", model: null });
     expect(mocks.callProvider).not.toHaveBeenCalled();
     expect(mocks.values).not.toHaveBeenCalled();
   });
@@ -92,7 +92,7 @@ describe("provider credential validation", () => {
       new ProviderError("Rate limited", "RATE_LIMIT", 429),
     );
     await expect(validateProviderCredential(base)).resolves.toMatchObject({
-      status: "rate_limited",
+      status: "unreachable",
       failureCode: "RATE_LIMIT",
     });
     expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({
@@ -102,13 +102,13 @@ describe("provider credential validation", () => {
     expect(JSON.stringify(mocks.values.mock.calls)).not.toContain(base.secret);
   });
 
-  it("keeps transient provider failures pending instead of declaring the key invalid", async () => {
+  it.each(["UNAVAILABLE", "TIMEOUT", "BAD_RESPONSE", "POLICY", "UNKNOWN"] as const)("finishes %s as unreachable with a reason", async (code) => {
     mocks.callProvider.mockRejectedValueOnce(
-      new ProviderError("Temporary outage", "UNAVAILABLE", 503),
+      new ProviderError("Synthetic provider failure", code),
     );
     await expect(validateProviderCredential(base)).resolves.toMatchObject({
-      status: "pending_validation",
-      failureCode: "UNAVAILABLE",
+      status: "unreachable",
+      failureCode: code,
     });
   });
 

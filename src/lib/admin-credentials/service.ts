@@ -224,7 +224,7 @@ async function prepareValidatedChange(
     return {
       validationStatus: validation.status,
       failureCode: validation.failureCode,
-      validatedAt: validation.model ? new Date() : null,
+      validatedAt: new Date(),
       sealed,
     };
   } finally {
@@ -353,12 +353,12 @@ export async function performAdminCredentialOperation(
   }
 
   const correlationId = randomUUID();
-  if (input.action === "test" || input.action === "replace") {
+  if (["test", "replace", "enable"].includes(input.action)) {
     // Provider validation and decryption are external/in-memory effects that
     // cannot be rolled back. Audit and both learner notices must commit first.
     await recordValidationIntent(input, target, correlationId);
   }
-  const prepared = input.action === "test" || input.action === "replace"
+  const prepared = ["test", "replace", "enable"].includes(input.action)
     ? await prepareValidatedChange(input, target)
     : null;
   const now = new Date();
@@ -379,14 +379,12 @@ export async function performAdminCredentialOperation(
         throw new AdminCredentialError("CONCURRENT_CHANGE", "Credential changed during this operation. Refresh and retry.");
       }
       status = "deleted";
-    } else if (input.action === "disable" || input.action === "enable") {
-      const nextStatus = input.action === "disable" ? "disabled" : "pending_validation";
+    } else if (input.action === "disable") {
       const updated = await tx
         .update(providerCredential)
         .set({
-          status: nextStatus,
-          disabledAt: input.action === "disable" ? now : null,
-          ...(input.action === "enable" ? { failureCode: null } : {}),
+          status: "disabled",
+          disabledAt: now,
           updatedAt: now,
         })
         .where(and(eq(providerCredential.id, locked.id), eq(providerCredential.userId, locked.userId)))
@@ -394,7 +392,7 @@ export async function performAdminCredentialOperation(
       if (updated.length !== 1) {
         throw new AdminCredentialError("CONCURRENT_CHANGE", "Credential changed during this operation. Refresh and retry.");
       }
-      status = nextStatus;
+      status = "disabled";
     } else {
       if (!prepared) {
         throw new AdminCredentialError("INVALID_OPERATION", "Credential operation was not prepared safely.");
@@ -420,6 +418,7 @@ export async function performAdminCredentialOperation(
               status: prepared.validationStatus,
               failureCode: prepared.failureCode,
               lastValidatedAt: prepared.validatedAt,
+              ...(input.action === "enable" ? { disabledAt: null } : {}),
               updatedAt: now,
             })
         .where(
@@ -444,7 +443,7 @@ export async function performAdminCredentialOperation(
       resourceId: locked.id,
       reason: input.reason.trim(),
       outcome:
-        prepared && !["active", "pending_validation"].includes(prepared.validationStatus)
+        prepared && prepared.validationStatus !== "active"
           ? "failure"
           : "success",
       correlationId,

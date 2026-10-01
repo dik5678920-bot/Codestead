@@ -119,6 +119,7 @@ export const credentialStatusEnum = pgEnum("credential_status", [
   "active",
   "invalid",
   "rate_limited",
+  "unreachable",
   "disabled",
   "revoked",
 ]);
@@ -659,9 +660,7 @@ export const providerCredential = pgTable(
     authTag: text("auth_tag").notNull(),
     keyVersion: integer("key_version").default(1).notNull(),
     lastFour: text("last_four").notNull(),
-    status: credentialStatusEnum("status")
-      .default("pending_validation")
-      .notNull(),
+    status: credentialStatusEnum("status").default("pending_validation").notNull(),
     isPreferred: boolean("is_preferred").default(false).notNull(),
     lastValidatedAt: timestamp("last_validated_at", { withTimezone: true }),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
@@ -671,6 +670,7 @@ export const providerCredential = pgTable(
   },
   (table) => [
     index("credential_user_provider_idx").on(table.userId, table.provider),
+    uniqueIndex("credential_one_preferred_per_user_idx").on(table.userId).where(sql`${table.isPreferred} = true`),
     check("credential_last_four_length", sql`char_length(${table.lastFour}) = 4`),
   ],
 );
