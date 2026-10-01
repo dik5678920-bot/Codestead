@@ -170,6 +170,49 @@ through the API and `docker logs`.
 - The `RunnerClient` interface stays; a `PistonRunnerClient` implements it and is selected by
   `CODE_RUNNER_PROVIDER=legacy|piston` (default `legacy`).
 
+## Languages and packages
+
+The app supports five languages (`src/app/api/code/run/route.ts`, `services/runner/src/types.ts`).
+There is no in-browser runtime in `src/` today: no Pyodide and no browser JavaScript sandbox. The
+lesson workspace sends every language, Python and JavaScript included, to `/api/code/run`, so all of
+them reach the server runner.
+
+| Language | Legacy runner | Newest in Piston's package index | Baked in PR1 |
+|---|---|---|---|
+| C | GCC 14.2 (C23) | gcc 10.2.0 | gcc 10.2.0 |
+| C++ | G++ 14.2 (C++20) | gcc 10.2.0 | gcc 10.2.0 |
+| Java | Java 21.0.12 | java 15.0.2 | java 15.0.2 |
+| Python | Python 3.14.7 | python 3.12.0 | python 3.12.0 |
+| JavaScript | Node 22 | node 20.11.1 | node 20.11.1 |
+
+PR1 ships the official packages so the service can be measured. Matching the lessons needs our own
+packages (PR5). Plan:
+
+- **Own Piston image on a current base.** The upstream image is Debian buster (EOL, glibc 2.28), so
+  modern toolchains cannot run on it. Build the Piston API and isolate from a pinned upstream commit on
+  a pinned `debian:trixie-slim` digest instead. Toolchains installed in the image root are visible inside
+  isolate boxes, so each Piston package becomes a thin `compile`/`run`/`environment` wrapper.
+- **C/C++:** `gcc-14`/`g++-14` from Debian trixie, pinned through `snapshot.debian.org`.
+- **Java 21:** the Eclipse Temurin 21 JDK tarball (sha256-pinned). Split into a real `javac` compile
+  step and a `java -cp` run, so compile errors are reported as COMPILE_ERROR (gap in the table above).
+  Add an AppCDS archive built at image build time (`-XX:ArchiveClassesAtExit` over a javac + hello
+  run, then `-XX:SharedArchiveFile` for both javac and java) to cut JVM start-up.
+- **Python 3.14:** the python-build-standalone `install_only` tarball (sha256-pinned).
+- **Node 22:** the official nodejs.org linux-x64 tarball (sha256-pinned).
+
+## Speed and resources
+
+Measured per tuning on the KVM runner (see the results table added with PR1):
+
+1. Per-job directories (`/piston/jobs`, isolate's box root `/var/local/lib/isolate`, `/tmp`) are tmpfs
+   inside the guest, so compiling and running never round-trips through virtio-fs.
+2. 2 vCPUs by default, up to 4 (idle vCPUs cost the host nothing). The 1536 MB ceiling stays, with
+   balloon free-page reporting (`reclaim_guest_freed_memory`) so freed guest RAM returns to the host.
+   virtio-fs read cache `always` is safe because the image is read-only.
+3. Java AppCDS (PR5, above).
+4. Warm by default. An optional idle stop (`PISTON_IDLE_STOP_MINUTES`, off by default) lets the app stop
+   Piston after N idle minutes and start it on the next run, at the measured cold-start cost.
+
 ## Migration (small PRs, each behind the flag)
 
 1. Kata-only Piston compose service with a pinned digest, baked packages, limits and no egress,
@@ -177,7 +220,8 @@ through the API and `docker logs`.
 2. `PistonRunnerClient` adapter + status mapping + unit tests from the table above (no callers changed).
 3. Wire `/api/code/run` (practice RUN/COMPILE) to the provider flag.
 4. Wire exam TEST runs and assessment corrections to the flag.
-5. Custom Piston packages for GCC 14, Java 21 and Python 3.14 so results match lessons.
+5. Own Piston image on Debian trixie with GCC 14, Java 21 (+ AppCDS), Python 3.14 and Node 22.
+   Optional idle stop.
 6. After a week on `piston` with no regressions: delete `services/runner`, `infra/runner*`, the runtime
    image release tooling, and their evidence files.
 
