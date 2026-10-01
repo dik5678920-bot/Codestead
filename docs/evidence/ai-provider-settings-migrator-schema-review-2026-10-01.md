@@ -1,5 +1,7 @@
 # PR #85: restricted migrator correction — evidence approval
 
+Evidence Phase 2 retires the historical rebinding tool. Its table rows were removed; the original approval inventory remains in Git history.
+
 This is the complete additional evidence delta compared with committed head c82cde6. No commit or push has been made for this correction.
 
 Migration SQL SHA-256: `e9b4acffdb2813bd55baba8415af965f6a1e55c27f6abeb4baa3c4758491919d` → `a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c`.
@@ -55,7 +57,6 @@ New evidence: `docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.jso
 | scripts/database-runtime-capabilities.mjs | absent | `8b7b6c332a640403c9f7c1c040d86423a2377221e43ca08b3bf0f26b66cb8864` |
 | scripts/database-runtime-capabilities.test.mjs | absent | `7ef8f59844909ea4231434e8d40b7c71beca8353d9cfed4bcb6ddff33de23980` |
 | scripts/lib/reviewed-migration-ledger.mjs | absent | `b472f3384219f0490423b043e2078fd5d5afedd2480cb65837a9c79525fbfef2` |
-| scripts/refresh-ai-provider-evidence-bindings.mjs | absent | `9d7e0b4954252deec5b39431ae5cd611047f88b02e7d70d065197833bd3cc112` |
 | scripts/sync-reviewed-database-inventory.mjs | absent | `4433c8403e62321fcf46fc866399d75d6a272738961893b14f44351fc4325621` |
 | scripts/sync-reviewed-migration-hashes.mjs | absent | `72c1e0d4c369587c3ef568030ad92abcba620fe4c47ce6a76675edc98187520a` |
 | scripts/verify-database-runtime-capabilities.test.mjs | absent | `d98606edf5334208c4fc610c87f9686f9223f6ba785b3a6f6a746b9b6f5db030` |

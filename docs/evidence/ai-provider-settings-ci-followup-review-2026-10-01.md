@@ -1,5 +1,7 @@
 # AI provider CI follow-up evidence review
 
+Evidence Phase 2 retires the historical rebinding tool. Its table rows were removed; the original approval inventory remains in Git history.
+
 Rebased on `3a1638ca823eb21fb2c3297df1b3f98f1c82a2b0`. No commits or push pending approval.
 
 All four requested checks pass. The disposable migration harness also passes 20 tests and both release cycles. Owner scanner unchanged. Browser failure was an obsolete hidden-button assertion; server-side durable MFA enforcement and existing session-lifetime policy are unchanged. Password concealment passes locally without changing its spec.
@@ -17,7 +19,6 @@ Eight current binding updates; three metadata additions. Historical results and 
 | docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json | `/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json` | `df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2` | `8a2ad8e42089ce714d23cbcb9c7743adef452a14655ca0a7a68917ea78e3c11c` |
 | docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json | `/artifactSha256/docs~1evidence~1ai-provider-settings-ci-pins-2026-10-01.json` | `69e1bceb6a7f1a3a3fa93e30246b7a6832f2f9cb6679b2ce354d174982ebd0f9` | `2ea6f3150af02aaf127c1f420875828ef25c282f1e41d195f38f8b81a90a8c30` |
 | docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json | `/artifactSha256/integration~1credential-preference-migration.integration.test.ts` | `a9b7382068c7ff13fb160c7f397e30cf03cf31615c3b7f532f0a6c394e51c3b1` | `ceab46370093b4b69bd2682511b88d5fc97705e483a0de918eb82fd868cadc32` |
-| docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json | `/artifactSha256/scripts~1refresh-ai-provider-evidence-bindings.mjs` | `9d7e0b4954252deec5b39431ae5cd611047f88b02e7d70d065197833bd3cc112` | `668cc764cc03bf1d24deaa03840de2c751c19a63ab8326f68ccb2ab43f43e2a7` |
 | docs/evidence/ai-provider-settings-2026-10-01.json | `/ciFollowupRefresh` | absent | scope and changed-field digest inventory |
 | docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json | `/ciFollowupRefresh` | absent | scope and changed-field digest inventory |
 | docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json | `/ciFollowupRefresh` | absent | scope and changed-field digest inventory |
@@ -38,7 +39,6 @@ Eight current binding updates; three metadata additions. Historical results and 
 | New record binding: integration/credential-preference-migration.integration.test.ts | absent | `ceab46370093b4b69bd2682511b88d5fc97705e483a0de918eb82fd868cadc32` |
 | New record binding: integration/support/credential-preference-migration-proof.ts | absent | `dad457f393f97b71c9b2105c0649df2a49a83a98bd9a020c6782f386992fb1ba` |
 | New record binding: integration/support/with-validated-owner-fault-injection.ts | absent | `8e2732e4ff6171758a1701c76225ddf574203fdb43b5c6ad6b78f4690c04c84e` |
-| New record binding: scripts/refresh-ai-provider-evidence-bindings.mjs | absent | `668cc764cc03bf1d24deaa03840de2c751c19a63ab8326f68ccb2ab43f43e2a7` |
 | New record binding: scripts/__tests__/validated-owner-fault-injection.test.ts | absent | `5c353b5d371135ea9030b709736527821b6c86d8186bf0cd262eac1806cedf74` |
 | New record binding: src/lib/security/recent-mfa.ts | absent | `7b7fdebba042cf43467975860630d6606a351f27eeca9a554c4c10b0dc6f8064` |
 | New record binding: src/lib/security/privileged-access.ts | absent | `19178909fb882c34536208bee280807930cab4eaf2ebb76ef7c1e1aef15c44fa` |
