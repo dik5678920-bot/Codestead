@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm, unlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
@@ -22,6 +23,8 @@ const shipped: BackupEvidence = JSON.parse(readFileSync(path.join(repositoryRoot
 let root: string;
 let proofCommit: string;
 let record: BackupEvidence;
+const fixturePins: BackupEvidence["sourceHashes"] = [];
+const fixtures: string[] = [];
 
 function git(directory: string, ...args: string[]) {
   return execFileSync("git", [
@@ -41,12 +44,14 @@ async function verify() {
 }
 
 beforeAll(async () => {
-  expect(shipped.sourceCommit).toMatch(/^[0-9a-f]{40}$/);
   root = await mkdtemp(path.join(os.tmpdir(), "backup-evidence-anchor-"));
+  fixtures.push(root);
   git(root, "init", "--quiet", "--initial-branch=main");
   for (const pin of shipped.sourceHashes) {
-    // Reconstruct the actual recorded source bytes in a disposable real repo.
-    await write(pin.path, git(repositoryRoot, "cat-file", "blob", `${shipped.sourceCommit}:${pin.path}`));
+    // Exercise every shipped path without relying on the checkout's Git history.
+    const contents = `fixture source bytes for ${pin.path}\n`;
+    await write(pin.path, contents);
+    fixturePins.push({ path: pin.path, sha256: createHash("sha256").update(contents).digest("hex") });
   }
   git(root, "add", ".");
   git(root, "commit", "--quiet", "-m", "recorded source bytes");
@@ -56,28 +61,29 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
-  record = { ...structuredClone(shipped), sourceCommit: proofCommit };
+  record = { sourceCommit: proofCommit, sourceHashes: structuredClone(fixturePins) };
   await write(evidencePath, JSON.stringify(record));
 });
 
 afterAll(async () => {
-  if (root) {
-    expect(path.dirname(path.resolve(root))).toBe(path.resolve(os.tmpdir()));
-    expect(path.basename(root)).toMatch(/^backup-evidence-anchor-/);
-    await rm(root, { recursive: true, force: true });
+  for (const fixture of fixtures) {
+    expect(path.dirname(path.resolve(fixture))).toBe(path.resolve(os.tmpdir()));
+    expect(path.basename(fixture)).toMatch(/^backup-evidence-anchor-/);
+    await rm(fixture, { recursive: true, force: true });
   }
 });
 
 describe("backup status evidence anchor", () => {
   it("retains the shipped source pins and an explicit anchoring note", () => {
+    // Actual shipped blob digests are checked by evidence:verify in full-history CI.
+    // Unit tests only need record metadata and their own committed fixture bytes.
+    expect(shipped.sourceCommit).toMatch(/^[0-9a-f]{40}$/);
     expect(shipped.note).toEqual(expect.any(String));
     expect(shipped.note?.trim().length).toBeGreaterThan(0);
-    git(repositoryRoot, "merge-base", "--is-ancestor", shipped.sourceCommit!, "HEAD");
+    expect(shipped.sourceHashes).toHaveLength(25);
+    expect(shipped.sourceHashes.map((pin) => pin.path)).toEqual(expect.arrayContaining([ciPath, "vitest.integration.config.ts"]));
     for (const pin of shipped.sourceHashes) {
-      const blob = git(repositoryRoot, "cat-file", "blob", `${shipped.sourceCommit}:${pin.path}`);
-      const raw = createHash("sha256").update(blob).digest("hex");
-      const canonical = createHash("sha256").update(blob.toString("utf8").replaceAll("\r\n", "\n")).digest("hex");
-      expect([raw, canonical], pin.path).toContain(pin.sha256);
+      expect(pin.sha256, pin.path).toMatch(/^[0-9a-f]{64}$/);
     }
   });
 
@@ -112,5 +118,21 @@ describe("backup status evidence anchor", () => {
     record.sourceCommit = anchor;
     await write(evidencePath, JSON.stringify(record));
     expect((await verify()).issues).toEqual([expect.objectContaining({ kind, source: evidencePath })]);
+  });
+
+  it("fails closed when a shallow clone omits the anchor even with matching working-tree pins", async () => {
+    const shallow = await mkdtemp(path.join(os.tmpdir(), "backup-evidence-anchor-"));
+    fixtures.push(shallow);
+    git(root, "clone", "--quiet", "--depth=1", "--no-tags", pathToFileURL(root).href, shallow);
+    expect(git(shallow, "rev-parse", "--is-shallow-repository").toString("utf8").trim()).toBe("true");
+    const sourceHashes = fixturePins.map((pin) => ({
+      path: pin.path,
+      sha256: createHash("sha256").update(readFileSync(path.join(shallow, pin.path))).digest("hex"),
+    }));
+    await mkdir(path.join(shallow, "docs/evidence"), { recursive: true });
+    await writeFile(path.join(shallow, evidencePath), JSON.stringify({ sourceCommit: proofCommit, sourceHashes }));
+    const report = await verifyEvidenceIntegrity({ root: shallow, markdownRoots: [] });
+    expect(report.issues).toEqual([expect.objectContaining({ kind: "SOURCE_COMMIT_UNAVAILABLE", source: evidencePath })]);
+    expect(report.evidence.hashes).toBe(0);
   });
 });
