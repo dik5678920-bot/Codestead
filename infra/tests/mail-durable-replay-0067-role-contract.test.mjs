@@ -2186,6 +2186,104 @@ test("0067 disposable root is covered by top-level cleanup from its first fallib
   assert.doesNotMatch(mainBody, /cleanup_error=/u);
 });
 
+function evaluateExactClusterCleanup(overrides = {}) {
+  const deadlineStart = integrationHarness.indexOf("function createOperationDeadline(");
+  const deadlineEnd = integrationHarness.indexOf("async function waitForMarker(", deadlineStart);
+  const cleanupStart = integrationHarness.indexOf("async function verifyExactClusterCleanup(");
+  const cleanupEnd = integrationHarness.indexOf("export async function main()", cleanupStart);
+  assert.ok(deadlineStart >= 0 && deadlineEnd > deadlineStart);
+  assert.ok(cleanupStart >= 0 && cleanupEnd > cleanupStart);
+  const timingConstants = [
+    "CLEANUP_TIMEOUT_MS", "OPERATION_TIMEOUT_MS", "POLL_INTERVAL_MS",
+  ].map((name) => {
+    const declaration = integrationHarness.match(
+      new RegExp(`^const ${name} = [0-9_]+;$`, "mu"),
+    )?.[0];
+    assert.ok(declaration, `${name} is missing from the harness`);
+    return declaration;
+  }).join("\n");
+  const dependencies = {
+    assert,
+    assertExactClusterPaths: () => {},
+    run: () => ({ status: 3 }),
+    executable: (name) => name,
+    countLoopbackListeners: async () => 0,
+    processStillExists: () => false,
+    readExactPostmasterPid: () => undefined,
+    performance: { now: () => 0 },
+    delay: async () => {},
+    ...overrides,
+  };
+  return Function(
+    ...Object.keys(dependencies),
+    `"use strict";
+     ${timingConstants}
+     ${integrationHarness.slice(deadlineStart, deadlineEnd)}
+     ${integrationHarness.slice(cleanupStart, cleanupEnd)}
+     return verifyExactClusterCleanup;`,
+  )(...Object.values(dependencies));
+}
+
+for (const pidSource of ["captured", "pidfile"]) {
+  test(`0067 cleanup waits for ${pidSource} process exit after pg_ctl reports stopped`, async () => {
+    let alive = true;
+    let releaseExit;
+    let observedWait;
+    const waiting = new Promise((resolve) => { observedWait = resolve; });
+    let listenerChecks = 0;
+    const checkedPids = [];
+    const verify = evaluateExactClusterCleanup({
+      processStillExists: (pid) => { checkedPids.push(pid); return alive; },
+      readExactPostmasterPid: () => pidSource === "pidfile" ? 67 : undefined,
+      countLoopbackListeners: async () => { listenerChecks += 1; return 0; },
+      delay: () => new Promise((resolve) => {
+        releaseExit = () => { alive = false; resolve(); };
+        observedWait();
+      }),
+    });
+    let settled = false;
+    const cleanup = verify({ postmasterPid: pidSource === "captured" ? 67 : undefined })
+      .then(() => { settled = true; });
+    // Observe rejection immediately even when running the unfixed harness.
+    const outcome = cleanup.then(() => "complete", (error) => error);
+    const first = await Promise.race([waiting.then(() => "waiting"), outcome]);
+    assert.equal(first, "waiting", "PID-file removal must not imply OS process exit");
+    assert.equal(settled, false);
+    assert.equal(listenerChecks, 0);
+    releaseExit();
+    assert.equal(await outcome, "complete");
+    assert.equal(listenerChecks, 1);
+    assert.ok(checkedPids.length >= 2);
+    assert.ok(checkedPids.every((pid) => pid === 67));
+  });
+}
+
+test("0067 cleanup still rejects a process that survives the original cleanup deadline", async () => {
+  let now = 0;
+  const verify = evaluateExactClusterCleanup({
+    processStillExists: () => true,
+    performance: { now: () => now },
+    run: () => { now = 4_950; return { status: 3 }; },
+    delay: async (milliseconds) => { now += milliseconds; },
+  });
+  await assert.rejects(
+    verify({ postmasterPid: 67 }),
+    /temporary PostgreSQL process exit exceeded its monotonic operation deadline/u,
+  );
+  assert.equal(now, 5_000);
+});
+
+test("0067 cleanup retains the active-cluster and lingering-listener checks", async () => {
+  await assert.rejects(
+    evaluateExactClusterCleanup({ run: () => ({ status: 0 }) })({}),
+    /exact temporary cluster is still active/u,
+  );
+  await assert.rejects(
+    evaluateExactClusterCleanup({ countLoopbackListeners: async () => 1 })({}),
+    /temporary PostgreSQL port still has a loopback listener/u,
+  );
+});
+
 test("0067 entrypoint fails closed with one fixed diagnostic", () => {
   assert.match(
     integrationEntrypoint,
