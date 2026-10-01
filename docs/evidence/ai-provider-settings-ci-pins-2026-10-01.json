@@ -86,7 +86,7 @@
       "field": "docs/evidence/backup-status-outbox-2026-07-12.json",
       "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
       "previousSha256": "c7b65b5e3a32830a8978565131104b98a118f4e645a0c0db2f3112fdf765e840",
-      "sha256": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269"
+      "sha256": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
     },
     {
       "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
@@ -98,8 +98,8 @@
   ],
   "artifactSha256": {
     "Dockerfile": "891fb214ac486fb484ebcaae1587046e6a397e63a12e2d1b044734809b54ff79",
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "cdfa3e7f12e51edc63b43564a03ee31ce75634fc4ade092a35d53b3a9bad3fd8",
-    "docs/evidence/backup-status-outbox-2026-07-12.json": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "ba22c32b4f629c930235ac2e7f24209140d3739b2495cf9d8fe7e25efaa4a5f1",
+    "docs/evidence/backup-status-outbox-2026-07-12.json": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8",
     "docs/reviewed-migration-inventory-pins.md": "cfccee3116a90b6e3e2bf262b77a92b43b7c88b14e2d3d8b888a58e9a2aebfda",
     "drizzle/meta/0070_public_column_attnums.json": "445e46c714041c037d7474a39d940cf065e92951ba6c2bbd0f2b2fdc73bb2e75",
     "infra/tests/database-least-privilege-static.test.mjs": "b309b1692aa7c2e705db2f4c1c85e2423d00c795bb9292ff76e6ccfb6232513c",
@@ -178,7 +178,7 @@
         "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
         "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
         "previousDigest": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
-        "currentDigest": "cdfa3e7f12e51edc63b43564a03ee31ce75634fc4ade092a35d53b3a9bad3fd8"
+        "currentDigest": "ba22c32b4f629c930235ac2e7f24209140d3739b2495cf9d8fe7e25efaa4a5f1"
       }
     ]
   }

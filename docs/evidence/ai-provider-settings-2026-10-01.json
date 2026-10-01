@@ -135,7 +135,7 @@
   "historicalEvidence": "Only current source bindings refreshed in three historical records, with previous hashes retained and annotations distinguishing bindings from the original test dates and results. The API matrix changes only two operation source hashes; its authorization rules and counts are unchanged.",
   "artifactSha256": {
     "docs/evidence/api-authorization-matrix-2026-07-12.json": "dddb32ecd9ece9201fb5f109afb51790b8ceec6460c6f37ed7aa724a70751238",
-    "docs/evidence/backup-status-outbox-2026-07-12.json": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269",
+    "docs/evidence/backup-status-outbox-2026-07-12.json": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8",
     "docs/evidence/provider-outage-fallback-verification-2026-07-12.json": "d939e054c18f841bec6fb2d110076969a302388dd29c9ec9c7862da3ccad154e",
     "docs/evidence/run-008-official-runner-fairness-2026-07-12.json": "3b959497a8d8d2f23b02e78d840e49b9b2b4577103af92e71fe4a69cc9de1872",
     "docs/provider-onboarding.md": "b60bff88b29d242f1fc9eef0ef2053f5ebe7611f14dcfce0026d1eae2c0044f4",
@@ -178,7 +178,7 @@
         "field": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "previousSha256": "c7b65b5e3a32830a8978565131104b98a118f4e645a0c0db2f3112fdf765e840",
-        "sha256": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269"
+        "sha256": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
       },
       {
         "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
@@ -222,7 +222,7 @@
         "field": "/artifactSha256/docs~1evidence~1backup-status-outbox-2026-07-12.json",
         "artifact": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "previousDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
-        "currentDigest": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269"
+        "currentDigest": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
       },
       {
         "field": "/artifactSha256/drizzle~10070_credential_validation_preference.sql",
@@ -276,7 +276,7 @@
         "field": "/ciPinFollowup/changes/0/sha256",
         "artifact": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "previousDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
-        "currentDigest": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269"
+        "currentDigest": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
       },
       {
         "field": "/migration/sqlSha256",
