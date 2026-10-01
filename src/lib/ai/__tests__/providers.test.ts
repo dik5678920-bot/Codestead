@@ -6,9 +6,24 @@ import { ProviderError } from "../types";
 
 const messages = [{ role: "user" as const, content: "Explain variables." }];
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); });
 
 describe("provider adapters", () => {
+  it.each(["fetch", "response body"])("ends validation when %s never settles, even if abort is ignored", async (stage) => {
+    vi.useFakeTimers();
+    const stalled = new Promise<never>(() => {});
+    vi.stubGlobal("fetch", stage === "fetch"
+      ? vi.fn(() => stalled)
+      : vi.fn(async () => ({ ok: true, json: () => stalled })));
+    let failure: unknown;
+    const pending = callProvider({ provider: "google", apiKey: "synthetic-key", model: "test-model", messages, timeoutMs: 1_000 });
+    void pending.catch((error: unknown) => { failure = error; });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(failure).toMatchObject({ code: "TIMEOUT" });
+    await expect(pending).rejects.toMatchObject({ code: "TIMEOUT" });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("calls NVIDIA's server-owned endpoint without leaking the key in the body", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

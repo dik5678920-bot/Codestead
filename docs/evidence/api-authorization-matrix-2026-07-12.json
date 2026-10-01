@@ -35,7 +35,7 @@
       "file": "src/app/api/exams/_lib/service.ts",
       "purpose": "exam sessions and answers",
       "anchors": 4,
-      "sourceSha256": "e11f966b69b96a65e62e5ab80eb9913986bbcd776b36e2171acd8caa5edc04a2"
+      "sourceSha256": "bfe18dc604cbfa11ecd4bb9725276c686f75b49d7c06257890ef9ec756bb6342"
     },
     {
       "file": "src/lib/learning-service/drizzle-store.ts",
@@ -1266,7 +1266,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by eq(providerCredential.userId, authz.session.user.id)",
-      "operationSourceSha256": "618dfcbbe184fc7bb7b2c2b72daa45b965b07143518344fb262078a0d39bec3e"
+      "operationSourceSha256": "e60d4638baf6631e2a60500bab2ab1648819ff782c562cad718f72624bce0054"
     },
     {
       "operation": "GET /api/credentials",
@@ -1292,7 +1292,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "adfa24d2e096bf99f801da0f67e5d10510e9d0fabb4b3265aebbdd086f5d9a16"
+      "operationSourceSha256": "d3e355c2c94193ad7cd637760adc71c5e7af490b8651f2eae88828a82d50db30"
     },
     {
       "operation": "GET /api/drafts",

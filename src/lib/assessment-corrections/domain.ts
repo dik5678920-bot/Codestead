@@ -2,6 +2,7 @@ import type {
   ExamAnswer,
   ExamFormSnapshot,
   ExamGradingEvidence,
+  ExamItem,
   ExamResult,
   ExamRunnerResult,
 } from "@/lib/exams/contracts";
@@ -22,6 +23,13 @@ export interface CorrectionTarget {
   readonly faultyBundleVersion: string;
   readonly faultyEvidenceHash: string;
   readonly hadHiddenTests: boolean;
+  /**
+   * Stable identity of the authored bank item. Question IDs are randomized per
+   * form (qNN-hash(seed, bank, item)), so the same authored item carries a
+   * different ID in every learner's form. Matching uses this content identity
+   * plus the exact faulty bundle and evidence hash, never the form-local ID.
+   */
+  readonly authoredItemHash: string;
 }
 
 export class AssessmentCorrectionError extends Error {
@@ -79,6 +87,23 @@ export function correctionMasteryLanguageContext(form: ExamFormSnapshot): string
   return `dsa:${languages[0]}`;
 }
 
+/** Hash of everything authored about an item except its form-local ID and oracle. */
+export function authoredItemHash(item: ExamItem): string {
+  return hashAppealEvidence({
+    schemaVersion: 1,
+    kind: item.kind,
+    skillId: item.skillId,
+    clusterId: item.clusterId,
+    title: item.title,
+    prompt: item.prompt,
+    points: item.points,
+    critical: item.critical,
+    language: item.language ?? null,
+    starterCode: item.starterCode ?? null,
+    runtime: item.runtime ?? null,
+  });
+}
+
 export function correctionTarget(form: ExamFormSnapshot, itemId: string): CorrectionTarget {
   const item = form.items.find((candidate) => candidate.id === itemId);
   if (!item) throw new AssessmentCorrectionError("ITEM_NOT_FOUND");
@@ -94,6 +119,7 @@ export function correctionTarget(form: ExamFormSnapshot, itemId: string): Correc
     faultyBundleVersion: item.gradingEvidence.bundleVersion,
     faultyEvidenceHash: hashAppealEvidence(item.gradingEvidence),
     hadHiddenTests: item.gradingEvidence.tests.some((test) => test.visibility === "HIDDEN"),
+    authoredItemHash: authoredItemHash(item),
   };
 }
 
@@ -111,17 +137,28 @@ export function reviewedReplacement(
   return replacement;
 }
 
-export function formMatchesTarget(form: ExamFormSnapshot, target: CorrectionTarget): boolean {
+/**
+ * The form-local ID of the target's authored item in this form, or null. The
+ * same authored item with the same faulty oracle maps to exactly one question;
+ * an ambiguous form (two identical questions) is never guessed at.
+ */
+export function targetItemIdInForm(form: ExamFormSnapshot, target: CorrectionTarget): string | null {
   if (
     form.courseId !== target.courseId
     || form.moduleId !== target.moduleId
     || form.contentVersion !== target.contentVersion
-  ) return false;
-  const item = form.items.find((candidate) => candidate.id === target.itemId);
-  return item?.skillId === target.skillId
+  ) return null;
+  const matches = form.items.filter((item) =>
+    item.skillId === target.skillId
     && item.gradingEvidence.kind === "runner-tests"
     && item.gradingEvidence.bundleVersion === target.faultyBundleVersion
-    && hashAppealEvidence(item.gradingEvidence) === target.faultyEvidenceHash;
+    && hashAppealEvidence(item.gradingEvidence) === target.faultyEvidenceHash
+    && authoredItemHash(item) === target.authoredItemHash);
+  return matches.length === 1 ? matches[0]!.id : null;
+}
+
+export function formMatchesTarget(form: ExamFormSnapshot, target: CorrectionTarget): boolean {
+  return targetItemIdInForm(form, target) !== null;
 }
 
 export function replaceFormEvidence(
@@ -129,13 +166,58 @@ export function replaceFormEvidence(
   target: CorrectionTarget,
   replacementValue: unknown,
 ): ExamFormSnapshot {
-  if (!formMatchesTarget(form, target)) throw new AssessmentCorrectionError("EXAM_EVIDENCE_MISSING");
+  const localItemId = targetItemIdInForm(form, target);
+  if (localItemId === null) throw new AssessmentCorrectionError("EXAM_EVIDENCE_MISSING");
   const replacement = reviewedReplacement(target, replacementValue);
   return {
     ...form,
-    items: form.items.map((item) => item.id === target.itemId
+    items: form.items.map((item) => item.id === localItemId
       ? { ...item, gradingEvidence: replacement as ExamGradingEvidence }
       : item),
+  };
+}
+
+/**
+ * A correction that already produced this attempt's effective result. Captured
+ * hash-bound in the impact snapshot so a later correction regrades on top of
+ * it instead of silently restoring the original faulty oracle.
+ */
+export interface AppliedCorrection {
+  readonly correctionId: string;
+  readonly outcomeId: string;
+  readonly itemId: string;
+  readonly faultyEvidenceHash: string;
+  readonly replacement: ReplacementEvidence;
+}
+
+/**
+ * Re-applies the effective correction chain (oldest first) to the immutable
+ * base form. Each link must still match the base form's faulty oracle for its
+ * own question. `supersededItemId` is the question the current correction
+ * replaces; its earlier replacement is superseded rather than stacked.
+ */
+export function applyPriorCorrections(
+  form: ExamFormSnapshot,
+  applied: readonly AppliedCorrection[],
+  supersededItemId: string,
+): ExamFormSnapshot {
+  const evidence = new Map<string, ExamGradingEvidence>();
+  for (const link of applied) {
+    const base = form.items.find((item) => item.id === link.itemId);
+    if (
+      !base
+      || base.gradingEvidence.kind !== "runner-tests"
+      || hashAppealEvidence(base.gradingEvidence) !== link.faultyEvidenceHash
+    ) throw new AssessmentCorrectionError("EXAM_EVIDENCE_MISSING");
+    evidence.set(link.itemId, replacementEvidenceSchema.parse(link.replacement) as ExamGradingEvidence);
+  }
+  evidence.delete(supersededItemId);
+  return {
+    ...form,
+    items: form.items.map((item) => {
+      const corrected = evidence.get(item.id);
+      return corrected ? { ...item, gradingEvidence: corrected } : item;
+    }),
   };
 }
 
@@ -155,6 +237,10 @@ export interface ImpactSnapshot {
   readonly form: ExamFormSnapshot;
   readonly answers: Readonly<Record<string, { readonly revision: number; readonly answer: ExamAnswer }>>;
   readonly originalResult: ExamResult;
+  /** Form-local question this impact corrects (absent on legacy snapshots). */
+  readonly targetItemId?: string;
+  /** Effective correction chain at capture, oldest first (absent on legacy snapshots). */
+  readonly appliedCorrections?: readonly AppliedCorrection[];
 }
 
 export function buildImpactHashes(snapshot: ImpactSnapshot) {

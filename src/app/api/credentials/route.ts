@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { validateProviderCredential } from "@/lib/ai/credential-validation";
+import { clearOtherCredentialPreferences } from "@/lib/ai/credential-preference";
 import { notifyCredentialChanged } from "@/lib/credential-notifications";
 import { db } from "@/lib/db/client";
 import { providerCredential } from "@/lib/db/schema";
@@ -13,6 +14,7 @@ import { parseMasterKey, sealCredential } from "@/lib/security/credential-vault"
 import { withRateLimit } from "@/lib/security/rate-limit";
 import { isFreshMfa, LEARNER_SELF_SERVICE_MFA_MS } from "@/lib/security/privileged-access";
 import { requireRecentMfa } from "@/lib/security/recent-mfa";
+import { lockUserAuthority } from "@/lib/security/user-authority-lock";
 import {
   consentPurposeForProvider,
   getCurrentConsents,
@@ -129,30 +131,31 @@ export async function POST(request: NextRequest) {
   const sealed = sealCredential(body.data.secret, context, wrappingKey);
   wrappingKey.fill(0);
 
-  if (body.data.preferred) {
-    await db
-      .update(providerCredential)
-      .set({ isPreferred: false })
-      .where(
-        and(
-          eq(providerCredential.userId, authz.session.user.id),
-          eq(providerCredential.provider, body.data.provider),
-        ),
-      );
-  }
-  await db.insert(providerCredential).values({
-    id: credentialId,
-    userId: authz.session.user.id,
-    provider: body.data.provider,
-    label: body.data.label,
-    ciphertext: sealed.ciphertext,
-    wrappedDataKey: sealed.wrappedDataKey,
-    wrapIv: sealed.wrapIv,
-    dataIv: sealed.dataIv,
-    authTag: sealed.authTag,
-    keyVersion: sealed.keyVersion,
-    lastFour: sealed.lastFour,
-    isPreferred: body.data.preferred,
+  const insertedAt = new Date();
+  await db.transaction(async (tx) => {
+    await lockUserAuthority(tx, authz.session.user.id);
+    if (body.data.preferred) {
+      await clearOtherCredentialPreferences(tx, authz.session.user.id, credentialId);
+    }
+    await tx.insert(providerCredential).values({
+      id: credentialId,
+      userId: authz.session.user.id,
+      provider: body.data.provider,
+      label: body.data.label,
+      ciphertext: sealed.ciphertext,
+      wrappedDataKey: sealed.wrappedDataKey,
+      wrapIv: sealed.wrapIv,
+      dataIv: sealed.dataIv,
+      authTag: sealed.authTag,
+      keyVersion: sealed.keyVersion,
+      lastFour: sealed.lastFour,
+      isPreferred: body.data.preferred,
+      // A process/persistence failure before finalization must remain retryable,
+      // never look like a background validation job that does not exist.
+      status: "unreachable",
+      failureCode: "VALIDATION_INCOMPLETE",
+      updatedAt: insertedAt,
+    });
   });
 
   const validation = await validateProviderCredential({
@@ -162,11 +165,21 @@ export async function POST(request: NextRequest) {
     secret: body.data.secret,
   });
   const { status, failureCode } = validation;
-  if (validation.model) {
-    await db
+  const updated = await db
       .update(providerCredential)
-      .set({ status, failureCode, lastValidatedAt: new Date() })
-      .where(eq(providerCredential.id, credentialId));
+      .set({ status, failureCode, lastValidatedAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(providerCredential.id, credentialId),
+        eq(providerCredential.userId, authz.session.user.id),
+        eq(providerCredential.keyVersion, 1),
+        eq(providerCredential.updatedAt, insertedAt),
+      ))
+      .returning({ id: providerCredential.id });
+  if (updated.length !== 1) {
+    return NextResponse.json(
+      { error: "Credential changed. Refresh to see its current state.", code: "STALE_CREDENTIAL" },
+      { status: 409, headers: { "Cache-Control": "no-store" } },
+    );
   }
   if (status === "active") {
     // Earlier failed submissions of this same key are dead retries; retire them
@@ -191,7 +204,7 @@ export async function POST(request: NextRequest) {
     action: "credential.add",
     resourceType: "provider_credential",
     resourceId: credentialId,
-    outcome: status === "active" || status === "pending_validation" ? "success" : "failure",
+    outcome: status === "active" ? "success" : "failure",
     metadata: { provider: body.data.provider, status, lastFour: sealed.lastFour },
   });
   await notifyCredentialChanged({

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { postgresCiProjectionThrough0069 } from "./mail-guarded-delivery-0069-ci-contract.mjs";
@@ -644,16 +644,16 @@ function validatePackageScriptContracts(manifest) {
 function validateHarnessReviewedRestoreFixtureContract(source) {
   for (const [fragment, message] of [
     [
-      "len(entries) != 70",
-      "production E2E does not require the exact 70-row reviewed ledger",
+      "len(entries) != 71",
+      "production E2E does not require the exact 71-row reviewed ledger",
     ],
     [
-      'entries[-1].get("idx") != 69',
-      "production E2E does not require reviewed ledger tail index 69",
+      'entries[-1].get("idx") != 70',
+      "production E2E does not require reviewed ledger tail index 70",
     ],
     [
-      'entries[-1].get("tag") != "0069_mail_outbox_guarded_delivery_authority"',
-      "production E2E does not require the reviewed 0069 ledger tail",
+      'entries[-1].get("tag") != "0070_credential_validation_preference"',
+      "production E2E does not require the reviewed 0070 ledger tail",
     ],
     [
       "--env REQUIRE_COMPLETE_MIGRATION_LEDGER=false",
@@ -676,8 +676,8 @@ function validateHarnessReviewedRestoreFixtureContract(source) {
       "production E2E omits the full source application-object boundary verifier",
     ],
     [
-      "grep -Fxq 'migration_count=70'",
-      "production E2E does not attest all 70 reviewed migrations",
+      "grep -Fxq 'migration_count=71'",
+      "production E2E does not attest all 71 reviewed migrations",
     ],
   ]) {
     requireHarnessFragment(source, fragment, message);
@@ -1020,7 +1020,7 @@ const applicationPartition = new Map([
   ],
   ["db-roles", ["npm run test:database-role-boundaries"]],
   [
-    "infra-shell-a",
+    "infra-recovery",
     [
       "python3 infra/tests/existing-container-baseline.test.py",
       "python3 infra/tests/capture-existing-containers.test.py",
@@ -1037,7 +1037,7 @@ const applicationPartition = new Map([
     ],
   ],
   [
-    "infra-shell-b",
+    "infra-release",
     [
       "python3 infra/tests/runner-release-tree.test.py",
       "python3 infra/tests/release-tree-packaging.test.py",
@@ -1049,7 +1049,7 @@ const applicationPartition = new Map([
     ],
   ],
   [
-    "infra-shell-c",
+    "infra-host",
     [
       "CODESTEAD_DISPOSABLE_HOST=1 npm run production-load:fixture-runtime:lifecycle",
       'sudo env "PATH=$PATH" CODESTEAD_REQUIRE_LINUX_ROOT=1 npm run production-load:test-control:runtime',
@@ -1075,7 +1075,7 @@ const applicationPartition = new Map([
     ],
   ],
   [
-    "infra-shell-d",
+    "infra-sandbox",
     [
       "sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0",
       "sudo -n env \"PATH=$PATH\" bash infra/tests/runner-reconciliation.test.sh",
@@ -1113,10 +1113,10 @@ const reviewedJobNames = [
   "build",
   "docker-build",
   "db-roles",
-  "infra-shell-a",
-  "infra-shell-b",
-  "infra-shell-c",
-  "infra-shell-d",
+  "infra-recovery",
+  "infra-release",
+  "infra-host",
+  "infra-sandbox",
   "ci-ok",
   "application-images",
   "production-topology",
@@ -1124,8 +1124,12 @@ const reviewedJobNames = [
   "backup-production-e2e",
   "runner",
   "postgres-integration",
+  "postgres-integration-shards",
   "integration-mail-races",
   "curriculum-runtime",
+  "curriculum-verify",
+  "curriculum-dsa-parity",
+  "curriculum-dsa-parity-merge",
   "auth-browser",
   "browser",
 ];
@@ -1331,18 +1335,54 @@ function requireIntegrationOnlyFilesGateDatabase() {
 requireIntegrationOnlyFilesGateDatabase();
 
 const reviewedDatabaseGateLines = [...postgresCiRuntimePolicy.databaseGateLines];
-const mailRacesIntegrationFile =
-  "integration/mail-delivery-races.integration.test.ts";
+// The race suites are excluded from postgres-integration by one glob and run
+// as matrix parts instead. Every file the glob excludes must be a matrix part,
+// so each integration file still runs exactly once.
+const mailRacesParts = [...postgresCiRuntimePolicy.mailRacesIntegrationParts];
+const mailRacesGlob = "mail-delivery-races-*.integration.test.ts";
+const mailRacesFiles = readdirSync(resolve(repoRoot, "integration"))
+  .filter((file) => /^mail-delivery-races-[a-z0-9-]+\.integration\.test\.ts$/u.test(file))
+  .sort();
 if (
   postgresCiRuntimePolicy.mailRacesIntegrationCommand !==
-    `npm run test:integration -- ${mailRacesIntegrationFile}` ||
-  !postgresCiRuntimePolicy.livePg17IntegrationCommand.includes(
-    `! -name ${mailRacesIntegrationFile.slice("integration/".length)} `,
-  )
+    "npm run test:integration -- integration/mail-delivery-races-${{ matrix.part }}.integration.test.ts" ||
+  !postgresCiRuntimePolicy.livePg17IntegrationCommand.includes(`! -name '${mailRacesGlob}' `) ||
+  mailRacesFiles.join("\n") !==
+    mailRacesParts.map((part) => `mail-delivery-races-${part}.integration.test.ts`).sort().join("\n") ||
+  readdirSync(resolve(repoRoot, "integration")).includes("mail-delivery-races.integration.test.ts")
 ) {
-  fail("the integration split must run the race suite exactly once, in its own job");
+  fail("the integration split must run every race suite exactly once, as a matrix part");
 }
-readFileSync(resolve(repoRoot, mailRacesIntegrationFile), "utf8");
+
+// The remaining integration files are split into shards of the sorted list by
+// 1-based position modulo the shard count. Shard 0 runs in postgres-integration
+// and the others as matrix shards; together they must partition the files:
+// every shard non-empty (an empty argument list would run every file), each
+// file in exactly one shard, and both commands identical except the shard.
+const integrationShardCount = postgresCiRuntimePolicy.integrationShardCount;
+const integrationMatrixShards = [...postgresCiRuntimePolicy.integrationMatrixShards];
+const shardedIntegrationFiles = readdirSync(resolve(repoRoot, "integration"))
+  .filter((file) => /\.integration\.test\.ts$/u.test(file) && !file.startsWith("mail-delivery-races-"))
+  .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+const integrationShardListing =
+  "npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name 'mail-delivery-races-*.integration.test.ts' | LC_ALL=C sort | awk ";
+const integrationShards = [0, ...integrationMatrixShards];
+const filesByIntegrationShard = integrationShards.map((shard) =>
+  shardedIntegrationFiles.filter((_file, index) => (index + 1) % integrationShardCount === shard));
+if (
+  !Number.isInteger(integrationShardCount) || integrationShardCount < 2 ||
+  integrationShards.join(",") !==
+    Array.from({ length: integrationShardCount }, (_value, shard) => shard).join(",") ||
+  postgresCiRuntimePolicy.livePg17IntegrationCommand !==
+    `${integrationShardListing}'NR % ${integrationShardCount} == 0')` ||
+  postgresCiRuntimePolicy.integrationShardCommand !==
+    `${integrationShardListing}-v shard=\${{ matrix.shard }} 'NR % ${integrationShardCount} == shard')` ||
+  filesByIntegrationShard.some((files) => files.length === 0) ||
+  [...filesByIntegrationShard.flat()].sort().join("\n") !== [...shardedIntegrationFiles].sort().join("\n") ||
+  new Set(filesByIntegrationShard.flat()).size !== shardedIntegrationFiles.length
+) {
+  fail("the integration shards must partition every non-race integration file exactly once");
+}
 
 const rootNodeInstallProjection = [`      - run: ${rootNodeInstallRun}`];
 const playwrightCacheProjection = (suffix) => [
@@ -1378,18 +1418,22 @@ const ciOkNeeds = [
   "build",
   "docker-build",
   "db-roles",
-  "infra-shell-a",
-  "infra-shell-b",
-  "infra-shell-c",
-  "infra-shell-d",
+  "infra-recovery",
+  "infra-release",
+  "infra-host",
+  "infra-sandbox",
   "production-topology",
   "application-images",
   "backup-safety",
   "backup-production-e2e",
   "runner",
   "postgres-integration",
+  "postgres-integration-shards",
   "integration-mail-races",
   "curriculum-runtime",
+  "curriculum-verify",
+  "curriculum-dsa-parity",
+  "curriculum-dsa-parity-merge",
   "auth-browser",
   "browser",
 ];
@@ -1398,13 +1442,13 @@ const ciOkScript = [
   "          set -Eeuo pipefail",
   "          gate_of() {",
   '            case "$1" in',
-  "              infra-shell-a|infra-shell-b|infra-shell-c|infra-shell-d) echo infra ;;",
+  "              infra-recovery|infra-release|infra-host|infra-sandbox) echo infra ;;",
   "              production-topology) echo topology ;;",
   "              application-images) echo images ;;",
   "              runner) echo runner ;;",
-  "              curriculum-runtime) echo curriculum ;;",
+  "              curriculum-runtime|curriculum-verify|curriculum-dsa-parity|curriculum-dsa-parity-merge) echo curriculum ;;",
   "              auth-browser|browser) echo browser ;;",
-  "              postgres-integration|integration-mail-races) echo database ;;",
+  "              postgres-integration|postgres-integration-shards|integration-mail-races) echo database ;;",
   "              *) echo '' ;;",
   "            esac",
   "          }",
@@ -1538,6 +1582,7 @@ const reviewedJobContracts = new Map([
   [
     "unit",
     [
+      "    name: \"unit tests (shard ${{ matrix.shard }}/6)\"",
       "    runs-on: ubuntu-24.04",
       "    timeout-minutes: 20",
       "    strategy:",
@@ -1612,8 +1657,9 @@ const reviewedJobContracts = new Map([
     ],
   ],
   [
-    "infra-shell-a",
+    "infra-recovery",
     [
+      "    name: \"infra: power loss & recovery\"",
       "    runs-on: ubuntu-24.04",
       "    timeout-minutes: 30",
       ...infraGateLines,
@@ -1621,12 +1667,13 @@ const reviewedJobContracts = new Map([
       ...checkoutProjection,
       ...infraShellPrelude,
       ...infraAptRuns.map((command) => `      - run: ${command}`),
-      ...partitionRuns("infra-shell-a"),
+      ...partitionRuns("infra-recovery"),
     ],
   ],
   [
-    "infra-shell-b",
+    "infra-release",
     [
+      "    name: \"infra: release & rollback\"",
       "    runs-on: ubuntu-24.04",
       "    timeout-minutes: 30",
       ...infraGateLines,
@@ -1634,30 +1681,32 @@ const reviewedJobContracts = new Map([
       ...applicationCheckoutProjection,
       ...infraShellPrelude,
       ...infraAptRuns.map((command) => `      - run: ${command}`),
-      ...partitionRuns("infra-shell-b").slice(0, 2),
+      ...partitionRuns("infra-release").slice(0, 2),
       `      - run: ${reviewedDockerEngineRun}`,
-      ...partitionRuns("infra-shell-b").slice(2),
+      ...partitionRuns("infra-release").slice(2),
     ],
   ],
   [
-    "infra-shell-c",
+    "infra-host",
     [
+      "    name: \"infra: ingress, runner VM & host load tests\"",
       "    runs-on: ubuntu-24.04",
       "    timeout-minutes: 30",
       ...infraGateLines,
       "    steps:",
       ...checkoutProjection,
       ...infraShellPrelude,
-      ...partitionRuns("infra-shell-c").slice(0, 4),
+      ...partitionRuns("infra-host").slice(0, 4),
       ...infraAptRuns.map((command) => `      - run: ${command}`),
-      ...partitionRuns("infra-shell-c").slice(4, -1),
+      ...partitionRuns("infra-host").slice(4, -1),
       `      - run: ${reviewedDockerEngineRun}`,
-      ...partitionRuns("infra-shell-c").slice(-1),
+      ...partitionRuns("infra-host").slice(-1),
     ],
   ],
   [
-    "infra-shell-d",
+    "infra-sandbox",
     [
+      "    name: \"infra: runtime sandbox & config\"",
       "    runs-on: ubuntu-24.04",
       "    timeout-minutes: 30",
       ...infraGateLines,
@@ -1666,15 +1715,38 @@ const reviewedJobContracts = new Map([
       ...infraShellPrelude,
       ...infraAptRuns.map((command) => `      - run: ${command}`),
       `      - run: ${reviewedDockerEngineRun}`,
-      ...partitionRuns("infra-shell-d"),
+      ...partitionRuns("infra-sandbox"),
+    ],
+  ],
+  [
+    "postgres-integration-shards",
+    [
+      '    name: "database: integration files (shard ${{ matrix.shard }})"',
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      ...reviewedDatabaseGateLines,
+      "    strategy:",
+      "      fail-fast: false",
+      "      matrix:",
+      `        shard: [${integrationMatrixShards.join(", ")}]`,
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      `      - run: ${postgresCiRuntimePolicy.integrationShardCommand}`,
     ],
   ],
   [
     "integration-mail-races",
     [
+      '    name: "database: mail delivery races (${{ matrix.part }})"',
       "    runs-on: ubuntu-24.04",
       "    timeout-minutes: 30",
       ...reviewedDatabaseGateLines,
+      "    strategy:",
+      "      fail-fast: false",
+      "      matrix:",
+      `        part: [${mailRacesParts.join(", ")}]`,
       "    steps:",
       ...checkoutProjection,
       ...setupNodeProjection,
@@ -1865,6 +1937,7 @@ const reviewedJobContracts = new Map([
   [
     "curriculum-runtime",
     [
+      "    name: \"curriculum: runtime images & scan\"",
       "    runs-on: ubuntu-24.04",
       "    timeout-minutes: 45",
       "    needs: changes",
@@ -1897,10 +1970,124 @@ const reviewedJobContracts = new Map([
       "      - run: npm run runtime:record",
       "        working-directory: services/runner",
       "      - run: npm run curriculum:runtime-pins:check",
+      ...runtimeEvidenceUploadProjection("curriculum-runtime-release-evidence"),
+    ],
+  ],
+  [
+    "curriculum-verify",
+    [
+      "    name: \"curriculum: verify ${{ matrix.group }}\"",
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      "    needs: changes",
+      "    if: needs.changes.outputs.curriculum == 'true'",
+      "    env:",
+      "      RUNTIME_LOCAL_RISK_ACCEPTANCE: accept-unsigned-local-buildkit-provenance-v1",
+      "      RUNTIME_SOURCE_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}",
+      "      RUNTIME_SOURCE_REVISION: ${{ github.sha }}",
+      "    strategy:",
+      "      fail-fast: false",
+      "      matrix:",
+      "        include:",
+      "          - group: c-cpp",
+      "            verify: c-cpp:executable:verify",
+      "            apply: c-cpp:executable:evidence:apply",
+      "            evidence: docs/evidence/c-cpp-executable-runtime-*.json",
+      "          - group: java-python",
+      "            verify: java-python:executable:verify",
+      "            apply: java-python:executable:evidence:apply",
+      "            evidence: docs/evidence/java-python-executable-runtime-*.json",
+      "          - group: ai-code",
+      "            verify: ai-code:executable:verify",
+      "            apply: ai-code:executable:evidence:apply",
+      "            evidence: docs/evidence/ai-code-executable-runtime-*.json",
+      "          - group: web",
+      "            verify: web:executable:verify",
+      "            apply: web:executable:evidence:apply",
+      "            evidence: docs/evidence/web-executable-runtime-*.json",
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      "      - run: npm ci",
+      "        working-directory: services/runner",
+      ...dockerSetupProjection,
+      "      - run: npm run runtime:build",
+      "        working-directory: services/runner",
+      "      - run: npm run runtime:inspect",
+      "        working-directory: services/runner",
       ...playwrightCacheProjection("chromium"),
       "      - run: npx playwright install --with-deps chromium",
-      "      - run: npm run dsa:parity:verify",
-      "      - run: npm run dsa:parity:evidence:apply",
+      "      - run: npm run ${{ matrix.verify }}",
+      "      - run: npm run ${{ matrix.apply }}",
+      "        if: failure()",
+      "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2",
+      "        if: failure()",
+      "        with:",
+      "          name: ${{ matrix.group }}-evidence-regenerated",
+      "          path: ${{ matrix.evidence }}",
+      "          if-no-files-found: warn",
+      "          retention-days: 14",
+    ],
+  ],
+  [
+    "curriculum-dsa-parity",
+    [
+      '    name: "curriculum: DSA parity (shard ${{ matrix.shard }}/2)"',
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      "    needs: changes",
+      "    if: needs.changes.outputs.curriculum == 'true'",
+      "    env:",
+      "      RUNTIME_LOCAL_RISK_ACCEPTANCE: accept-unsigned-local-buildkit-provenance-v1",
+      "      RUNTIME_SOURCE_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}",
+      "      RUNTIME_SOURCE_REVISION: ${{ github.sha }}",
+      "    strategy:",
+      "      fail-fast: false",
+      "      matrix:",
+      "        shard: [1, 2]",
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      "      - run: npm ci",
+      "        working-directory: services/runner",
+      ...dockerSetupProjection,
+      "      - run: npm run runtime:build",
+      "        working-directory: services/runner",
+      "      - run: npm run runtime:inspect",
+      "        working-directory: services/runner",
+      "      - run: npm run dsa:parity:verify -- --shard=${{ matrix.shard }}/2",
+      "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2",
+      "        if: always()",
+      "        with:",
+      "          name: dsa-parity-shard-${{ matrix.shard }}",
+      "          path: services/runner/dist/dsa-parity-shards/",
+      "          if-no-files-found: error",
+      "          retention-days: 1",
+    ],
+  ],
+  [
+    "curriculum-dsa-parity-merge",
+    [
+      '    name: "curriculum: DSA parity (merge & evidence)"',
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 15",
+      "    needs:",
+      "      - changes",
+      "      - curriculum-dsa-parity",
+      "    if: needs.changes.outputs.curriculum == 'true'",
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      "      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0",
+      "        with:",
+      "          pattern: dsa-parity-shard-*",
+      "          path: services/runner/dist/dsa-parity-shards",
+      "          merge-multiple: true",
+      "      - run: npm run dsa:parity:verify -- --merge-shards=2",
+      "      - run: npm run dsa:parity:evidence:apply -- --merge-shards=2",
       "        if: failure()",
       "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2",
       "        if: failure()",
@@ -1909,20 +2096,6 @@ const reviewedJobContracts = new Map([
       "          path: docs/evidence/dsa-parity-runtime-*.json",
       "          if-no-files-found: warn",
       "          retention-days: 14",
-      "      - run: npm run c-cpp:executable:verify",
-      "      - run: npm run java-python:executable:verify",
-      "      - run: npm run ai-code:executable:verify",
-      "      - run: npm run web:executable:verify",
-      "      - run: npm run c-cpp:executable:evidence:apply || true; npm run java-python:executable:evidence:apply || true; npm run ai-code:executable:evidence:apply || true; npm run web:executable:evidence:apply || true",
-      "        if: failure()",
-      "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2",
-      "        if: failure()",
-      "        with:",
-      "          name: executable-evidence-regenerated",
-      "          path: docs/evidence/*-executable-runtime-*.json",
-      "          if-no-files-found: warn",
-      "          retention-days: 14",
-      ...runtimeEvidenceUploadProjection("curriculum-runtime-release-evidence"),
     ],
   ],
   [
@@ -2597,6 +2770,7 @@ function runAdversarialSelfTests(document) {
   );
   for (const jobName of [
     "postgres-integration",
+    "postgres-integration-shards",
     "curriculum-runtime",
     "browser",
     "production-topology",
@@ -2846,10 +3020,19 @@ function runAdversarialSelfTests(document) {
     "extra curriculum runtime command",
     replaceExactly(
       document,
-      "      - run: npm run runtime:inspect\n        working-directory: services/runner\n",
-      "      - run: npm run runtime:inspect\n        working-directory: services/runner\n      - run: echo unreviewed\n",
+      "      - run: npm run runtime:inspect\n        working-directory: services/runner\n      - run: npm run runtime:test\n",
+      "      - run: npm run runtime:inspect\n        working-directory: services/runner\n      - run: echo unreviewed\n      - run: npm run runtime:test\n",
     ),
     "curriculum-runtime executable contract changed",
+  );
+  expectRejectedWithMessage(
+    "extra curriculum verifier command",
+    replaceExactly(
+      document,
+      "      - run: npm run ${{ matrix.verify }}\n",
+      "      - run: npm run ${{ matrix.verify }}\n      - run: echo unreviewed\n",
+    ),
+    "curriculum-verify executable contract changed",
   );
   expectRejectedWithMessage(
     "browser step environment",

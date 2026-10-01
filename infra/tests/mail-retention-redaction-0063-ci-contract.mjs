@@ -12,12 +12,20 @@ export const postgresCiRuntimePolicy = Object.freeze({
   runner: "ubuntu-24.04",
   baselineTimeoutMinutes: 20,
   maximumTimeoutMinutes: 35,
-  // Every integration file except the long mail-delivery race suite runs here;
-  // that one file runs in its own parallel job under the same database gate.
+  // Every integration file except the mail-delivery race suites is split into
+  // integrationShardCount shards of the sorted file list (shard k takes the
+  // files whose 1-based position p has p % count === k). Shard 0 runs here;
+  // shards 1..count-1 run as parallel matrix shards under the same database
+  // gate, so every file still runs exactly once.
+  integrationShardCount: 5,
   livePg17IntegrationCommand:
-    "npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name mail-delivery-races.integration.test.ts | LC_ALL=C sort)",
+    "npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name 'mail-delivery-races-*.integration.test.ts' | LC_ALL=C sort | awk 'NR % 5 == 0')",
+  integrationShardCommand:
+    "npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name 'mail-delivery-races-*.integration.test.ts' | LC_ALL=C sort | awk -v shard=${{ matrix.shard }} 'NR % 5 == shard')",
+  integrationMatrixShards: Object.freeze([1, 2, 3, 4]),
   mailRacesIntegrationCommand:
-    "npm run test:integration -- integration/mail-delivery-races.integration.test.ts",
+    "npm run test:integration -- integration/mail-delivery-races-${{ matrix.part }}.integration.test.ts",
+  mailRacesIntegrationParts: Object.freeze(["claims", "sweeper", "deletion"]),
   // Owner decision 2026-10-01: pull requests run the PostgreSQL gates only when
   // database/server paths change; push to main, nightly and dispatch always do.
   databaseGateLines: Object.freeze([

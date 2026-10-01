@@ -31,6 +31,7 @@ import {
   ExamMasteryAwardError,
 } from "@/lib/achievements/exam-mastery";
 import {
+  listPointerSelectedCourseSlugs,
   listPublishedExamCourses,
 } from "@/lib/curriculum-publication/runtime";
 import type { StoredEvidence } from "@/lib/learning-service/types";
@@ -367,14 +368,19 @@ export async function listExamCatalog(
   now = new Date(),
 ): Promise<readonly ExamCatalogEntry[]> {
   const content = createContentRepository();
-  const [filesystemCourses, publishedCourses] = await Promise.all([
+  const [filesystemCourses, publishedCourses, pointerSelected] = await Promise.all([
     content.listCourses({ status: ["beta", "verified"] }),
     listPublishedExamCourses(),
+    listPointerSelectedCourseSlugs(),
   ]);
+  // A pointer-selected course is governed by its publication alone. When the
+  // publication is not exam-ready (for example it lacks release evidence), the
+  // course is closed rather than reopened from filesystem content.
   const publishedCourseIds = new Set(publishedCourses.map((item) => item.course.id));
   const courses = [
     ...publishedCourses.map((item) => item.course),
-    ...filesystemCourses.filter((course) => !publishedCourseIds.has(course.id)),
+    ...filesystemCourses.filter((course) =>
+      !publishedCourseIds.has(course.id) && !pointerSelected.has(course.id)),
   ];
   let history = await examHistory(userId);
   const expiredActive = history.filter((entry) =>
@@ -500,6 +506,32 @@ export interface StartExamInput {
   readonly device: StartDeviceClaim;
 }
 
+// Rewards and their reconciliation only credit attempts bound to a learner-owned
+// enrollment (attempt.enrollment_id). Bind the learner's own active/completed
+// enrollment for the exact published course version being assessed, locked for
+// the admission transaction. Unpublished filesystem admissions have no version
+// identity to prove ownership against and stay unbound (no XP), as do learners
+// without an enrollment for that version.
+async function admissionEnrollmentId(
+  tx: DrizzleTransaction,
+  userId: string,
+  courseVersionId: string | null,
+): Promise<string | null> {
+  if (courseVersionId === null) return null;
+  const [owned] = await tx
+    .select({ id: enrollment.id })
+    .from(enrollment)
+    .where(and(
+      eq(enrollment.userId, userId),
+      eq(enrollment.courseVersionId, courseVersionId),
+      inArray(enrollment.status, ["active", "completed"]),
+    ))
+    .orderBy(enrollment.createdAt, enrollment.id)
+    .limit(1)
+    .for("share");
+  return owned?.id ?? null;
+}
+
 async function publishedModuleReadiness(input: {
   readonly userId: string;
   readonly courseVersionId: string;
@@ -564,7 +596,10 @@ export async function startExam(
     );
   }
 
-  const publishedCourses = await listPublishedExamCourses();
+  const [publishedCourses, pointerSelected] = await Promise.all([
+    listPublishedExamCourses(),
+    listPointerSelectedCourseSlugs(),
+  ]);
   const published = publishedCourses
     .map((publication) => ({
       ...publication,
@@ -580,7 +615,9 @@ export async function startExam(
   if (!courseModule || !course || (course.status !== "beta" && course.status !== "verified")) {
     throw new ExamServiceError("This module is not available for an exam.", 404, "MODULE_NOT_EXAM_READY");
   }
-  if (!published && publishedCourses.some((publication) => publication.course.id === course.id)) {
+  // Filesystem content may serve only courses no publication pointer selects,
+  // including pointer-selected courses the exam runtime excluded as ineligible.
+  if (!published && pointerSelected.has(course.id)) {
     throw new ExamServiceError(
       "This module is not part of the current reviewed curriculum publication.",
       404,
@@ -790,10 +827,12 @@ export async function startExam(
     const attemptNumber = priorForms.filter(
       (row) => storedForm(row.answer)?.moduleId === input.moduleId,
     ).length + 1;
+    const enrollmentId = await admissionEnrollmentId(tx, userId, published?.courseVersionId ?? null);
     const [createdAttempt] = await tx
       .insert(attempt)
       .values({
         userId,
+        enrollmentId,
         kind: attemptNumber === 1 ? "exam" : "retake",
         attemptNumber,
         status: "in_progress",
@@ -1058,10 +1097,12 @@ export async function startMasteryRecheck(
         { sessionId: otherActive.id },
       );
     }
+    const enrollmentId = await admissionEnrollmentId(tx, userId, published.courseVersionId);
     const [createdAttempt] = await tx
       .insert(attempt)
       .values({
         userId,
+        enrollmentId,
         kind: "mastery_check",
         attemptNumber: 1,
         status: "in_progress",
@@ -2458,6 +2499,14 @@ export async function submitExam(
   return getExamSession(userId, sessionId, now);
 }
 
+function appealBeforeDurableResult(): ExamServiceError {
+  return new ExamServiceError(
+    "An appeal can be submitted after the exam result is recorded.",
+    409,
+    "APPEAL_TOO_EARLY",
+  );
+}
+
 export async function submitExamAppeal(input: {
   readonly userId: string;
   readonly sessionId: string;
@@ -2509,6 +2558,9 @@ export async function submitExamAppeal(input: {
       .where(eq(codeSubmission.attemptId, owned.attempt.id))
       .orderBy(codeSubmission.createdAt, codeSubmission.id),
   ]);
+  // A submitted/expired session without a durable result is still owned by
+  // finalization; moving it to under_review would strand that job.
+  if (result === null) throw appealBeforeDurableResult();
   const snapshot = buildExamAppealEvidence({
     examSessionId: input.sessionId,
     attemptId: owned.attempt.id,
@@ -2567,6 +2619,26 @@ export async function submitExamAppeal(input: {
         );
       }
       return { accepted: true, duplicate: true, appealId: sameRequest.id } as const;
+    }
+    // Re-prove the durable result under the session lock: the pre-lock read
+    // must not decide whether finalization still owns this session.
+    const [lockedEffective] = await tx
+      .select({ result: assessmentAttemptEffectiveResult.result })
+      .from(assessmentAttemptEffectiveResult)
+      .where(eq(assessmentAttemptEffectiveResult.attemptId, locked.attempt.id))
+      .limit(1)
+      .for("share");
+    const [lockedBase] = await tx
+      .select({ answer: examResponse.answer })
+      .from(examResponse)
+      .where(and(
+        eq(examResponse.attemptId, locked.attempt.id),
+        eq(examResponse.itemKey, RESULT_RESPONSE_KEY),
+      ))
+      .limit(1)
+      .for("share");
+    if (storedResult(lockedEffective?.result) === null && storedResult(lockedBase?.answer) === null) {
+      throw appealBeforeDurableResult();
     }
     const [alreadyOpen] = await tx
       .select({ id: appeal.id })

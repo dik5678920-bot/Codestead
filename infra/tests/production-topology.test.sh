@@ -911,6 +911,15 @@ migration_rows_after="$(psql_query 'select count(*) from drizzle.__drizzle_migra
   exit 1
 }
 
+# Release runs a complete-ledger role reconciliation after every migration and
+# before the seed. When the contended bootstrap won the lock above, the
+# migrations ran after it and only this reconciliation grants the runtime roles
+# the objects they created; without it the seed cannot see them.
+timeout 360 "${compose[@]}" --profile operations run --rm --env PGAPPNAME=codestead-topology-role-bootstrap \
+  --env REQUIRE_COMPLETE_MIGRATION_LEDGER=true --no-deps database-role-bootstrap \
+  >"$workdir/bootstrap-reconcile.log" 2>&1
+grep -F '"event":"database.roles_bootstrapped"' "$workdir/bootstrap-reconcile.log" >/dev/null
+
 timeout 600 "${compose[@]}" --profile operations run --rm --no-deps platform-seed \
   >"$workdir/seed-one.log" 2>&1
 grep -F '"event":"platform.seeded"' "$workdir/seed-one.log" >/dev/null

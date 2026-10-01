@@ -1,0 +1,157 @@
+{
+  "schemaVersion": 1,
+  "date": "2026-10-01",
+  "pullRequest": 85,
+  "rebasedOn": "3a1638ca823eb21fb2c3297df1b3f98f1c82a2b0",
+  "scope": "CI follow-up: upstream evidence drift, validated owner migration proof, browser UI expectations and historical 0069 journal replay.",
+  "findings": [
+    "Owner scanner reproduced 2 failures for direct DATABASE_OWNER_URL use. The legacy-row replay now runs inside runValidatedIntegrationMigrations after its owner/app URL and live identity validation; the standalone catalog test uses app authority. The scanner and its closed-world helper API/callsite inventory are unchanged.",
+    "Chromium reproduced the obsolete Verified button expectation. The code input and verification button disappear after successful verification. The spec still proves zero mutations before verification and one successful verification before mutation. Password concealment passed in the red and green local runs; e2e/access.spec.ts is unchanged.",
+    "Server credential mutations still call requireRecentMfa, which re-reads the durable session row and fails closed for missing or never-verified sessions. The pre-existing learner policy accepts an MFA-completed session for its lifetime; this PR does not change that policy or the fresh-MFA endpoint.",
+    "Mail PG17 harness failed at prepareRuntimeProofJournal: actual 71 versus expected 70. It now requires the 0069 entry at index 69 and replays the corresponding 70-entry prefix while permitting later entries."
+  ],
+  "checks": [
+    {
+      "command": "npm run evidence:verify",
+      "result": "pass"
+    },
+    {
+      "command": "npm run test -- scripts/__tests__/validated-owner-fault-injection.test.ts src/lib/security/__tests__/recent-mfa.test.ts src/lib/security/__tests__/credential-mutation-boundaries.test.ts",
+      "result": "pass",
+      "tests": 82,
+      "files": 3
+    },
+    {
+      "command": "npm run test:e2e -- e2e/assurance.spec.ts e2e/access.spec.ts --project=chromium",
+      "result": "pass",
+      "tests": 11,
+      "port": 3185
+    },
+    {
+      "command": "POSTGRES_17_BIN=/usr/lib/postgresql/17/bin npm run test:mail-guarded-delivery-0069:pg17",
+      "result": "pass",
+      "environment": "WSL Ubuntu, native PostgreSQL 17, Node 24.19.0; own worktree dependencies with Linux esbuild binary"
+    },
+    {
+      "command": "npm run test:integration -- integration/postgres.integration.test.ts integration/credential-preference-migration.integration.test.ts",
+      "result": "pass",
+      "tests": 20,
+      "files": 2,
+      "releaseCycles": [
+        "initial",
+        "replay"
+      ],
+      "migrationTail": "0070",
+      "legacyRows": "duplicate preferences repaired, stored envelopes/statuses preserved, partial uniqueness enforced, unreachable enum committed"
+    },
+    {
+      "command": "node --test infra/tests/mail-guarded-delivery-0069-harness.test.mjs",
+      "result": "pass",
+      "tests": 13
+    },
+    {
+      "command": "tsc --noEmit",
+      "result": "pass"
+    },
+    {
+      "command": "eslint on changed source files",
+      "result": "pass"
+    }
+  ],
+  "limits": "Focused checks only. Full Vitest, all integration files, all browser projects and production build were not rerun. Prior historical test results remain unchanged. No CI result is asserted.",
+  "evidenceBindingChanges": [
+    {
+      "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
+      "field": "/artifactSha256/docs~1evidence~1api-authorization-matrix-2026-07-12.json",
+      "artifact": "docs/evidence/api-authorization-matrix-2026-07-12.json",
+      "previousDigest": "25e499dec80e020d60e9a05a9a9c1536484a6238be5de6938ea71ed327840e07",
+      "currentDigest": "dddb32ecd9ece9201fb5f109afb51790b8ceec6460c6f37ed7aa724a70751238"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
+      "field": "/artifactSha256/docs~1evidence~1run-008-official-runner-fairness-2026-07-12.json",
+      "artifact": "docs/evidence/run-008-official-runner-fairness-2026-07-12.json",
+      "previousDigest": "7f2aa6fc3f086fc425cd12f2df84d28bb8bb54500fdabc289f5ef47e6401fccf",
+      "currentDigest": "f53e4656463dc9759bb3cf8d4153d074358d5e350174b29a2b98fe42705e91b6"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
+      "field": "/artifactSha256/integration~1credential-preference-migration.integration.test.ts",
+      "artifact": "integration/credential-preference-migration.integration.test.ts",
+      "previousDigest": "a9b7382068c7ff13fb160c7f397e30cf03cf31615c3b7f532f0a6c394e51c3b1",
+      "currentDigest": "ceab46370093b4b69bd2682511b88d5fc97705e483a0de918eb82fd868cadc32"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
+      "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
+      "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
+      "previousDigest": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
+      "currentDigest": "ba22c32b4f629c930235ac2e7f24209140d3739b2495cf9d8fe7e25efaa4a5f1"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json",
+      "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
+      "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
+      "previousDigest": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
+      "currentDigest": "ba22c32b4f629c930235ac2e7f24209140d3739b2495cf9d8fe7e25efaa4a5f1"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json",
+      "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-ci-pins-2026-10-01.json",
+      "artifact": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
+      "previousDigest": "69e1bceb6a7f1a3a3fa93e30246b7a6832f2f9cb6679b2ce354d174982ebd0f9",
+      "currentDigest": "1886fc7b8fccc906d24e895eeb25157f606409523ff96cad441fc190699dbff8"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json",
+      "field": "/artifactSha256/integration~1credential-preference-migration.integration.test.ts",
+      "artifact": "integration/credential-preference-migration.integration.test.ts",
+      "previousDigest": "a9b7382068c7ff13fb160c7f397e30cf03cf31615c3b7f532f0a6c394e51c3b1",
+      "currentDigest": "ceab46370093b4b69bd2682511b88d5fc97705e483a0de918eb82fd868cadc32"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json",
+      "field": "/artifactSha256/scripts~1refresh-ai-provider-evidence-bindings.mjs",
+      "artifact": "scripts/refresh-ai-provider-evidence-bindings.mjs",
+      "previousDigest": "9d7e0b4954252deec5b39431ae5cd611047f88b02e7d70d065197833bd3cc112",
+      "currentDigest": "668cc764cc03bf1d24deaa03840de2c751c19a63ab8326f68ccb2ab43f43e2a7"
+    }
+  ],
+  "metadataAdditions": [
+    {
+      "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
+      "field": "/ciFollowupRefresh",
+      "old": "absent",
+      "new": "scope and exact changed-field old/current digest inventory; historical metadata preserved"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
+      "field": "/ciFollowupRefresh",
+      "old": "absent",
+      "new": "scope and exact changed-field old/current digest inventory; historical metadata preserved"
+    },
+    {
+      "evidence": "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json",
+      "field": "/ciFollowupRefresh",
+      "old": "absent",
+      "new": "scope and exact changed-field old/current digest inventory; historical metadata preserved"
+    }
+  ],
+  "artifactSha256": {
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "ba22c32b4f629c930235ac2e7f24209140d3739b2495cf9d8fe7e25efaa4a5f1",
+    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "1886fc7b8fccc906d24e895eeb25157f606409523ff96cad441fc190699dbff8",
+    "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json": "2437fbbf783a0e36a896a6e1dec3614d3baf675025c03a44f813b10df4520651",
+    "e2e/assurance.spec.ts": "cd96a09185e4222495c52ffe7e34031ed51ead1e1c05144e99de537f85427985",
+    "e2e/access.spec.ts": "d7026f69cb0faf066b39e89b8184434b4c58e521b21a2b9fd6861f1444cb5c75",
+    "infra/tests/mail-guarded-delivery-0069.impl.mjs": "77b54c928cc6360bb4a613f122b80696d0be1984111d789482f1dea9cfa0bd54",
+    "infra/tests/mail-guarded-delivery-0069-harness.test.mjs": "d88c7e25322870cbfb1cda63b775cc3f40334f45dc52468799afe1360a49db3f",
+    "integration/credential-preference-migration.integration.test.ts": "ceab46370093b4b69bd2682511b88d5fc97705e483a0de918eb82fd868cadc32",
+    "integration/support/credential-preference-migration-proof.ts": "dad457f393f97b71c9b2105c0649df2a49a83a98bd9a020c6782f386992fb1ba",
+    "integration/support/with-validated-owner-fault-injection.ts": "8e2732e4ff6171758a1701c76225ddf574203fdb43b5c6ad6b78f4690c04c84e",
+    "scripts/refresh-ai-provider-evidence-bindings.mjs": "668cc764cc03bf1d24deaa03840de2c751c19a63ab8326f68ccb2ab43f43e2a7",
+    "scripts/__tests__/validated-owner-fault-injection.test.ts": "5c353b5d371135ea9030b709736527821b6c86d8186bf0cd262eac1806cedf74",
+    "src/lib/security/recent-mfa.ts": "7b7fdebba042cf43467975860630d6606a351f27eeca9a554c4c10b0dc6f8064",
+    "src/lib/security/privileged-access.ts": "19178909fb882c34536208bee280807930cab4eaf2ebb76ef7c1e1aef15c44fa",
+    "src/app/api/security/fresh-mfa/route.ts": "5c2c5a0adc32a1e7557128665b788139eaff1a7b77b26552a226c81bf1e223d5"
+  }
+}

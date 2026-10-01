@@ -184,6 +184,7 @@ jobs:
   # because one shard covers only part of the code. unit-coverage merges all
   # six blobs and enforces the unchanged vitest.config.ts thresholds once.
   unit:
+    name: "unit tests (shard ${{ matrix.shard }}/6)"
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -271,7 +272,8 @@ jobs:
 
   # Host-shell infrastructure suites run as four parallel groups. Pull requests
   # run them only when infra-paths change; main, nightly and dispatch always do.
-  infra-shell-a:
+  infra-recovery:
+    name: "infra: power loss & recovery"
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: changes
@@ -301,7 +303,8 @@ jobs:
       - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/power-recovery-check.test.sh
       - run: sudo bash infra/tests/systemd-recovery.test.sh
 
-  infra-shell-b:
+  infra-release:
+    name: "infra: release & rollback"
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: changes
@@ -330,7 +333,8 @@ jobs:
       - run: sudo -n env "PATH=$PATH" PYTHONDONTWRITEBYTECODE=1 bash infra/tests/rollback-production.test.sh
       - run: REQUIRE_COMPOSE_MAJOR=5 bash infra/tests/compose-release-cli-contract.test.sh
 
-  infra-shell-c:
+  infra-host:
+    name: "infra: ingress, runner VM & host load tests"
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: changes
@@ -374,7 +378,8 @@ jobs:
       - run: bash infra/tests/install-reviewed-docker-engine.sh
       - run: sudo env PYTHONDONTWRITEBYTECODE=1 bash infra/tests/runner-firewall-packets.test.sh
 
-  infra-shell-d:
+  infra-sandbox:
+    name: "infra: runtime sandbox & config"
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: changes
@@ -717,7 +722,7 @@ jobs:
       - run: npm run test:mail-durable-replay-0067:roles
       - run: npm run test:mail-retention-redaction-0068:roles
       - run: npm run test:mail-guarded-delivery-0069:roles
-      - run: npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name mail-delivery-races.integration.test.ts | LC_ALL=C sort)
+      - run: npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name 'mail-delivery-races-*.integration.test.ts' | LC_ALL=C sort | awk 'NR % 5 == 0')
       - run: docker pull postgres:17-bookworm@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f2ccd4c800f047b394
       - run: docker pull node:22.23.3-alpine3.23@sha256:489418a947387da1c5b4c0c5749c963da56ecaac0ced1da74c67db60e42f2b3a
       - run: CODESTEAD_DISPOSABLE_HOST=1 bash infra/tests/database-least-privilege-integration.sh
@@ -765,14 +770,20 @@ jobs:
       - run: POSTGRES_18_BIN=/usr/lib/postgresql/18/bin npm run test:mail-guarded-delivery-0069:pg18
       - run: POSTGRES_18_BIN=/usr/lib/postgresql/18/bin npm run test:restore-drill-role-boundary:pg18
 
-  # The mail-delivery race suite alone takes about 7.5 minutes, so it runs in
-  # parallel with postgres-integration (which runs every other integration file)
-  # under the same database gate and the same disposable PostgreSQL harness.
-  integration-mail-races:
+  # The other integration files run in five shards of the sorted file list
+  # (shard k = files at 1-based positions p with p % 5 == k): shard 0 inside
+  # postgres-integration, shards 1-4 here, each with its own disposable
+  # database. backup-ci-registration proves the shards partition every file.
+  postgres-integration-shards:
+    name: "database: integration files (shard ${{ matrix.shard }})"
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     needs: changes
     if: needs.changes.outputs.database == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -782,9 +793,34 @@ jobs:
           node-version: 22.23.1
           cache: npm
       - run: npm ci
-      - run: npm run test:integration -- integration/mail-delivery-races.integration.test.ts
+      - run: npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name 'mail-delivery-races-*.integration.test.ts' | LC_ALL=C sort | awk -v shard=${{ matrix.shard }} 'NR % 5 == shard')
+
+  # The mail-delivery race suites (about 7.5 minutes of tests in total) run as
+  # three parallel parts beside postgres-integration, which runs every other
+  # integration file, under the same database gate and disposable harness.
+  integration-mail-races:
+    name: "database: mail delivery races (${{ matrix.part }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.database == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [claims, sweeper, deletion]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - run: npm run test:integration -- integration/mail-delivery-races-${{ matrix.part }}.integration.test.ts
 
   curriculum-runtime:
+    name: "curriculum: runtime images & scan"
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     needs: changes
@@ -842,38 +878,6 @@ jobs:
       - run: npm run runtime:record
         working-directory: services/runner
       - run: npm run curriculum:runtime-pins:check
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-chromium
-      - run: npx playwright install --with-deps chromium
-      - run: npm run dsa:parity:verify
-      - name: Regenerate DSA parity runtime evidence after a failed verification
-        run: npm run dsa:parity:evidence:apply
-        if: failure()
-      - name: Upload regenerated DSA parity runtime evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: failure()
-        with:
-          name: dsa-parity-evidence-regenerated
-          path: docs/evidence/dsa-parity-runtime-*.json
-          if-no-files-found: warn
-          retention-days: 14
-      - run: npm run c-cpp:executable:verify
-      - run: npm run java-python:executable:verify
-      - run: npm run ai-code:executable:verify
-      - run: npm run web:executable:verify
-      - name: Regenerate executable runtime evidence after a failed verification
-        run: npm run c-cpp:executable:evidence:apply || true; npm run java-python:executable:evidence:apply || true; npm run ai-code:executable:evidence:apply || true; npm run web:executable:evidence:apply || true
-        if: failure()
-      - name: Upload regenerated executable runtime evidence
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        if: failure()
-        with:
-          name: executable-evidence-regenerated
-          path: docs/evidence/*-executable-runtime-*.json
-          if-no-files-found: warn
-          retention-days: 14
       - name: Upload curriculum runtime evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
@@ -887,6 +891,167 @@ jobs:
             services/runner/dist/.runtime-security.failed-*/**
           if-no-files-found: warn
           include-hidden-files: true
+          retention-days: 14
+
+  # Each executable-tranche verifier runs in its own job against freshly built
+  # local runtime images. A failed verifier regenerates and uploads its own
+  # evidence file so the reviewed diff can be inspected.
+  curriculum-verify:
+    name: "curriculum: verify ${{ matrix.group }}"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.curriculum == 'true'
+    env:
+      RUNTIME_LOCAL_RISK_ACCEPTANCE: accept-unsigned-local-buildkit-provenance-v1
+      RUNTIME_SOURCE_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}
+      RUNTIME_SOURCE_REVISION: ${{ github.sha }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - group: c-cpp
+            verify: c-cpp:executable:verify
+            apply: c-cpp:executable:evidence:apply
+            evidence: docs/evidence/c-cpp-executable-runtime-*.json
+          - group: java-python
+            verify: java-python:executable:verify
+            apply: java-python:executable:evidence:apply
+            evidence: docs/evidence/java-python-executable-runtime-*.json
+          - group: ai-code
+            verify: ai-code:executable:verify
+            apply: ai-code:executable:evidence:apply
+            evidence: docs/evidence/ai-code-executable-runtime-*.json
+          - group: web
+            verify: web:executable:verify
+            apply: web:executable:evidence:apply
+            evidence: docs/evidence/web-executable-runtime-*.json
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - run: npm ci
+        working-directory: services/runner
+      - name: Set up Docker with containerd image store
+        uses: docker/setup-docker-action@6d7cfa65f60a9dda7b46e5513fa982536f3c9877 # v5.3.0
+        with:
+          set-host: true
+          daemon-config: |
+            {
+              "features": {
+                "containerd-snapshotter": true
+              }
+            }
+      - run: npm run runtime:build
+        working-directory: services/runner
+      - run: npm run runtime:inspect
+        working-directory: services/runner
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}-chromium
+      - run: npx playwright install --with-deps chromium
+      - run: npm run ${{ matrix.verify }}
+      - name: Regenerate this group's runtime evidence after a failed verification
+        run: npm run ${{ matrix.apply }}
+        if: failure()
+      - name: Upload this group's regenerated runtime evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: ${{ matrix.group }}-evidence-regenerated
+          path: ${{ matrix.evidence }}
+          if-no-files-found: warn
+          retention-days: 14
+
+  # DSA parity executes every runtime case in two shards; the merge job then
+  # requires every case exactly once and checks the single committed evidence.
+  curriculum-dsa-parity:
+    name: "curriculum: DSA parity (shard ${{ matrix.shard }}/2)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.curriculum == 'true'
+    env:
+      RUNTIME_LOCAL_RISK_ACCEPTANCE: accept-unsigned-local-buildkit-provenance-v1
+      RUNTIME_SOURCE_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}
+      RUNTIME_SOURCE_REVISION: ${{ github.sha }}
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - run: npm ci
+        working-directory: services/runner
+      - name: Set up Docker with containerd image store
+        uses: docker/setup-docker-action@6d7cfa65f60a9dda7b46e5513fa982536f3c9877 # v5.3.0
+        with:
+          set-host: true
+          daemon-config: |
+            {
+              "features": {
+                "containerd-snapshotter": true
+              }
+            }
+      - run: npm run runtime:build
+        working-directory: services/runner
+      - run: npm run runtime:inspect
+        working-directory: services/runner
+      - run: npm run dsa:parity:verify -- --shard=${{ matrix.shard }}/2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: dsa-parity-shard-${{ matrix.shard }}
+          path: services/runner/dist/dsa-parity-shards/
+          if-no-files-found: error
+          retention-days: 1
+
+  curriculum-dsa-parity-merge:
+    name: "curriculum: DSA parity (merge & evidence)"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs:
+      - changes
+      - curriculum-dsa-parity
+    if: needs.changes.outputs.curriculum == 'true'
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          pattern: dsa-parity-shard-*
+          path: services/runner/dist/dsa-parity-shards
+          merge-multiple: true
+      - run: npm run dsa:parity:verify -- --merge-shards=2
+      - name: Regenerate DSA parity runtime evidence after a failed verification
+        run: npm run dsa:parity:evidence:apply -- --merge-shards=2
+        if: failure()
+      - name: Upload regenerated DSA parity runtime evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: failure()
+        with:
+          name: dsa-parity-evidence-regenerated
+          path: docs/evidence/dsa-parity-runtime-*.json
+          if-no-files-found: warn
           retention-days: 14
 
   auth-browser:
@@ -955,18 +1120,22 @@ jobs:
       - build
       - docker-build
       - db-roles
-      - infra-shell-a
-      - infra-shell-b
-      - infra-shell-c
-      - infra-shell-d
+      - infra-recovery
+      - infra-release
+      - infra-host
+      - infra-sandbox
       - production-topology
       - application-images
       - backup-safety
       - backup-production-e2e
       - runner
       - postgres-integration
+      - postgres-integration-shards
       - integration-mail-races
       - curriculum-runtime
+      - curriculum-verify
+      - curriculum-dsa-parity
+      - curriculum-dsa-parity-merge
       - auth-browser
       - browser
     if: always()
@@ -976,13 +1145,13 @@ jobs:
           set -Eeuo pipefail
           gate_of() {
             case "$1" in
-              infra-shell-a|infra-shell-b|infra-shell-c|infra-shell-d) echo infra ;;
+              infra-recovery|infra-release|infra-host|infra-sandbox) echo infra ;;
               production-topology) echo topology ;;
               application-images) echo images ;;
               runner) echo runner ;;
-              curriculum-runtime) echo curriculum ;;
+              curriculum-runtime|curriculum-verify|curriculum-dsa-parity|curriculum-dsa-parity-merge) echo curriculum ;;
               auth-browser|browser) echo browser ;;
-              postgres-integration|integration-mail-races) echo database ;;
+              postgres-integration|postgres-integration-shards|integration-mail-races) echo database ;;
               *) echo '' ;;
             esac
           }

@@ -105,7 +105,7 @@
   "sourceHashes": [
     {
       "path": "scripts/backup/common.sh",
-      "sha256": "78d5dd6f317e2b54b468efa08a9eef39a310484f7274bb744e5e79b79eafa01c"
+      "sha256": "1fdc86e957a5523da851faa63fecc05e9b9c339931224282c4b53a1d05cafd49"
     },
     {
       "path": "scripts/backup/backup.sh",
@@ -137,11 +137,11 @@
     },
     {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "f62f2d8ce0640aa88eab712de40e463fcb27d7c3f78197e56a248612f2309080"
+      "sha256": "24338841f3566bc53b0c3bcdd6afef060b1ff79471246ffc165d5ee21dc727e2"
     },
     {
       "path": "scripts/lib/reviewed-migration-ledger.mjs",
-      "sha256": "ea6edf83dd8ee770013a4be83b6bd9806b08f63e083d449926b6423bd648acd3"
+      "sha256": "b472f3384219f0490423b043e2078fd5d5afedd2480cb65837a9c79525fbfef2"
     },
     {
       "path": "scripts/migrate-production.mjs",
@@ -181,7 +181,7 @@
     },
     {
       "path": "scripts/__tests__/backup-reporter-role-contract.test.ts",
-      "sha256": "1011a93b7e0c8b07492d445870de1eea07f41ee153d755cd9653720b9cb75cca"
+      "sha256": "9c9dca0c0fb9929e3807a916276cdda09e7405b9e96c52a6c4f497fa80604e47"
     },
     {
       "path": "scripts/run-integration-tests.ts",
@@ -197,11 +197,11 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "7efc3e02afb215e0da40d9f745011e9691fc5b93099e38882ae18200c3e1bbee"
+      "sha256": "8b2d56912db25e3d936de561489a1b37a372a2c6ffd00502fc7fa10d4a8ecd91"
     },
     {
       "path": "infra/tests/backup-ci-registration.test.mjs",
-      "sha256": "8ff5095a2a6385a9f5a42498af21490c98f29c000f02bb86c4feb50d58cbbeac"
+      "sha256": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
     }
   ],
   "supersededDigests": [
@@ -452,5 +452,86 @@
     "The selected native evidence run used PostgreSQL 17 only. Separate repository gates cover PostgreSQL 18; this record does not claim that external runtime evidence.",
     "The exact full backup and restore drill is recorded separately; this report does not exercise real backup archives, Google Drive, or real recovery credentials.",
     "The named C:\\tmp log is local run provenance rather than a committed artifact; the active source hashes and rerunnable commands are the repository integrity boundary."
-  ]
+  ],
+  "artifactBindingRefresh": {
+    "date": "2026-10-01",
+    "scope": "Current source hash bindings only. Original run dates, results, and historical scopes are unchanged; the historical PostgreSQL 17 release gates were not rerun for this change.",
+    "reviewRecord": "docs/evidence/ai-provider-settings-2026-10-01.json",
+    "changes": [
+      {
+        "path": "scripts/backup/common.sh",
+        "previousSha256": "78d5dd6f317e2b54b468efa08a9eef39a310484f7274bb744e5e79b79eafa01c",
+        "sha256": "1fdc86e957a5523da851faa63fecc05e9b9c339931224282c4b53a1d05cafd49"
+      },
+      {
+        "path": "drizzle/meta/_journal.json",
+        "previousSha256": "f62f2d8ce0640aa88eab712de40e463fcb27d7c3f78197e56a248612f2309080",
+        "sha256": "24338841f3566bc53b0c3bcdd6afef060b1ff79471246ffc165d5ee21dc727e2"
+      },
+      {
+        "path": "scripts/lib/reviewed-migration-ledger.mjs",
+        "previousSha256": "ea6edf83dd8ee770013a4be83b6bd9806b08f63e083d449926b6423bd648acd3",
+        "sha256": "b472f3384219f0490423b043e2078fd5d5afedd2480cb65837a9c79525fbfef2"
+      },
+      {
+        "path": "infra/tests/backup-ci-registration.test.mjs",
+        "previousSha256": "8ff5095a2a6385a9f5a42498af21490c98f29c000f02bb86c4feb50d58cbbeac",
+        "sha256": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
+      }
+    ]
+  },
+  "ciPinFollowup": {
+    "date": "2026-10-01",
+    "scope": "Current source binding only; original historical run dates, results, and scope are preserved.",
+    "reviewRecord": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
+    "changes": [
+      {
+        "evidence": "docs/evidence/backup-status-outbox-2026-07-12.json",
+        "field": "sha256",
+        "path": "scripts/__tests__/backup-reporter-role-contract.test.ts",
+        "previousSha256": "1011a93b7e0c8b07492d445870de1eea07f41ee153d755cd9653720b9cb75cca",
+        "sha256": "9c9dca0c0fb9929e3807a916276cdda09e7405b9e96c52a6c4f497fa80604e47"
+      }
+    ]
+  },
+  "rebaseBindingRefresh": {
+    "base": "234d981",
+    "scope": "Rebase onto merged CI phase 2 split; current source bindings refreshed, previous operator-reviewed digests retained here. Historical gate results are unchanged.",
+    "changes": [
+      {
+        "path": "infra/tests/backup-ci-registration.test.mjs",
+        "previousDigest": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc",
+        "currentDigest": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
+      }
+    ]
+  },
+  "schemaQualificationRefresh": {
+    "scope": "Current-source bindings and current 0070 migration identity only. Historical results are preserved; restricted-migrator verification is recorded separately.",
+    "changes": [
+      {
+        "field": "/sourceHashes/0/sha256",
+        "artifact": "scripts/backup/common.sh",
+        "previousDigest": "4a41eacd95beebab9cb7ac035b776f30b70710a6706bebe482d9f013829241fe",
+        "currentDigest": "1fdc86e957a5523da851faa63fecc05e9b9c339931224282c4b53a1d05cafd49"
+      },
+      {
+        "field": "/sourceHashes/9/sha256",
+        "artifact": "scripts/lib/reviewed-migration-ledger.mjs",
+        "previousDigest": "c6196ca09009a192534fb99b53ffb59fac453e8b652c36f05dfb08cc9e64260e",
+        "currentDigest": "b472f3384219f0490423b043e2078fd5d5afedd2480cb65837a9c79525fbfef2"
+      },
+      {
+        "field": "/artifactBindingRefresh/changes/0/sha256",
+        "artifact": "scripts/backup/common.sh",
+        "previousDigest": "4a41eacd95beebab9cb7ac035b776f30b70710a6706bebe482d9f013829241fe",
+        "currentDigest": "1fdc86e957a5523da851faa63fecc05e9b9c339931224282c4b53a1d05cafd49"
+      },
+      {
+        "field": "/artifactBindingRefresh/changes/2/sha256",
+        "artifact": "scripts/lib/reviewed-migration-ledger.mjs",
+        "previousDigest": "c6196ca09009a192534fb99b53ffb59fac453e8b652c36f05dfb08cc9e64260e",
+        "currentDigest": "b472f3384219f0490423b043e2078fd5d5afedd2480cb65837a9c79525fbfef2"
+      }
+    ]
+  }
 }

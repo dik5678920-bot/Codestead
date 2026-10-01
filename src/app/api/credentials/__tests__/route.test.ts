@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 
 const mocks = vi.hoisted(() => {
   const orderBy = vi.fn();
@@ -8,11 +10,14 @@ const mocks = vi.hoisted(() => {
   const select = vi.fn(() => ({ from }));
   const insertValues = vi.fn();
   const insert = vi.fn(() => ({ values: insertValues }));
-  const updateWhere = vi.fn();
+  const returning = vi.fn();
+  const updateWhere = vi.fn((_condition: SQL) => ({ returning }));
   const set = vi.fn(() => ({ where: updateWhere }));
   const update = vi.fn(() => ({ set }));
+  const execute = vi.fn();
+  const transaction = vi.fn(async (callback: (tx: unknown) => Promise<unknown>) => callback({ update, insert, execute }));
   return {
-    orderBy, whereSelect, from, select, insertValues, insert, updateWhere, set, update,
+    orderBy, whereSelect, from, select, insertValues, insert, updateWhere, returning, set, update, execute, transaction,
     requireAuth: vi.fn(), requireRecentMfa: vi.fn(), withRateLimit: vi.fn(),
     validateProviderCredential: vi.fn(), parseMasterKey: vi.fn(), sealCredential: vi.fn(),
     writeAuditEvent: vi.fn(), notifyCredentialChanged: vi.fn(),
@@ -21,7 +26,7 @@ const mocks = vi.hoisted(() => {
 });
 
 vi.mock("@/lib/db/client", () => ({
-  db: { select: mocks.select, insert: mocks.insert, update: mocks.update },
+  db: { select: mocks.select, insert: mocks.insert, update: mocks.update, transaction: mocks.transaction },
 }));
 vi.mock("@/lib/http/authz", () => ({ requireAuth: mocks.requireAuth }));
 vi.mock("@/lib/security/recent-mfa", () => ({ requireRecentMfa: mocks.requireRecentMfa }));
@@ -56,7 +61,7 @@ const auth = {
 };
 
 const secret = "synthetic-provider-secret";
-function request() {
+function request(preferred = false) {
   return new NextRequest("https://learn.test/api/credentials", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -64,7 +69,7 @@ function request() {
       provider: "nvidia_nim",
       label: "Personal NIM",
       secret,
-      preferred: false,
+      preferred,
     }),
   });
 }
@@ -92,7 +97,8 @@ describe("credential collection API", () => {
       model: "test/model",
     });
     mocks.insertValues.mockResolvedValue(undefined);
-    mocks.updateWhere.mockResolvedValue(undefined);
+    mocks.updateWhere.mockReturnValue({ returning: mocks.returning });
+    mocks.returning.mockReset().mockResolvedValue([{ id: "new-credential" }]);
     mocks.writeAuditEvent.mockResolvedValue({ correlationId: "c", eventHash: "h" });
     mocks.notifyCredentialChanged.mockResolvedValue(undefined);
     mocks.hasCurrentConsent.mockResolvedValue(true);
@@ -166,6 +172,37 @@ describe("credential collection API", () => {
       metadata: expect.objectContaining({ status: "invalid", lastFour: "cret" }),
     }));
     expect(JSON.stringify(await response.json())).not.toContain(secret);
+  });
+
+  it("persists a final outcome even when the provider has no configured model", async () => {
+    mocks.validateProviderCredential.mockResolvedValueOnce({ status: "unreachable", failureCode: "POLICY", model: null });
+    const response = await POST(request());
+    expect(response.status).toBe(201);
+    expect(mocks.set).toHaveBeenCalledWith(expect.objectContaining({ status: "unreachable", failureCode: "POLICY" }));
+    expect(mocks.writeAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ outcome: "failure" }));
+  });
+
+  it("clears preference across all of the learner's providers when adding a preferred key", async () => {
+    const response = await POST(request(true));
+    expect(response.status).toBe(201);
+    const query = new PgDialect().sqlToQuery(mocks.updateWhere.mock.calls[0][0]);
+    expect(query.sql).toContain('"user_id"');
+    expect(query.sql).not.toContain('"provider"');
+  });
+
+  it("stores a recoverable final state before probing, even if probe persistence fails", async () => {
+    mocks.validateProviderCredential.mockRejectedValueOnce(new Error("synthetic ledger failure"));
+    await expect(POST(request())).rejects.toThrow("synthetic ledger failure");
+    expect(mocks.insertValues).toHaveBeenCalledWith(expect.objectContaining({ status: "unreachable", failureCode: "VALIDATION_INCOMPLETE" }));
+  });
+
+  it("does not overwrite a key changed while its initial validation was running", async () => {
+    mocks.returning.mockResolvedValueOnce([]);
+    const response = await POST(request());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "STALE_CREDENTIAL" });
+    expect(mocks.writeAuditEvent).not.toHaveBeenCalled();
+    expect(mocks.notifyCredentialChanged).not.toHaveBeenCalled();
   });
 
   it("lists only masked credential fields", async () => {

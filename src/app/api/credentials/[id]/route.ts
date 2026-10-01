@@ -2,7 +2,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
-import { validateProviderCredential } from "@/lib/ai/credential-validation";
+import { validateProviderCredential, type CredentialValidationStatus } from "@/lib/ai/credential-validation";
+import { clearOtherCredentialPreferences } from "@/lib/ai/credential-preference";
 import { providerCredentialUpdatedAtToken } from "@/lib/ai/provider-credential-outcome";
 import { notifyCredentialChanged } from "@/lib/credential-notifications";
 import { db } from "@/lib/db/client";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/security/credential-vault";
 import { withRateLimit } from "@/lib/security/rate-limit";
 import { requireRecentMfa } from "@/lib/security/recent-mfa";
+import { lockUserAuthority } from "@/lib/security/user-authority-lock";
 import { consentPurposeForProvider, hasCurrentConsent } from "@/lib/privacy/consent";
 
 const patchSchema = z.discriminatedUnion("action", [
@@ -58,6 +60,7 @@ export async function PATCH(
           id: providerCredential.id,
           userId: providerCredential.userId,
           provider: providerCredential.provider,
+          status: providerCredential.status,
           ciphertext: providerCredential.ciphertext,
           wrappedDataKey: providerCredential.wrappedDataKey,
           wrapIv: providerCredential.wrapIv,
@@ -76,7 +79,7 @@ export async function PATCH(
         )
         .limit(1);
       if (!owned) return NextResponse.json({ error: "Credential not found." }, { status: 404 });
-      const snapshotCondition = and(
+      let snapshotCondition = and(
         eq(providerCredential.id, owned.id),
         eq(providerCredential.userId, owned.userId),
         eq(providerCredential.keyVersion, owned.keyVersion),
@@ -102,29 +105,30 @@ export async function PATCH(
         }
       }
 
-      let validationStatus: "active" | "invalid" | "rate_limited" | "pending_validation" | null = null;
+      let validationStatus: CredentialValidationStatus | null = null;
       if (body.data.action === "prefer") {
-        await db.transaction(async (tx) => {
-          await tx
+        const stalePreference = new Error("Stale credential preference");
+        try {
+          await db.transaction(async (tx) => {
+            await lockUserAuthority(tx, authz.session.user.id);
+            await clearOtherCredentialPreferences(tx, authz.session.user.id, owned.id);
+            const updated = await tx
             .update(providerCredential)
-            .set({ isPreferred: false })
-            .where(
-              and(
-                eq(providerCredential.userId, authz.session.user.id),
-                eq(providerCredential.provider, owned.provider),
-              ),
-            );
-          await tx
-            .update(providerCredential)
-            .set({ isPreferred: true })
-            .where(eq(providerCredential.id, owned.id));
-        });
-      } else if (body.data.action === "disable" || body.data.action === "enable") {
+            .set({ isPreferred: true, updatedAt: nextRevision })
+            .where(snapshotCondition)
+            .returning({ id: providerCredential.id });
+            if (updated.length !== 1) throw stalePreference;
+          });
+        } catch (error) {
+          if (error === stalePreference) return staleResult();
+          throw error;
+        }
+      } else if (body.data.action === "disable") {
         const updated = await db
           .update(providerCredential)
           .set({
-            status: body.data.action === "disable" ? "disabled" : "pending_validation",
-            disabledAt: body.data.action === "disable" ? new Date() : null,
+            status: "disabled",
+            disabledAt: new Date(),
             updatedAt: nextRevision,
           })
           .where(snapshotCondition)
@@ -165,6 +169,24 @@ export async function PATCH(
             }
           }
 
+          if (owned.status === "pending_validation") {
+            // Legacy pending rows have no background job. Persist a retryable
+            // outcome before probing so interruption or a failed ledger write
+            // cannot leave this stored key appearing to validate forever.
+            const [started] = await db.update(providerCredential).set({
+              status: "unreachable",
+              failureCode: "VALIDATION_INCOMPLETE",
+              updatedAt: nextRevision,
+            }).where(snapshotCondition).returning({ updatedAtToken: providerCredentialUpdatedAtToken });
+            if (!started) return staleResult();
+            snapshotCondition = and(
+              eq(providerCredential.id, owned.id),
+              eq(providerCredential.userId, owned.userId),
+              eq(providerCredential.keyVersion, owned.keyVersion),
+              eq(providerCredentialUpdatedAtToken, started.updatedAtToken),
+            );
+          }
+
           const validation = await validateProviderCredential({
             userId: authz.session.user.id,
             credentialId: owned.id,
@@ -196,7 +218,7 @@ export async function PATCH(
                 lastFour: sealed.lastFour,
                 status: validation.status,
                 failureCode: validation.failureCode,
-                lastValidatedAt: validation.model ? new Date() : null,
+                lastValidatedAt: new Date(),
                 disabledAt: null,
                 updatedAt: nextRevision,
               })
@@ -209,7 +231,8 @@ export async function PATCH(
               .set({
                 status: validation.status,
                 failureCode: validation.failureCode,
-                lastValidatedAt: validation.model ? new Date() : null,
+                lastValidatedAt: new Date(),
+                ...(body.data.action === "enable" ? { disabledAt: null } : {}),
                 updatedAt: nextRevision,
               })
               .where(snapshotCondition)
@@ -227,7 +250,7 @@ export async function PATCH(
         resourceType: "provider_credential",
         resourceId: owned.id,
         outcome:
-          validationStatus && !["active", "pending_validation"].includes(validationStatus)
+          validationStatus && validationStatus !== "active"
             ? "failure"
             : "success",
         metadata: { provider: owned.provider, validationStatus },

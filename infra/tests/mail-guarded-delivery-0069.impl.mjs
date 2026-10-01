@@ -5698,9 +5698,11 @@ function prepareRuntimeProofJournal(
   journalEntries,
 ) {
   assert.equal(migrationsThrough0069.length, 70);
-  assert.equal(journalEntries.length, migrationsThrough0069.length);
+  // This historical proof replays through 0069 even when later migrations exist.
+  assert.ok(journalEntries.length >= migrationsThrough0069.length);
+  assert.equal(journalEntries[69]?.tag, "0069_mail_outbox_guarded_delivery_authority");
   const reviewedEntries = Object.freeze(
-    journalEntries.map((entry, index) => {
+    journalEntries.slice(0, migrationsThrough0069.length).map((entry, index) => {
       const manifest = migrationsThrough0069[index];
       assert.ok(manifest !== undefined);
       assert.equal(entry.idx, index);

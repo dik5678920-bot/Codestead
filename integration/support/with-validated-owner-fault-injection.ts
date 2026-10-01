@@ -11,6 +11,7 @@ import {
   verifyAppliedMigrationLedger,
   verifyReviewedMigrationRepository,
 } from "../../scripts/lib/reviewed-migration-ledger.mjs";
+import { proveCredentialPreferenceMigration } from "./credential-preference-migration-proof";
 
 type OwnerDatabaseIdentity = {
   current_database: string;
@@ -655,6 +656,10 @@ export async function runValidatedIntegrationMigrations(
         migrationsFolder: WORKSPACE_MIGRATIONS_FOLDER,
       });
       await verifyAppliedMigrationLedger(client, { requireComplete: true });
+      // Replay the 0070 legacy-row proof only when that migration is present.
+      if (reviewedMigrations.some((migration) => migration.folderMillis === 1_790_851_350_433)) {
+        await proveCredentialPreferenceMigration(client);
+      }
       return verifyExactAppliedMigrationJournal(
         client,
         context,
