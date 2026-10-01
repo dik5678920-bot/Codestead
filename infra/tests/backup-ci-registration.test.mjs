@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { postgresCiProjectionThrough0069 } from "./mail-guarded-delivery-0069-ci-contract.mjs";
@@ -1127,6 +1127,8 @@ const reviewedJobNames = [
   "integration-mail-races",
   "curriculum-runtime",
   "curriculum-verify",
+  "curriculum-dsa-parity",
+  "curriculum-dsa-parity-merge",
   "auth-browser",
   "browser",
 ];
@@ -1332,18 +1334,24 @@ function requireIntegrationOnlyFilesGateDatabase() {
 requireIntegrationOnlyFilesGateDatabase();
 
 const reviewedDatabaseGateLines = [...postgresCiRuntimePolicy.databaseGateLines];
-const mailRacesIntegrationFile =
-  "integration/mail-delivery-races.integration.test.ts";
+// The race suites are excluded from postgres-integration by one glob and run
+// as matrix parts instead. Every file the glob excludes must be a matrix part,
+// so each integration file still runs exactly once.
+const mailRacesParts = [...postgresCiRuntimePolicy.mailRacesIntegrationParts];
+const mailRacesGlob = "mail-delivery-races-*.integration.test.ts";
+const mailRacesFiles = readdirSync(resolve(repoRoot, "integration"))
+  .filter((file) => /^mail-delivery-races-[a-z0-9-]+\.integration\.test\.ts$/u.test(file))
+  .sort();
 if (
   postgresCiRuntimePolicy.mailRacesIntegrationCommand !==
-    `npm run test:integration -- ${mailRacesIntegrationFile}` ||
-  !postgresCiRuntimePolicy.livePg17IntegrationCommand.includes(
-    `! -name ${mailRacesIntegrationFile.slice("integration/".length)} `,
-  )
+    "npm run test:integration -- integration/mail-delivery-races-${{ matrix.part }}.integration.test.ts" ||
+  !postgresCiRuntimePolicy.livePg17IntegrationCommand.includes(`! -name '${mailRacesGlob}' `) ||
+  mailRacesFiles.join("\n") !==
+    mailRacesParts.map((part) => `mail-delivery-races-${part}.integration.test.ts`).sort().join("\n") ||
+  readdirSync(resolve(repoRoot, "integration")).includes("mail-delivery-races.integration.test.ts")
 ) {
-  fail("the integration split must run the race suite exactly once, in its own job");
+  fail("the integration split must run every race suite exactly once, as a matrix part");
 }
-readFileSync(resolve(repoRoot, mailRacesIntegrationFile), "utf8");
 
 const rootNodeInstallProjection = [`      - run: ${rootNodeInstallRun}`];
 const playwrightCacheProjection = (suffix) => [
@@ -1392,6 +1400,8 @@ const ciOkNeeds = [
   "integration-mail-races",
   "curriculum-runtime",
   "curriculum-verify",
+  "curriculum-dsa-parity",
+  "curriculum-dsa-parity-merge",
   "auth-browser",
   "browser",
 ];
@@ -1404,7 +1414,7 @@ const ciOkScript = [
   "              production-topology) echo topology ;;",
   "              application-images) echo images ;;",
   "              runner) echo runner ;;",
-  "              curriculum-runtime|curriculum-verify) echo curriculum ;;",
+  "              curriculum-runtime|curriculum-verify|curriculum-dsa-parity|curriculum-dsa-parity-merge) echo curriculum ;;",
   "              auth-browser|browser) echo browser ;;",
   "              postgres-integration|integration-mail-races) echo database ;;",
   "              *) echo '' ;;",
@@ -1679,9 +1689,14 @@ const reviewedJobContracts = new Map([
   [
     "integration-mail-races",
     [
+      '    name: "database: mail delivery races (${{ matrix.part }})"',
       "    runs-on: ubuntu-24.04",
       "    timeout-minutes: 30",
       ...reviewedDatabaseGateLines,
+      "    strategy:",
+      "      fail-fast: false",
+      "      matrix:",
+      `        part: [${mailRacesParts.join(", ")}]`,
       "    steps:",
       ...checkoutProjection,
       ...setupNodeProjection,
@@ -1924,10 +1939,6 @@ const reviewedJobContracts = new Map([
       "      fail-fast: false",
       "      matrix:",
       "        include:",
-      "          - group: dsa-parity",
-      "            verify: dsa:parity:verify",
-      "            apply: dsa:parity:evidence:apply",
-      "            evidence: docs/evidence/dsa-parity-runtime-*.json",
       "          - group: c-cpp",
       "            verify: c-cpp:executable:verify",
       "            apply: c-cpp:executable:evidence:apply",
@@ -1965,6 +1976,74 @@ const reviewedJobContracts = new Map([
       "        with:",
       "          name: ${{ matrix.group }}-evidence-regenerated",
       "          path: ${{ matrix.evidence }}",
+      "          if-no-files-found: warn",
+      "          retention-days: 14",
+    ],
+  ],
+  [
+    "curriculum-dsa-parity",
+    [
+      '    name: "curriculum: DSA parity (shard ${{ matrix.shard }}/2)"',
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      "    needs: changes",
+      "    if: needs.changes.outputs.curriculum == 'true'",
+      "    env:",
+      "      RUNTIME_LOCAL_RISK_ACCEPTANCE: accept-unsigned-local-buildkit-provenance-v1",
+      "      RUNTIME_SOURCE_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}",
+      "      RUNTIME_SOURCE_REVISION: ${{ github.sha }}",
+      "    strategy:",
+      "      fail-fast: false",
+      "      matrix:",
+      "        shard: [1, 2]",
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      "      - run: npm ci",
+      "        working-directory: services/runner",
+      ...dockerSetupProjection,
+      "      - run: npm run runtime:build",
+      "        working-directory: services/runner",
+      "      - run: npm run runtime:inspect",
+      "        working-directory: services/runner",
+      "      - run: npm run dsa:parity:verify -- --shard=${{ matrix.shard }}/2",
+      "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2",
+      "        if: always()",
+      "        with:",
+      "          name: dsa-parity-shard-${{ matrix.shard }}",
+      "          path: services/runner/dist/dsa-parity-shards/",
+      "          if-no-files-found: error",
+      "          retention-days: 1",
+    ],
+  ],
+  [
+    "curriculum-dsa-parity-merge",
+    [
+      '    name: "curriculum: DSA parity (merge & evidence)"',
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 15",
+      "    needs:",
+      "      - changes",
+      "      - curriculum-dsa-parity",
+      "    if: needs.changes.outputs.curriculum == 'true'",
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      "      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0",
+      "        with:",
+      "          pattern: dsa-parity-shard-*",
+      "          path: services/runner/dist/dsa-parity-shards",
+      "          merge-multiple: true",
+      "      - run: npm run dsa:parity:verify -- --merge-shards=2",
+      "      - run: npm run dsa:parity:evidence:apply -- --merge-shards=2",
+      "        if: failure()",
+      "      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2",
+      "        if: failure()",
+      "        with:",
+      "          name: dsa-parity-evidence-regenerated",
+      "          path: docs/evidence/dsa-parity-runtime-*.json",
       "          if-no-files-found: warn",
       "          retention-days: 14",
     ],

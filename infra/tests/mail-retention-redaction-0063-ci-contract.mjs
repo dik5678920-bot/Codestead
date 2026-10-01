@@ -12,12 +12,13 @@ export const postgresCiRuntimePolicy = Object.freeze({
   runner: "ubuntu-24.04",
   baselineTimeoutMinutes: 20,
   maximumTimeoutMinutes: 35,
-  // Every integration file except the long mail-delivery race suite runs here;
-  // that one file runs in its own parallel job under the same database gate.
+  // Every integration file except the mail-delivery race suites runs here;
+  // those run as parallel matrix parts under the same database gate.
   livePg17IntegrationCommand:
-    "npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name mail-delivery-races.integration.test.ts | LC_ALL=C sort)",
+    "npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name 'mail-delivery-races-*.integration.test.ts' | LC_ALL=C sort)",
   mailRacesIntegrationCommand:
-    "npm run test:integration -- integration/mail-delivery-races.integration.test.ts",
+    "npm run test:integration -- integration/mail-delivery-races-${{ matrix.part }}.integration.test.ts",
+  mailRacesIntegrationParts: Object.freeze(["claims", "sweeper", "deletion"]),
   // Owner decision 2026-10-01: pull requests run the PostgreSQL gates only when
   // database/server paths change; push to main, nightly and dispatch always do.
   databaseGateLines: Object.freeze([
