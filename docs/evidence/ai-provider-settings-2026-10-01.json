@@ -99,7 +99,7 @@
       "evidence": "docs/evidence/backup-status-outbox-2026-07-12.json",
       "path": "infra/tests/backup-ci-registration.test.mjs",
       "previousSha256": "8ff5095a2a6385a9f5a42498af21490c98f29c000f02bb86c4feb50d58cbbeac",
-      "sha256": "f128a90f9598e06e27d5f50513a37fd1724dd95f1abbe69b77587e89c7814d85"
+      "sha256": "cd6008296c1c64e8dd6ae830becbb496d77b70a64823594dfac7bdda462dfaaf"
     },
     {
       "evidence": "docs/evidence/api-authorization-matrix-2026-07-12.json",
@@ -142,7 +142,7 @@
     "drizzle/0070_credential_validation_preference.sql": "a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c",
     "drizzle/meta/0070_snapshot.json": "24c987e88a0664c9b74a5f3f8c2fe727bf4470410a6564c4d0f2289dd6599d1a",
     "drizzle/meta/_journal.json": "24338841f3566bc53b0c3bcdd6afef060b1ff79471246ffc165d5ee21dc727e2",
-    "infra/tests/backup-ci-registration.test.mjs": "f128a90f9598e06e27d5f50513a37fd1724dd95f1abbe69b77587e89c7814d85",
+    "infra/tests/backup-ci-registration.test.mjs": "cd6008296c1c64e8dd6ae830becbb496d77b70a64823594dfac7bdda462dfaaf",
     "infra/tests/backup-production-e2e.test.sh": "fe18804d70da2b6b58ceffd62c48f0d19cfd309ee6d8fcfd223c38cc9754a856",
     "infra/tests/recovery-evidence-verifier.test.sh": "55718a4d326cedb14bec8028ab4a7a954b4203062c96b075ef9ceba29a82e084",
     "infra/tests/restore-drill-reminder.test.sh": "2e04284ae5f37c93e869a585488fc073ad8c409c0be355e2148e4026fbb5fa18",
@@ -312,6 +312,24 @@
         "artifact": "integration/credential-preference-migration.integration.test.ts",
         "previousDigest": "a9b7382068c7ff13fb160c7f397e30cf03cf31615c3b7f532f0a6c394e51c3b1",
         "currentDigest": "ceab46370093b4b69bd2682511b88d5fc97705e483a0de918eb82fd868cadc32"
+      }
+    ]
+  },
+  "ciCacheBindingRefresh": {
+    "date": "2026-10-02",
+    "scope": "Current-source bindings for the reviewed CI cache setup fixtures only. Historical execution results, dates, and scopes are preserved.",
+    "changes": [
+      {
+        "field": "/artifactSha256/infra~1tests~1backup-ci-registration.test.mjs",
+        "artifact": "infra/tests/backup-ci-registration.test.mjs",
+        "previousDigest": "f128a90f9598e06e27d5f50513a37fd1724dd95f1abbe69b77587e89c7814d85",
+        "currentDigest": "cd6008296c1c64e8dd6ae830becbb496d77b70a64823594dfac7bdda462dfaaf"
+      },
+      {
+        "field": "/evidenceChanges/3/sha256",
+        "artifact": "infra/tests/backup-ci-registration.test.mjs",
+        "previousDigest": "f128a90f9598e06e27d5f50513a37fd1724dd95f1abbe69b77587e89c7814d85",
+        "currentDigest": "cd6008296c1c64e8dd6ae830becbb496d77b70a64823594dfac7bdda462dfaaf"
       }
     ]
   }

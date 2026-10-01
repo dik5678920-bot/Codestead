@@ -362,8 +362,8 @@
     }
   ],
   "artifactSha256": {
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "b7dd20ae4d4deea4b0aefa7f53df93b1a7e01826ea864999d2e3a90a34b08a62",
-    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "447ec9080f6c3d5f7c6b7f034142cd6b7bdf004dcf65cdc16737280cbbcd7668",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "bbe722463884a2b44e86787a8e5b4c84b32ec5c6f6efabc7cb02fc893b1430d2",
+    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "aeeb5a3082d0880a45a1ad8cdc54effa65e80fd201fbb334f7ee3ff17c672112",
     "docs/evidence/backup-status-outbox-2026-07-12.json": "6772b9a325df624871e51e52023e82692cab02a737e799fb4b9a68d53b273223",
     "docs/reviewed-migration-inventory-pins.md": "cfccee3116a90b6e3e2bf262b77a92b43b7c88b14e2d3d8b888a58e9a2aebfda",
     "drizzle/0070_credential_validation_preference.sql": "a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c",
@@ -407,6 +407,24 @@
         "artifact": "scripts/refresh-ai-provider-evidence-bindings.mjs",
         "previousDigest": "9d7e0b4954252deec5b39431ae5cd611047f88b02e7d70d065197833bd3cc112",
         "currentDigest": "668cc764cc03bf1d24deaa03840de2c751c19a63ab8326f68ccb2ab43f43e2a7"
+      }
+    ]
+  },
+  "ciCacheBindingRefresh": {
+    "date": "2026-10-02",
+    "scope": "Current-source bindings for the reviewed CI cache setup fixtures only. Historical execution results, dates, and scopes are preserved.",
+    "changes": [
+      {
+        "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
+        "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
+        "previousDigest": "b7dd20ae4d4deea4b0aefa7f53df93b1a7e01826ea864999d2e3a90a34b08a62",
+        "currentDigest": "bbe722463884a2b44e86787a8e5b4c84b32ec5c6f6efabc7cb02fc893b1430d2"
+      },
+      {
+        "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-ci-pins-2026-10-01.json",
+        "artifact": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
+        "previousDigest": "447ec9080f6c3d5f7c6b7f034142cd6b7bdf004dcf65cdc16737280cbbcd7668",
+        "currentDigest": "aeeb5a3082d0880a45a1ad8cdc54effa65e80fd201fbb334f7ee3ff17c672112"
       }
     ]
   }

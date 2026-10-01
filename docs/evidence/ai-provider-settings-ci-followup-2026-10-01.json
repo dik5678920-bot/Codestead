@@ -138,9 +138,9 @@
     }
   ],
   "artifactSha256": {
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "b7dd20ae4d4deea4b0aefa7f53df93b1a7e01826ea864999d2e3a90a34b08a62",
-    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "447ec9080f6c3d5f7c6b7f034142cd6b7bdf004dcf65cdc16737280cbbcd7668",
-    "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json": "ca27e102c3d39bc1c2321df9c9c7bdeadca7ff37e0677d4abaaea403a593ec59",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "bbe722463884a2b44e86787a8e5b4c84b32ec5c6f6efabc7cb02fc893b1430d2",
+    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "aeeb5a3082d0880a45a1ad8cdc54effa65e80fd201fbb334f7ee3ff17c672112",
+    "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json": "665c97cbeff473b79d9fe048b8ff056af06eb68e7e3dd42e6138b6a609ba4234",
     "e2e/assurance.spec.ts": "cd96a09185e4222495c52ffe7e34031ed51ead1e1c05144e99de537f85427985",
     "e2e/access.spec.ts": "d7026f69cb0faf066b39e89b8184434b4c58e521b21a2b9fd6861f1444cb5c75",
     "infra/tests/mail-guarded-delivery-0069.impl.mjs": "77b54c928cc6360bb4a613f122b80696d0be1984111d789482f1dea9cfa0bd54",
@@ -153,5 +153,29 @@
     "src/lib/security/recent-mfa.ts": "7b7fdebba042cf43467975860630d6606a351f27eeca9a554c4c10b0dc6f8064",
     "src/lib/security/privileged-access.ts": "19178909fb882c34536208bee280807930cab4eaf2ebb76ef7c1e1aef15c44fa",
     "src/app/api/security/fresh-mfa/route.ts": "5c2c5a0adc32a1e7557128665b788139eaff1a7b77b26552a226c81bf1e223d5"
+  },
+  "ciCacheBindingRefresh": {
+    "date": "2026-10-02",
+    "scope": "Current-source bindings for the reviewed CI cache setup fixtures only. Historical execution results, dates, and scopes are preserved.",
+    "changes": [
+      {
+        "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
+        "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
+        "previousDigest": "b7dd20ae4d4deea4b0aefa7f53df93b1a7e01826ea864999d2e3a90a34b08a62",
+        "currentDigest": "bbe722463884a2b44e86787a8e5b4c84b32ec5c6f6efabc7cb02fc893b1430d2"
+      },
+      {
+        "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-ci-pins-2026-10-01.json",
+        "artifact": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
+        "previousDigest": "447ec9080f6c3d5f7c6b7f034142cd6b7bdf004dcf65cdc16737280cbbcd7668",
+        "currentDigest": "aeeb5a3082d0880a45a1ad8cdc54effa65e80fd201fbb334f7ee3ff17c672112"
+      },
+      {
+        "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-migrator-schema-2026-10-01.json",
+        "artifact": "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json",
+        "previousDigest": "ca27e102c3d39bc1c2321df9c9c7bdeadca7ff37e0677d4abaaea403a593ec59",
+        "currentDigest": "665c97cbeff473b79d9fe048b8ff056af06eb68e7e3dd42e6138b6a609ba4234"
+      }
+    ]
   }
 }

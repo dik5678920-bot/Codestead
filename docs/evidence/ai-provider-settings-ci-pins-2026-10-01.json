@@ -98,7 +98,7 @@
   ],
   "artifactSha256": {
     "Dockerfile": "891fb214ac486fb484ebcaae1587046e6a397e63a12e2d1b044734809b54ff79",
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "b7dd20ae4d4deea4b0aefa7f53df93b1a7e01826ea864999d2e3a90a34b08a62",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "bbe722463884a2b44e86787a8e5b4c84b32ec5c6f6efabc7cb02fc893b1430d2",
     "docs/evidence/backup-status-outbox-2026-07-12.json": "6772b9a325df624871e51e52023e82692cab02a737e799fb4b9a68d53b273223",
     "docs/reviewed-migration-inventory-pins.md": "cfccee3116a90b6e3e2bf262b77a92b43b7c88b14e2d3d8b888a58e9a2aebfda",
     "drizzle/meta/0070_public_column_attnums.json": "445e46c714041c037d7474a39d940cf065e92951ba6c2bbd0f2b2fdc73bb2e75",
@@ -179,6 +179,18 @@
         "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
         "previousDigest": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
         "currentDigest": "09b347cefe42a7471355b369fb64aee7843acc846134221ce4cf929b1c9eb922"
+      }
+    ]
+  },
+  "ciCacheBindingRefresh": {
+    "date": "2026-10-02",
+    "scope": "Current-source bindings for the reviewed CI cache setup fixtures only. Historical execution results, dates, and scopes are preserved.",
+    "changes": [
+      {
+        "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
+        "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
+        "previousDigest": "b7dd20ae4d4deea4b0aefa7f53df93b1a7e01826ea864999d2e3a90a34b08a62",
+        "currentDigest": "bbe722463884a2b44e86787a8e5b4c84b32ec5c6f6efabc7cb02fc893b1430d2"
       }
     ]
   }
