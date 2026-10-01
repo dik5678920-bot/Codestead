@@ -44,7 +44,7 @@ import {
   waitForBlockedBackendBy,
   within,
   zeroErasureDependencies,
-} from "./support/mail-delivery-races-harness";
+} from "./fixtures/mail-delivery-races-harness";
 
 registerMailDeliveryRaceHarness();
 

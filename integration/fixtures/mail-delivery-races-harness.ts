@@ -40,7 +40,7 @@ import { outboxMessageId } from "@/lib/notifications/provider-correlation";
 import { isProductionEmailTemplate } from "@/lib/notifications/template-authority-policy";
 import type { OutboxClaim, ProviderCallPermit } from "@/lib/notifications/outbox-worker";
 import { userAuthorityLockKey } from "@/lib/security/user-authority-lock";
-import { resetDisposableIntegrationDatabase } from "./reset-disposable-database";
+import { resetDisposableIntegrationDatabase } from "../support/reset-disposable-database";
 
 
 export const { Pool } = pg;
