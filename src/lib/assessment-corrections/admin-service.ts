@@ -13,6 +13,7 @@ import { pool } from "@/lib/db/client";
 import {
   createCorrectionSchema,
   queueCorrectionSchema,
+  replacementEvidenceSchema,
   type CreateCorrectionInput,
   type QueueCorrectionInput,
 } from "./contracts";
@@ -21,8 +22,9 @@ import {
   buildImpactHashes,
   correctionReviewHash,
   correctionTarget,
-  formMatchesTarget,
   reviewedReplacement,
+  targetItemIdInForm,
+  type AppliedCorrection,
   type CorrectionTarget,
   type ImpactSnapshot,
 } from "./domain";
@@ -109,7 +111,10 @@ async function affectedCandidates(client: PoolClient, target: CorrectionTarget):
          on original.attempt_id = a.id and original.item_key = $1 and original.revision = 1
        left join assessment_attempt_effective_result effective on effective.attempt_id = a.id
       where blueprint.item_key = $2 and blueprint.revision = 1
-        and a.kind in ('exam', 'retake')
+        -- Official mastery rechecks are closed-book exam sessions with the same
+        -- immutable evidence; a mastery_check without an exam session (practice)
+        -- is never an official correction candidate.
+        and (a.kind in ('exam', 'retake') or (a.kind = 'mastery_check' and es.id is not null))
         and a.status in ('graded', 'grading')
         and blueprint.answer #>> '{snapshot,courseId}' = $3
         and blueprint.answer #>> '{snapshot,moduleId}' = $4
@@ -126,6 +131,52 @@ async function affectedCandidates(client: PoolClient, target: CorrectionTarget):
     ],
   );
   return rows.rows;
+}
+
+/**
+ * The corrections that produced this attempt's current effective result, oldest
+ * first. Only the correction worker writes effective results, each superseding
+ * the previous outcome, so the outcome chain is the complete applied history.
+ */
+async function appliedCorrectionChain(
+  client: PoolClient,
+  attemptId: string,
+): Promise<readonly AppliedCorrection[]> {
+  const rows = await client.query<{
+    outcome_id: string;
+    correction_id: string;
+    item_id: string;
+    local_item_id: string | null;
+    faulty_evidence_hash: string;
+    replacement_evidence: unknown;
+  }>(
+    `with recursive chain as (
+       select o.id, o.correction_id, o.impact_id, o.supersedes_outcome_id, o.revision
+         from assessment_attempt_effective_result effective
+         join assessment_regrade_outcome o on o.id = effective.outcome_id
+        where effective.attempt_id = $1
+       union all
+       select o.id, o.correction_id, o.impact_id, o.supersedes_outcome_id, o.revision
+         from chain
+         join assessment_regrade_outcome o on o.id = chain.supersedes_outcome_id
+        where o.attempt_id = $1
+     )
+     select chain.id as outcome_id, c.id as correction_id, c.item_id,
+            i.snapshot ->> 'targetItemId' as local_item_id,
+            c.faulty_evidence_hash, c.replacement_evidence
+       from chain
+       join assessment_correction c on c.id = chain.correction_id
+       join assessment_correction_impact i on i.id = chain.impact_id
+      order by chain.revision asc`,
+    [attemptId],
+  );
+  return rows.rows.map((row) => ({
+    correctionId: row.correction_id,
+    outcomeId: row.outcome_id,
+    itemId: row.local_item_id ?? row.item_id,
+    faultyEvidenceHash: row.faulty_evidence_hash,
+    replacement: replacementEvidenceSchema.parse(row.replacement_evidence),
+  }));
 }
 
 async function latestAnswers(client: PoolClient, attemptId: string) {
@@ -285,14 +336,17 @@ export async function createAssessmentCorrection(inputValue: CreateCorrectionInp
     const replacementHash = hashAppealEvidence(replacement);
     const reviewHash = correctionReviewHash(input.review);
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [
-      `assessment-correction-scope:${target.courseId}:${target.moduleId}:${target.itemId}:${target.contentVersion}:${target.faultyEvidenceHash}`,
+      // Keyed by authored identity, not the form-local question ID (N04).
+      `assessment-correction-scope:${target.courseId}:${target.moduleId}:${target.authoredItemHash}:${target.contentVersion}:${target.faultyEvidenceHash}`,
     ]);
     const duplicateScope = await client.query<{ id: string }>(
+      // The same faulty oracle with the same replacement is one defect scope,
+      // whichever learner's randomized question ID the appeal referenced.
       `select id from assessment_correction
-        where course_id = $1 and module_id = $2 and item_id = $3
+        where course_id = $1 and module_id = $2 and skill_id = $3
           and content_version = $4 and faulty_evidence_hash = $5
           and replacement_evidence_hash = $6`,
-      [target.courseId, target.moduleId, target.itemId, target.contentVersion,
+      [target.courseId, target.moduleId, target.skillId, target.contentVersion,
         target.faultyEvidenceHash, replacementHash],
     );
     if (duplicateScope.rows[0]) throw new AssessmentCorrectionError("INVALID_STATE");
@@ -336,10 +390,14 @@ export async function createAssessmentCorrection(inputValue: CreateCorrectionInp
     const impactedAttemptIds: string[] = [];
     for (const candidate of candidates) {
       const form = storedForm(candidate.blueprint);
-      if (!form || !formMatchesTarget(form, target)) continue;
+      const targetItemId = form ? targetItemIdInForm(form, target) : null;
+      if (!form || targetItemId === null) continue;
       const originalResult = storedResult(candidate.effective_result ?? candidate.original_result);
       if (!originalResult) continue;
       const answers = await latestAnswers(client, candidate.attempt_id);
+      const appliedCorrections = candidate.effective_result
+        ? await appliedCorrectionChain(client, candidate.attempt_id)
+        : [];
       const snapshot: ImpactSnapshot = {
         schemaVersion: 1,
         attempt: {
@@ -356,6 +414,8 @@ export async function createAssessmentCorrection(inputValue: CreateCorrectionInp
         form,
         answers,
         originalResult,
+        targetItemId,
+        appliedCorrections,
       };
       const hashes = buildImpactHashes(snapshot);
       await client.query(

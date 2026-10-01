@@ -20,6 +20,7 @@ import { replacementEvidenceSchema, type ReplacementEvidence } from "./contracts
 import { reconcileAssessmentCorrectionCompletion } from "./completion";
 import {
   AssessmentCorrectionError,
+  applyPriorCorrections,
   correctionMasteryLanguageContext,
   correctionTarget,
   effectiveAnswers,
@@ -173,12 +174,15 @@ async function claimJob(workerId: string, correctionId: string | undefined, now:
       await client.query("commit");
       return null;
     }
-    const targetFromSnapshot = correctionTarget(row.snapshot.form, row.item_id);
+    // The impact snapshot binds this form's own question for the correction;
+    // legacy snapshots predate randomized-ID mapping and use the source ID.
+    const localItemId = row.snapshot.targetItemId ?? row.item_id;
+    const targetFromSnapshot = correctionTarget(row.snapshot.form, localItemId);
     const target: CorrectionTarget = {
       ...targetFromSnapshot,
       courseId: row.course_id,
       moduleId: row.module_id,
-      itemId: row.item_id,
+      itemId: localItemId,
       skillId: row.skill_id,
       contentVersion: row.content_version,
       faultyBundleVersion: row.faulty_bundle_version,
@@ -671,7 +675,17 @@ export async function processOneAssessmentRegrade(input: {
       originalResultHash: job.originalResultHash,
       snapshotHash: job.snapshotHash,
     })) throw new AssessmentCorrectionError("EXAM_EVIDENCE_MISSING");
-    const correctedForm = replaceFormEvidence(job.snapshot.form, job.target, job.replacement);
+    // Rebuild on the effective correction chain captured with the impact, so
+    // an earlier correction to another question is kept, not reverted (N08).
+    const appliedCorrections = job.snapshot.appliedCorrections ?? [];
+    const correctedForm = replaceFormEvidence(
+      applyPriorCorrections(job.snapshot.form, appliedCorrections, job.target.itemId),
+      job.target,
+      job.replacement,
+    );
+    const correctedRuntimeDigests = new Map<string, string>(appliedCorrections.map((link) =>
+      [link.itemId, link.replacement.runtimeImageDigest]));
+    correctedRuntimeDigests.set(job.target.itemId, job.expectedRuntimeImageDigest);
     const answers = effectiveAnswers(job.snapshot);
     const runnerResults: Record<string, ExamRunnerResult> = {};
     const executor = input.executor ?? configuredRegradeExecutor;
@@ -687,9 +701,7 @@ export async function processOneAssessmentRegrade(input: {
       ) {
         throw new AssessmentCorrectionError("EXAM_EVIDENCE_MISSING");
       }
-      const expectedRuntimeImageDigest = item.id === job.target.itemId
-        ? job.expectedRuntimeImageDigest
-        : item.runtime.imageDigest;
+      const expectedRuntimeImageDigest = correctedRuntimeDigests.get(item.id) ?? item.runtime.imageDigest;
       runnerResults[item.id] = await executor.execute({
         jobId: job.id,
         jobAttemptCount: job.attemptCount,
