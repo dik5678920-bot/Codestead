@@ -362,8 +362,8 @@
     }
   ],
   "artifactSha256": {
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "8a2ad8e42089ce714d23cbcb9c7743adef452a14655ca0a7a68917ea78e3c11c",
-    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "2ea6f3150af02aaf127c1f420875828ef25c282f1e41d195f38f8b81a90a8c30",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "cdfa3e7f12e51edc63b43564a03ee31ce75634fc4ade092a35d53b3a9bad3fd8",
+    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "e587bac871b0ccb257356ea504ca6c882040bf210a18c90ab379b8655fd1f242",
     "docs/evidence/backup-status-outbox-2026-07-12.json": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269",
     "docs/reviewed-migration-inventory-pins.md": "cfccee3116a90b6e3e2bf262b77a92b43b7c88b14e2d3d8b888a58e9a2aebfda",
     "drizzle/0070_credential_validation_preference.sql": "a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c",
@@ -388,13 +388,13 @@
         "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
         "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
         "previousDigest": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
-        "currentDigest": "8a2ad8e42089ce714d23cbcb9c7743adef452a14655ca0a7a68917ea78e3c11c"
+        "currentDigest": "cdfa3e7f12e51edc63b43564a03ee31ce75634fc4ade092a35d53b3a9bad3fd8"
       },
       {
         "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-ci-pins-2026-10-01.json",
         "artifact": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
         "previousDigest": "69e1bceb6a7f1a3a3fa93e30246b7a6832f2f9cb6679b2ce354d174982ebd0f9",
-        "currentDigest": "2ea6f3150af02aaf127c1f420875828ef25c282f1e41d195f38f8b81a90a8c30"
+        "currentDigest": "e587bac871b0ccb257356ea504ca6c882040bf210a18c90ab379b8655fd1f242"
       },
       {
         "field": "/artifactSha256/integration~1credential-preference-migration.integration.test.ts",
