@@ -60,9 +60,11 @@ const operationServices = [
   "platform-seed",
 ];
 const uploadServices = ["clamav", "scan-worker"];
+const pistonServices = ["piston"];
 const internalLongRunningServices = [
   ...pilotServices.filter((name) => name !== "cloudflared"),
   ...uploadServices,
+  ...pistonServices,
 ];
 const oneShotServices = operationServices;
 const databaseMutatingServices = [
@@ -86,6 +88,7 @@ const applicationImages = {
   APP_OPERATIONS_IMAGE: `ghcr.io/thebrownhuman/compose-validator-operations@sha256:${"7".repeat(64)}`,
 };
 const clamavImage = `clamav/clamav:compose-validator@sha256:${"8".repeat(64)}`;
+const pistonImage = `codestead-piston:compose-validator@sha256:${"9".repeat(64)}`;
 
 function render(name, profiles, { allowFailure = false, environment = {} } = {}) {
   const profileArguments = profiles.flatMap((profile) => ["--profile", profile]);
@@ -113,6 +116,7 @@ function render(name, profiles, { allowFailure = false, environment = {} } = {})
         APP_URL: "https://compose-validator.example",
         BOOTSTRAP_ADMIN_EMAIL: "admin@compose-validator.example",
         CLAMAV_IMAGE: clamavImage,
+        PISTON_IMAGE: pistonImage,
         COMPOSE_PROFILES: "",
         SENTRY_RELEASE: deployedRelease,
         UPLOADS_ENABLED: profiles.includes("uploads") ? "true" : "false",
@@ -137,7 +141,8 @@ const models = {
   pilot: render("pilot", [], { environment: { CLAMAV_IMAGE: "" } }),
   operations: render("operations", ["operations"]),
   uploads: render("uploads", ["uploads"]),
-  combined: render("combined", ["operations", "uploads"]),
+  piston: render("piston", ["piston"]),
+  combined: render("combined", ["operations", "uploads", "piston"]),
 };
 const inactiveClamav = render("inactive ClamAV fallback", ["uploads"], {
   allowFailure: true,
@@ -148,7 +153,8 @@ const expectedInventories = {
   pilot: pilotServices,
   operations: [...pilotServices, ...operationServices],
   uploads: [...pilotServices, ...uploadServices],
-  combined: [...pilotServices, ...operationServices, ...uploadServices],
+  piston: [...pilotServices, ...pistonServices],
+  combined: [...pilotServices, ...operationServices, ...uploadServices, ...pistonServices],
 };
 for (const [modelName, config] of Object.entries(models)) {
   expect(config.name === "learncoding", `${modelName} Compose project name must be learncoding`);
@@ -212,6 +218,7 @@ const expectedProfiles = Object.fromEntries([
   ...pilotServices.map((name) => [name, []]),
   ...operationServices.map((name) => [name, ["operations"]]),
   ...uploadServices.map((name) => [name, ["uploads"]]),
+  ...pistonServices.map((name) => [name, ["piston"]]),
 ]);
 for (const [name, profiles] of Object.entries(expectedProfiles)) {
   expect(same(config.services?.[name]?.profiles ?? [], profiles), `${name} profile allowlist drifted`);
@@ -316,6 +323,7 @@ const expectedNetworks = {
   "platform-seed": ["data"],
   "admin-bootstrap": ["data"],
   cloudflared: ["frontend"],
+  piston: ["piston"],
 };
 for (const [name, networks] of Object.entries(expectedNetworks)) {
   expect(same(keys(config.services?.[name]?.networks), networks), `${name} network allowlist drifted`);
@@ -327,6 +335,7 @@ expect(
     "github-egress",
     "glitchtip-ingest",
     "mail-egress",
+    "piston",
     "runner-client",
     "runner-egress",
     "scanner",
@@ -546,6 +555,18 @@ for (const [name, volumes] of Object.entries(expectedVolumes)) {
 
 const expectedCapAdd = {
   clamav: ["CHOWN", "DAC_OVERRIDE", "FOWNER", "SETGID", "SETUID"],
+  // Guest-kernel capabilities only: the Kata runtime gives Piston its own micro-VM.
+  piston: [
+    "CHOWN",
+    "DAC_OVERRIDE",
+    "FOWNER",
+    "KILL",
+    "NET_ADMIN",
+    "SETGID",
+    "SETUID",
+    "SYS_ADMIN",
+    "SYS_CHROOT",
+  ],
 };
 for (const name of expectedInventories.combined) {
   expect(
@@ -636,6 +657,36 @@ for (const [name, image] of Object.entries(expectedImages)) {
   expect(config.services?.[name]?.image === image, `${name} application image input drifted`);
 }
 expect(inactiveClamav?.services?.clamav?.image === "clamav/clamav:pilot-disabled", "ClamAV inactive fallback drifted");
+
+// Piston runs learner code. Its capabilities are only acceptable because the
+// Kata runtime confines them to a per-container micro-VM kernel.
+const piston = config.services?.piston;
+expect(piston?.runtime === "io.containerd.kata.v2", "piston must run under the Kata Containers runtime");
+expect(piston?.image === pistonImage, "piston image input drifted");
+expect(piston?.pull_policy === "never", "piston image must be built locally, never pulled");
+expect(config.networks?.piston?.internal === true, "piston network must be internal (no egress)");
+expect((piston?.volumes ?? []).length === 0, "piston must mount no host paths or volumes");
+expect((piston?.secrets ?? []).length === 0, "piston must receive no secrets");
+expect(
+  same(piston?.security_opt ?? [], ["no-new-privileges:true", "systempaths=unconfined"]),
+  "piston security options drifted",
+);
+for (const [key, value] of Object.entries({
+  PISTON_DISABLE_NETWORKING: "true",
+  PISTON_RUN_TIMEOUT: "3000",
+  PISTON_COMPILE_TIMEOUT: "10000",
+  PISTON_RUN_MEMORY_LIMIT: "268435456",
+  PISTON_COMPILE_MEMORY_LIMIT: "536870912",
+  PISTON_MAX_CONCURRENT_JOBS: "2",
+  PISTON_OUTPUT_MAX_SIZE: "65536",
+  PISTON_MAX_PROCESS_COUNT: "32",
+})) {
+  expect(piston?.environment?.[key] === value, `piston ${key} must be ${value}`);
+}
+for (const [name, service] of Object.entries(config.services ?? {})) {
+  if (name === "piston") continue;
+  expect(!keys(service.networks).includes("piston"), `${name} must not join the piston network yet`);
+}
 
 const operationCommands = {
   "database-role-bootstrap": ["node", "/app/scripts/bootstrap-database-roles.mjs"],

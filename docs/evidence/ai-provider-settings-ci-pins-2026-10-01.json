@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "sourceCommit": "eff3228fecdea158833b224275b5c49b9d1d921c",
+  "note": "Source pins are anchored to the current origin/main commit whose blobs match the retained recorded bindings, not the original proof commit. Historical checks were not rerun for this conversion; cross-pins and re-pin logs were removed, and Git history preserves them.",
   "date": "2026-10-01",
   "status": "locally-verified",
   "pr": "https://github.com/thebrownhuman/Codestead/pull/85",
@@ -73,33 +75,8 @@
       "productionDeployments": 0
     }
   },
-  "evidenceChanges": [
-    {
-      "evidence": "docs/evidence/backup-status-outbox-2026-07-12.json",
-      "field": "sha256",
-      "path": "scripts/__tests__/backup-reporter-role-contract.test.ts",
-      "previousSha256": "1011a93b7e0c8b07492d445870de1eea07f41ee153d755cd9653720b9cb75cca",
-      "sha256": "9c9dca0c0fb9929e3807a916276cdda09e7405b9e96c52a6c4f497fa80604e47"
-    },
-    {
-      "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
-      "field": "docs/evidence/backup-status-outbox-2026-07-12.json",
-      "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
-      "previousSha256": "c7b65b5e3a32830a8978565131104b98a118f4e645a0c0db2f3112fdf765e840",
-      "sha256": "6772b9a325df624871e51e52023e82692cab02a737e799fb4b9a68d53b273223"
-    },
-    {
-      "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
-      "field": "infra/tests/reviewed-migration-ledger-registration.test.mjs",
-      "path": "infra/tests/reviewed-migration-ledger-registration.test.mjs",
-      "previousSha256": "c1a2ab7c0e9d8e50fbc0e21d59bfad1b5d0033ee359438cff124816aa32b6aaf",
-      "sha256": "ad39dd85c0e55dd04cbf0b219905c1eb3cc631d6cf1d1b6e21de1f88842eebec"
-    }
-  ],
   "artifactSha256": {
     "Dockerfile": "891fb214ac486fb484ebcaae1587046e6a397e63a12e2d1b044734809b54ff79",
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "bbe722463884a2b44e86787a8e5b4c84b32ec5c6f6efabc7cb02fc893b1430d2",
-    "docs/evidence/backup-status-outbox-2026-07-12.json": "6772b9a325df624871e51e52023e82692cab02a737e799fb4b9a68d53b273223",
     "docs/reviewed-migration-inventory-pins.md": "cfccee3116a90b6e3e2bf262b77a92b43b7c88b14e2d3d8b888a58e9a2aebfda",
     "drizzle/meta/0070_public_column_attnums.json": "445e46c714041c037d7474a39d940cf065e92951ba6c2bbd0f2b2fdc73bb2e75",
     "infra/tests/database-least-privilege-static.test.mjs": "b309b1692aa7c2e705db2f4c1c85e2423d00c795bb9292ff76e6ccfb6232513c",
@@ -122,27 +99,6 @@
     "scripts/verify-restored-backup.ts": "fc4d276c4b289912df3755d88d8a4713977fc5e9fee5018b34124d64d3ffe154",
     "src/lib/notifications/__tests__/outbox-guarded-delivery-authority-0069.test.ts": "4dace4685c4add222fc1760ce14fdc60b4bc5367452d565cc9a02a4048e933a7"
   },
-  "rebaseBindingRefresh": {
-    "base": "234d981",
-    "scope": "Rebase onto merged CI phase 2 split; current source bindings refreshed, previous operator-reviewed digests retained here. Historical gate results are unchanged.",
-    "changes": [
-      {
-        "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
-        "previousDigest": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe",
-        "currentDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc"
-      },
-      {
-        "path": "docs/evidence/ai-provider-settings-2026-10-01.json",
-        "previousDigest": "c73995029ee42887538c985d863eb3ffc86b62a8d36aaf604a92e1374aefdb32",
-        "currentDigest": "daa03aebe5d845faebb40b5dd240467ce6d41881bfe40576e6f038c0ca7b940e"
-      },
-      {
-        "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
-        "previousDigest": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe",
-        "currentDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc"
-      }
-    ]
-  },
   "rebaseVerification": {
     "base": "234d981",
     "node": "24.19.0",
@@ -159,39 +115,5 @@
     "workflow": "Main ci.yml retained byte-for-byte",
     "evidenceIntegrity": "passed",
     "scope": "Local verification after rebase. New remote CI outcomes are reported separately."
-  },
-  "schemaQualificationRefresh": {
-    "scope": "Current-source bindings and current 0070 migration identity only. Historical results are preserved; restricted-migrator verification is recorded separately.",
-    "changes": [
-      {
-        "field": "/artifactSha256/docs~1reviewed-migration-inventory-pins.md",
-        "artifact": "docs/reviewed-migration-inventory-pins.md",
-        "previousDigest": "553d5cedaa7f4722e7e8a3b1b43cd0d6c2b0e1bb4f61c4aa965aad5e12a3fa9e",
-        "currentDigest": "cfccee3116a90b6e3e2bf262b77a92b43b7c88b14e2d3d8b888a58e9a2aebfda"
-      }
-    ]
-  },
-  "ciFollowupRefresh": {
-    "scope": "Current-source bindings after rebasing and fixing owner-helper, browser and historical mail harness failures. Historical run results and schema-qualification refresh are preserved; follow-up checks are recorded separately.",
-    "changes": [
-      {
-        "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
-        "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
-        "previousDigest": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
-        "currentDigest": "09b347cefe42a7471355b369fb64aee7843acc846134221ce4cf929b1c9eb922"
-      }
-    ]
-  },
-  "ciCacheBindingRefresh": {
-    "date": "2026-10-02",
-    "scope": "Current-source bindings for the reviewed CI cache setup fixtures only. Historical execution results, dates, and scopes are preserved.",
-    "changes": [
-      {
-        "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
-        "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
-        "previousDigest": "b7dd20ae4d4deea4b0aefa7f53df93b1a7e01826ea864999d2e3a90a34b08a62",
-        "currentDigest": "bbe722463884a2b44e86787a8e5b4c84b32ec5c6f6efabc7cb02fc893b1430d2"
-      }
-    ]
   }
 }
