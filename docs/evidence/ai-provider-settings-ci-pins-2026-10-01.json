@@ -86,7 +86,7 @@
       "field": "docs/evidence/backup-status-outbox-2026-07-12.json",
       "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
       "previousSha256": "c7b65b5e3a32830a8978565131104b98a118f4e645a0c0db2f3112fdf765e840",
-      "sha256": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe"
+      "sha256": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc"
     },
     {
       "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
@@ -98,8 +98,8 @@
   ],
   "artifactSha256": {
     "Dockerfile": "891fb214ac486fb484ebcaae1587046e6a397e63a12e2d1b044734809b54ff79",
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "c73995029ee42887538c985d863eb3ffc86b62a8d36aaf604a92e1374aefdb32",
-    "docs/evidence/backup-status-outbox-2026-07-12.json": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "daa03aebe5d845faebb40b5dd240467ce6d41881bfe40576e6f038c0ca7b940e",
+    "docs/evidence/backup-status-outbox-2026-07-12.json": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
     "docs/reviewed-migration-inventory-pins.md": "c0d99fe71aa793d292ef4dc05ab12a57d9338cb471c2500aaeb12831d2358f31",
     "drizzle/meta/0070_public_column_attnums.json": "ccb570feacc782971c12564d4eaeec176a9b6cc4fd746cea21fd3d93d252e4c0",
     "infra/tests/database-least-privilege-static.test.mjs": "b309b1692aa7c2e705db2f4c1c85e2423d00c795bb9292ff76e6ccfb6232513c",
@@ -121,5 +121,43 @@
     "scripts/verify-restored-backup.test.ts": "62e954041712d4e4fa3ea018059f295401321a740b3320012b814e36c91d54ab",
     "scripts/verify-restored-backup.ts": "fc4d276c4b289912df3755d88d8a4713977fc5e9fee5018b34124d64d3ffe154",
     "src/lib/notifications/__tests__/outbox-guarded-delivery-authority-0069.test.ts": "4dace4685c4add222fc1760ce14fdc60b4bc5367452d565cc9a02a4048e933a7"
+  },
+  "rebaseBindingRefresh": {
+    "base": "234d981",
+    "scope": "Rebase onto merged CI phase 2 split; current source bindings refreshed, previous operator-reviewed digests retained here. Historical gate results are unchanged.",
+    "changes": [
+      {
+        "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
+        "previousDigest": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe",
+        "currentDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc"
+      },
+      {
+        "path": "docs/evidence/ai-provider-settings-2026-10-01.json",
+        "previousDigest": "c73995029ee42887538c985d863eb3ffc86b62a8d36aaf604a92e1374aefdb32",
+        "currentDigest": "daa03aebe5d845faebb40b5dd240467ce6d41881bfe40576e6f038c0ca7b940e"
+      },
+      {
+        "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
+        "previousDigest": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe",
+        "currentDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc"
+      }
+    ]
+  },
+  "rebaseVerification": {
+    "base": "234d981",
+    "node": "24.19.0",
+    "inventoryCheck": "passed",
+    "databaseRoleBoundaries": "passed; complete launcher",
+    "leastPrivilegeStatic": "passed",
+    "fullVitest": {
+      "command": "npm run test -- --maxWorkers=2",
+      "passed": 5796,
+      "failed": 0,
+      "skipped": 11,
+      "files": 508
+    },
+    "workflow": "Main ci.yml retained byte-for-byte",
+    "evidenceIntegrity": "passed",
+    "scope": "Local verification after rebase. New remote CI outcomes are reported separately."
   }
 }

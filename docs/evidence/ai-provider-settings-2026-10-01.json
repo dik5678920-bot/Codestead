@@ -99,7 +99,7 @@
       "evidence": "docs/evidence/backup-status-outbox-2026-07-12.json",
       "path": "infra/tests/backup-ci-registration.test.mjs",
       "previousSha256": "8ff5095a2a6385a9f5a42498af21490c98f29c000f02bb86c4feb50d58cbbeac",
-      "sha256": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc"
+      "sha256": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
     },
     {
       "evidence": "docs/evidence/api-authorization-matrix-2026-07-12.json",
@@ -135,14 +135,14 @@
   "historicalEvidence": "Only current source bindings refreshed in three historical records, with previous hashes retained and annotations distinguishing bindings from the original test dates and results. The API matrix changes only two operation source hashes; its authorization rules and counts are unchanged.",
   "artifactSha256": {
     "docs/evidence/api-authorization-matrix-2026-07-12.json": "25e499dec80e020d60e9a05a9a9c1536484a6238be5de6938ea71ed327840e07",
-    "docs/evidence/backup-status-outbox-2026-07-12.json": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe",
+    "docs/evidence/backup-status-outbox-2026-07-12.json": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
     "docs/evidence/provider-outage-fallback-verification-2026-07-12.json": "d939e054c18f841bec6fb2d110076969a302388dd29c9ec9c7862da3ccad154e",
     "docs/evidence/run-008-official-runner-fairness-2026-07-12.json": "7f2aa6fc3f086fc425cd12f2df84d28bb8bb54500fdabc289f5ef47e6401fccf",
     "docs/provider-onboarding.md": "b60bff88b29d242f1fc9eef0ef2053f5ebe7611f14dcfce0026d1eae2c0044f4",
     "drizzle/0070_credential_validation_preference.sql": "e9b4acffdb2813bd55baba8415af965f6a1e55c27f6abeb4baa3c4758491919d",
     "drizzle/meta/0070_snapshot.json": "24c987e88a0664c9b74a5f3f8c2fe727bf4470410a6564c4d0f2289dd6599d1a",
     "drizzle/meta/_journal.json": "24338841f3566bc53b0c3bcdd6afef060b1ff79471246ffc165d5ee21dc727e2",
-    "infra/tests/backup-ci-registration.test.mjs": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc",
+    "infra/tests/backup-ci-registration.test.mjs": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27",
     "infra/tests/backup-production-e2e.test.sh": "fe18804d70da2b6b58ceffd62c48f0d19cfd309ee6d8fcfd223c38cc9754a856",
     "infra/tests/recovery-evidence-verifier.test.sh": "24f4642fb1f78a2dcd56bb987a674ed393f54561affd569fd3945bb0a2f820c5",
     "infra/tests/restore-drill-reminder.test.sh": "92996ccacf49db494249c268c62cf311522084924516cda9940212be66678df5",
@@ -178,7 +178,7 @@
         "field": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
         "previousSha256": "c7b65b5e3a32830a8978565131104b98a118f4e645a0c0db2f3112fdf765e840",
-        "sha256": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe"
+        "sha256": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc"
       },
       {
         "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
@@ -186,6 +186,32 @@
         "path": "infra/tests/reviewed-migration-ledger-registration.test.mjs",
         "previousSha256": "c1a2ab7c0e9d8e50fbc0e21d59bfad1b5d0033ee359438cff124816aa32b6aaf",
         "sha256": "ad39dd85c0e55dd04cbf0b219905c1eb3cc631d6cf1d1b6e21de1f88842eebec"
+      }
+    ]
+  },
+  "rebaseBindingRefresh": {
+    "base": "234d981",
+    "scope": "Rebase onto merged CI phase 2 split; current source bindings refreshed, previous operator-reviewed digests retained here. Historical gate results are unchanged.",
+    "changes": [
+      {
+        "path": "infra/tests/backup-ci-registration.test.mjs",
+        "previousDigest": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc",
+        "currentDigest": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
+      },
+      {
+        "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
+        "previousDigest": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe",
+        "currentDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc"
+      },
+      {
+        "path": "infra/tests/backup-ci-registration.test.mjs",
+        "previousDigest": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc",
+        "currentDigest": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
+      },
+      {
+        "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
+        "previousDigest": "244c228a0828dc613c25ac197a063f27996d1d13fd2caf0ab63f8c73ee5facfe",
+        "currentDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc"
       }
     ]
   }
