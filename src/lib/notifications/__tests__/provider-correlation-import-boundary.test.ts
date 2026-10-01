@@ -19,17 +19,18 @@ function productionTypeScriptFiles(directory: string): string[] {
   });
 }
 
+const repositoryRoot = process.cwd();
+const sources = [
+  ...productionTypeScriptFiles(resolve(repositoryRoot, "src")),
+  ...productionTypeScriptFiles(resolve(repositoryRoot, "scripts")),
+].map((path) => ({
+  path: relative(repositoryRoot, path).replaceAll("\\", "/"),
+  source: readFileSync(path, "utf8"),
+}));
+
+
 describe("provider-correlation recovery import boundary", () => {
   it("keeps the legacy raw Message-ID formatter reachable only by Gmail reconciliation", () => {
-    const repositoryRoot = process.cwd();
-    const sources = [
-      ...productionTypeScriptFiles(resolve(repositoryRoot, "src")),
-      ...productionTypeScriptFiles(resolve(repositoryRoot, "scripts")),
-    ].map((path) => ({
-      path: relative(repositoryRoot, path).replaceAll("\\", "/"),
-      source: readFileSync(path, "utf8"),
-    }));
-
     expect(sources
       .filter(({ source }) =>
         source.includes("provider-correlation-reconciliation-internal"))

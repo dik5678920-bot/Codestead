@@ -19,6 +19,8 @@ import {
 const roots: string[] = [];
 
 afterEach(async () => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })));
 });
 
@@ -135,11 +137,26 @@ describe("ClamAV response handling", () => {
   });
 
   it("preserves an early infected verdict when clamd closes during the upload", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const createConnection = net.createConnection;
+    // Retain real TCP and the native socket deadline. Release the upload pause
+    // only after the complete early verdict reaches the client.
+    vi.spyOn(net, "createConnection").mockImplementation((...args: Parameters<typeof net.createConnection>) => {
+      const socket = createConnection(...args);
+      socket.on("data", (chunk: Buffer) => {
+        if (chunk.includes(0)) queueMicrotask(() => vi.advanceTimersByTime(25));
+      });
+      return socket;
+    });
     const server = net.createServer((socket) => {
       let bytes = 0;
+      let responded = false;
       socket.on("data", (chunk: Buffer) => {
         bytes += chunk.byteLength;
-        if (bytes >= 15) socket.end("stream: Early-Signature FOUND\0");
+        if (bytes >= 15 && !responded) {
+          responded = true;
+          socket.end("stream: Early-Signature FOUND\0");
+        }
       });
     });
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

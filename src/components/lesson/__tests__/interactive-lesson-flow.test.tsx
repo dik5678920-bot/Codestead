@@ -3,7 +3,7 @@ import path from "node:path";
 import { render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import userEvent from "@testing-library/user-event";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { ContentRepository, type AuthoredLesson } from "@/lib/content";
 import { InteractiveLessonFlow } from "../interactive-lesson-flow";
@@ -25,6 +25,11 @@ function renderedMarkdown(source: string) {
     !Array.from(element.children).some((child) => child.textContent === plain);
 }
 
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
+
 describe("interactive authored lesson flow", () => {
   it("uses unique landmark and heading ids with a stable sources label", () => {
     const { container } = render(<InteractiveLessonFlow lesson={lesson} />);
@@ -36,17 +41,17 @@ describe("interactive authored lesson flow", () => {
   });
 
   it("requires a prediction before revealing the first machine-state step", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    vi.stubGlobal("jest", vi);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<InteractiveLessonFlow lesson={lesson} />);
 
     const reveal = screen.getByRole("button", { name: "Reveal the first step" });
     expect(reveal).toBeDisabled();
     expect(screen.getByText(/scratchpad responses stay in this tab/i)).toBeInTheDocument();
 
-    await user.type(
-      screen.getByRole("textbox", { name: "Your prediction" }),
-      "The computer will read the instructions in order.",
-    );
+    await user.click(screen.getByRole("textbox", { name: "Your prediction" }));
+    await user.paste("The computer will read the instructions in order.");
     await user.click(reveal);
 
     expect(screen.getByRole("status")).toHaveTextContent(/prediction saved locally/i);
@@ -90,31 +95,33 @@ describe("interactive authored lesson flow", () => {
   });
 
   it("fades support from a guided prompt to near and far transfer", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // Testing Library detects fake timers through its Jest-compatible adapter.
+    vi.stubGlobal("jest", vi);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<InteractiveLessonFlow lesson={lesson} />);
 
     expect(screen.getByRole("heading", { name: /Rung 1.*Guided/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Continue to near transfer" })).toBeDisabled();
     await user.click(screen.getByRole("button", { name: "Show one hint" }));
     expect(screen.getByText(lesson.practice.faded.scaffold[0]!)).toBeInTheDocument();
-    await user.type(
-      screen.getByRole("textbox", { name: "Your guided-practice answer" }),
-      "I would apply the rule, trace the state, and check the result.",
-    );
+    await user.click(screen.getByRole("textbox", { name: "Your guided-practice answer" }));
+    await user.paste("I would apply the rule, trace the state, and check the result.");
     await user.click(screen.getByRole("button", { name: "Continue to near transfer" }));
     expect(screen.getByRole("heading", { name: /Rung 2.*Similar problem/i })).toBeInTheDocument();
   });
 
   it("makes retrieval active before showing the authored recap", async () => {
-    const user = userEvent.setup();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    // Testing Library detects fake timers through its Jest-compatible adapter.
+    vi.stubGlobal("jest", vi);
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     render(<InteractiveLessonFlow lesson={lesson} />);
 
     const reveal = screen.getByRole("button", { name: "Compare with the recap" });
     expect(reveal).toBeDisabled();
-    await user.type(
-      screen.getByRole("textbox", { name: "Teach it back in your own words" }),
-      "A program is a precise set of instructions that turns input into observable output.",
-    );
+    await user.click(screen.getByRole("textbox", { name: "Teach it back in your own words" }));
+    await user.paste("A program is a precise set of instructions that turns input into observable output.");
     await user.click(reveal);
     expect(screen.getByText(lesson.recap.summary)).toBeInTheDocument();
     expect(screen.getByText(/This is reflection, not a correctness grade/i)).toBeInTheDocument();

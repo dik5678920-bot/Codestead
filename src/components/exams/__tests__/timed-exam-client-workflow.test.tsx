@@ -845,7 +845,9 @@ describe("timed exam client workflows", () => {
   });
 
   it("disables conflict choices when the estimated server deadline closes work", async () => {
-    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    // The outbox deadline uses setTimeout as well as the UI interval.
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval", "setTimeout", "clearTimeout"] });
+    vi.stubGlobal("jest", vi);
     const now = new Date("2026-07-15T10:00:00.000Z");
     vi.setSystemTime(now);
     vi.stubGlobal("indexedDB", new FakeIDBFactory());
@@ -866,7 +868,7 @@ describe("timed exam client workflows", () => {
       if (url.endsWith("/submit")) return new Promise<Response>(() => undefined);
       throw new Error(`Unexpected request: ${url}`);
     }));
-    const user = userEvent.setup();
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderWithNamespace(<TimedExamClient sessionId={sessionId} />);
     fireEvent.change(await screen.findByLabelText("Your response"), {
       target: { value: "recovered conflict value" },

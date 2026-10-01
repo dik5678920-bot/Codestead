@@ -1,4 +1,7 @@
 import { writeSync } from "node:fs";
+import { waitForFixtureStart } from "../../../../../scripts/__tests__/helpers/prepared-fixture.mjs";
+
+import { awaitWatchdogReady, controlWatchdogKillClock, advanceWatchdogKillClock } from "../../../../../scripts/__tests__/helpers/watchdog-fixture-clock.mjs";
 
 import {
   disarmMailDispatchHardWatchdog,
@@ -29,7 +32,25 @@ process.on("unhandledRejection", () => {
   writeSync(1, "UNHANDLED\n");
 });
 
-const watchdog = await startMailDispatchHardWatchdog();
+if (phase === "armed") {
+  controlWatchdogKillClock();
+  const wait = Atomics.wait;
+  Atomics.wait = (...args) => {
+    advanceWatchdogKillClock(250);
+    return wait(...args);
+  };
+}
+
+// The idle fault begins at READY itself. Other faults begin after RUN, so their
+// positive READY handshake belongs to fixture preparation.
+let watchdog;
+if (phase === "idle") {
+  await waitForFixtureStart();
+  watchdog = await awaitWatchdogReady(startMailDispatchHardWatchdog);
+} else {
+  watchdog = await awaitWatchdogReady(startMailDispatchHardWatchdog);
+  await waitForFixtureStart();
+}
 
 try {
   if (phase === "arm") {

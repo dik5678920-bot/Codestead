@@ -1,4 +1,5 @@
 const mode = process.argv[2];
+const { waitForFixtureStart } = await import("../../../../../scripts/__tests__/helpers/prepared-fixture.mjs");
 
 if (mode === "shared-array-buffer-throws") {
   globalThis.SharedArrayBuffer = class {
@@ -32,6 +33,7 @@ if (mode === "exit-returns") {
   throw new Error("invalid fixture mode");
 }
 
+await waitForFixtureStart();
 process.stdout.write("ENTER\n");
 if (
   mode === "park" ||

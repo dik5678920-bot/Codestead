@@ -1,4 +1,5 @@
 import { writeSync } from "node:fs";
+import { waitForFixtureStart } from "../../../../../scripts/__tests__/helpers/prepared-fixture.mjs";
 
 import {
   disarmMailDispatchHardWatchdog,
@@ -25,6 +26,8 @@ import {
 import { outboxMessageId } from "../../provider-correlation";
 import type { OutboxClaim } from "../../outbox-worker";
 
+import { awaitWatchdogReady, controlWatchdogKillClock, advanceWatchdogKillClock } from "../../../../../scripts/__tests__/helpers/watchdog-fixture-clock.mjs";
+
 type Scenario =
   | "acquire-timeout"
   | "pre-provider-hang"
@@ -49,6 +52,8 @@ if (
 ) {
   process.exit(64);
 }
+
+if (scenario === "provider-unsettled") controlWatchdogKillClock();
 
 const ID = "11111111-1111-4111-8111-111111111111";
 const OPERATION_ID = "22222222-2222-4222-8222-222222222222";
@@ -339,6 +344,9 @@ function fixtureWrite(
   callback?: ConsoleCallback,
 ) {
   marker("PROVIDER_START");
+  if (scenario === "provider-unsettled") {
+    setImmediate(() => advanceWatchdogKillClock(250));
+  }
   if (scenario !== "provider-unsettled") {
     const settle =
       typeof encodingOrCallback === "function"
@@ -393,7 +401,7 @@ async function main() {
   );
   marker("READY");
 
-  const watchdog = await startMailDispatchHardWatchdog();
+  const watchdog = await awaitWatchdogReady(startMailDispatchHardWatchdog);
   const armed = await watchdog.arm();
 
   try {
@@ -432,7 +440,7 @@ async function main() {
   }
 }
 
-void main().catch(() => {
+void waitForFixtureStart().then(main).catch(() => {
   marker("TOP_LEVEL_FAILED");
   process.exitCode = 70;
 });
