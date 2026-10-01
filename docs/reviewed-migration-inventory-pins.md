@@ -44,10 +44,10 @@ For an operator-reviewed correction to the latest SQL migration, first run
 apply/check commands. The hash tool uses the ledger's canonical digest function,
 updates the latest SQL hash and backup/restore digest projections, and refuses
 changes to historical migrations. Review the SQL correction before rebinding it.
-`node scripts/refresh-ai-provider-evidence-bindings.mjs --apply` refreshes this
-PR's affected current-source evidence bindings and preserves replaced values;
-follow it with `--check` and `npm run evidence:verify`. Historical test results
-are preserved, and every evidence delta still requires operator approval.
+Historical source bindings are anchored at each record's `sourceCommit`;
+`npm run evidence:verify` checks the recorded Git blobs. Re-pinning current
+source without rerunning the historical checks does not extend their proof.
+Evidence conversions and immutable-artifact changes require operator approval.
 
 For the next migration, also advance the Drizzle snapshot/journal, reviewed SQL
 hash and ledger digest, `scripts/backup/common.sh`, and the backup/restore test
