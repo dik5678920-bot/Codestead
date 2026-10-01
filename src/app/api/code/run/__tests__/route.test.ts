@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => {
     gateClosedBookCapability: vi.fn(),
     withRateLimit: vi.fn(),
     hasCurrentConsent: vi.fn(),
-    configuredRunnerClient: vi.fn(),
+    configuredPracticeRunnerClient: vi.fn(),
     checkAvailability: vi.fn(),
     submit: vi.fn(),
     waitForJob: vi.fn(),
@@ -31,7 +31,7 @@ vi.mock("@/lib/security/rate-limit", () => ({ withRateLimit: mocks.withRateLimit
 vi.mock("@/lib/privacy/consent", () => ({ hasCurrentConsent: mocks.hasCurrentConsent }));
 vi.mock("@/lib/runner/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/runner/client")>();
-  return { ...actual, configuredRunnerClient: mocks.configuredRunnerClient };
+  return { ...actual, configuredPracticeRunnerClient: mocks.configuredPracticeRunnerClient };
 });
 vi.mock("@/lib/runner/admission", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/runner/admission")>();
@@ -53,6 +53,7 @@ vi.mock("@/lib/runner/power-rehearsal-hold", async (importOriginal) => {
 import { GET, POST } from "../route";
 import { RunnerAdmissionError } from "@/lib/runner/admission";
 import { RunnerIndeterminateError, runtimeByLanguage } from "@/lib/runner/client";
+import { PistonRunnerClient } from "@/lib/runner/piston-client";
 import { practiceAdmissionRequestHash } from "@/lib/runner/practice-dispatch";
 import { RunnerPowerRehearsalError } from "@/lib/runner/power-rehearsal-hold";
 
@@ -144,7 +145,7 @@ describe("general practice code runner route", () => {
     mocks.gateClosedBookCapability.mockResolvedValue({ allowed: true });
     mocks.withRateLimit.mockImplementation(async (_rules, callback: () => Promise<Response>) => callback());
     mocks.hasCurrentConsent.mockResolvedValue(true);
-    mocks.configuredRunnerClient.mockReturnValue({
+    mocks.configuredPracticeRunnerClient.mockReturnValue({
       checkAvailability: mocks.checkAvailability,
       submit: mocks.submit,
       waitForJob: mocks.waitForJob,
@@ -192,7 +193,7 @@ describe("general practice code runner route", () => {
   });
 
   it("reports missing runner configuration through authenticated readiness", async () => {
-    mocks.configuredRunnerClient.mockImplementationOnce(() => {
+    mocks.configuredPracticeRunnerClient.mockImplementationOnce(() => {
       throw new Error("missing configuration");
     });
 
@@ -216,7 +217,7 @@ describe("general practice code runner route", () => {
     const response = await GET();
 
     expect(response.status).toBe(401);
-    expect(mocks.configuredRunnerClient).not.toHaveBeenCalled();
+    expect(mocks.configuredPracticeRunnerClient).not.toHaveBeenCalled();
   });
 
   it("rejects an anonymous caller before exam state, rate limits, consent, or storage", async () => {
@@ -264,7 +265,7 @@ describe("general practice code runner route", () => {
     expect(response.status).toBe(400);
     expect(mocks.hasCurrentConsent).not.toHaveBeenCalled();
     expect(mocks.admitRunnerJob).not.toHaveBeenCalled();
-    expect(mocks.configuredRunnerClient).not.toHaveBeenCalled();
+    expect(mocks.configuredPracticeRunnerClient).not.toHaveBeenCalled();
   });
 
   it("requires the browser request id instead of creating a hidden server UUID", async () => {
@@ -276,7 +277,7 @@ describe("general practice code runner route", () => {
     });
     expect(mocks.hasCurrentConsent).not.toHaveBeenCalled();
     expect(mocks.admitRunnerJob).not.toHaveBeenCalled();
-    expect(mocks.configuredRunnerClient).not.toHaveBeenCalled();
+    expect(mocks.configuredPracticeRunnerClient).not.toHaveBeenCalled();
   });
 
   it("requires the current server-execution consent before saving source", async () => {
@@ -301,7 +302,7 @@ describe("general practice code runner route", () => {
 
     const pending = POST(request());
     await vi.waitFor(() => expect(mocks.admitRunnerJob).toHaveBeenCalledOnce());
-    expect(mocks.configuredRunnerClient).not.toHaveBeenCalled();
+    expect(mocks.configuredPracticeRunnerClient).not.toHaveBeenCalled();
     expect(mocks.submit).not.toHaveBeenCalled();
 
     resolveAdmission(ADMISSION);
@@ -319,7 +320,7 @@ describe("general practice code runner route", () => {
       code: "IDEMPOTENCY_MISMATCH",
       retryable: false,
     });
-    expect(mocks.configuredRunnerClient).not.toHaveBeenCalled();
+    expect(mocks.configuredPracticeRunnerClient).not.toHaveBeenCalled();
     expect(mocks.submit).not.toHaveBeenCalled();
   });
 
@@ -334,7 +335,7 @@ describe("general practice code runner route", () => {
       retryable: false,
       officialMasteryEvidence: false,
     });
-    expect(mocks.configuredRunnerClient).not.toHaveBeenCalled();
+    expect(mocks.configuredPracticeRunnerClient).not.toHaveBeenCalled();
   });
 
   it("constructs a bounded Python quick-run request and stores only practice evidence", async () => {
@@ -416,7 +417,7 @@ describe("general practice code runner route", () => {
   });
 
   it("marks saved source failed when the isolated runner is not configured", async () => {
-    mocks.configuredRunnerClient.mockImplementationOnce(() => {
+    mocks.configuredPracticeRunnerClient.mockImplementationOnce(() => {
       throw new Error("missing configuration");
     });
 
@@ -506,7 +507,7 @@ describe("general practice code runner route", () => {
       indeterminate: false,
       replayed: true,
     });
-    expect(mocks.configuredRunnerClient).not.toHaveBeenCalled();
+    expect(mocks.configuredPracticeRunnerClient).not.toHaveBeenCalled();
     expect(mocks.beginRunnerDispatch).not.toHaveBeenCalled();
   });
 
@@ -870,4 +871,98 @@ describe("general practice code runner route", () => {
       officialMasteryEvidence: false,
     });
   });
+});
+
+describe("practice route contract parity: legacy runner vs Piston", () => {
+  const IMAGE = "codestead-piston:parity@sha256:" + "b".repeat(64);
+  const languages = ["c", "cpp", "java", "python", "javascript"] as const;
+  // Each outcome as the legacy runner reports it, and as Piston reports it.
+  const outcomes = {
+    accepted: {
+      legacy: { status: "ACCEPTED", compile: { status: "OK", stdout: "", stderr: "", exitCode: 0 }, run: { stdout: "Hello, Ada!\n", stderr: "", exitCode: 0, wallTimeMs: 12 } },
+      piston: { compile: { code: 0 }, run: { stdout: "Hello, Ada!\n", code: 0 } },
+    },
+    compile_error: {
+      legacy: { status: "COMPILE_ERROR", compile: { status: "COMPILE_ERROR", stdout: "", stderr: "error: bad", exitCode: 1 } },
+      piston: { compile: { code: 1, stderr: "error: bad" }, check: { code: 1, stderr: "error: bad" } },
+    },
+    runtime_error: {
+      legacy: { status: "RUNTIME_ERROR", compile: { status: "OK", stdout: "", stderr: "", exitCode: 0 }, run: { stdout: "", stderr: "boom", exitCode: 3, wallTimeMs: 12 } },
+      piston: { compile: { code: 0 }, run: { stderr: "boom", code: 3, status: "RE" } },
+    },
+    timeout: {
+      legacy: { status: "TIMEOUT", compile: { status: "OK", stdout: "", stderr: "", exitCode: 0 }, run: { stdout: "", stderr: "", exitCode: null, wallTimeMs: 3000 } },
+      piston: { compile: { code: 0 }, run: { code: null, signal: "SIGKILL", status: "TO" } },
+    },
+  } as const;
+
+  function pistonFetch(outcome: (typeof outcomes)[keyof typeof outcomes]["piston"]) {
+    const stage = (values: Record<string, unknown> = {}) => ({ stdout: "", stderr: "", code: 0, signal: null, status: null, ...values });
+    return (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const call = JSON.parse(String(init?.body)) as { files: Array<{ name: string }> };
+      if (call.files[0]?.name.startsWith("__codestead_check")) {
+        return Response.json({ run: stage("check" in outcome ? outcome.check : { code: 0 }) });
+      }
+      return Response.json({ compile: stage(outcome.compile), run: stage("run" in outcome ? outcome.run : { code: null }) });
+    }) as typeof fetch;
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.admitRunnerJob.mockResolvedValue(ADMISSION);
+    mocks.beginRunnerDispatch.mockResolvedValue({ replayed: false, remoteJobId: null });
+    mocks.holdRunnerDispatchForPowerRehearsal.mockResolvedValue({ held: false });
+    mocks.recordRunnerDispatch.mockResolvedValue({ replayed: false });
+    mocks.settleRunnerJob.mockResolvedValue({ replayed: false });
+    mocks.requireAuth.mockResolvedValue({ session: { user: { id: "learner-1" }, session: { id: "session-1" } }, response: null });
+    mocks.gateClosedBookCapability.mockResolvedValue({ allowed: true });
+    mocks.withRateLimit.mockImplementation(async (_rules, callback: () => Promise<Response>) => callback());
+    mocks.hasCurrentConsent.mockResolvedValue(true);
+  });
+
+  for (const language of languages) {
+    for (const [name, outcome] of Object.entries(outcomes)) {
+      it(`${language} ${name}: same HTTP status, fields and learner-visible values`, async () => {
+        mocks.admitRunnerJob.mockResolvedValue({
+          ...ADMISSION,
+          requestHash: practiceAdmissionRequestHash({
+            userId: "learner-1",
+            requestId: CLIENT_REQUEST_ID,
+            language,
+            sourceHash: SOURCE_HASH,
+            stdin: "Ada\n",
+            mode: "quick_run",
+            runtimeVersion: runtimeByLanguage[language].version,
+            entrypoint: runtimeByLanguage[language].entrypoint,
+            submissionType: "server_run",
+          }),
+        });
+        const legacyResult = { ...outcome.legacy, imageDigest: "sha256:legacy", runtimeVersion: "legacy", tests: [], totals: { passed: 0, failed: 0, total: 0 } };
+        mocks.configuredPracticeRunnerClient.mockReturnValue({
+          checkAvailability: async () => ({ available: true, status: "available", queueDepth: 0, activeJobs: 0, concurrency: 2 }),
+          submit: async () => completedJob({ result: legacyResult }),
+          waitForJob: vi.fn(),
+          waitFrom: vi.fn(),
+        });
+        const legacyResponse = await POST(request({ language }));
+        const legacyBody = await legacyResponse.json() as Record<string, unknown>;
+
+        const piston = new PistonRunnerClient("http://piston:2000", IMAGE, pistonFetch(outcome.piston));
+        vi.spyOn(piston, "checkAvailability").mockResolvedValue({ available: true, status: "available", queueDepth: 0, activeJobs: 0, concurrency: 2 });
+        mocks.configuredPracticeRunnerClient.mockReturnValue(piston);
+        const pistonResponse = await POST(request({ language }));
+        const pistonBody = await pistonResponse.json() as Record<string, unknown>;
+
+        expect(pistonResponse.status).toBe(legacyResponse.status);
+        expect(Object.keys(pistonBody).sort()).toEqual(Object.keys(legacyBody).sort());
+        for (const key of ["status", "stdout", "exitCode", "totals", "tests", "queue", "officialMasteryEvidence", "requestId", "submissionId"]) {
+          expect({ key, value: pistonBody[key] }).toEqual({ key, value: legacyBody[key] });
+        }
+        // Guard against a vacuous comparison of two identical error responses.
+        expect(legacyResponse.status).toBe(200);
+        expect(legacyBody.status).toBe(outcome.legacy.status.toLowerCase());
+        expect(pistonBody.imageDigest).toBe(IMAGE);
+      });
+    }
+  }
 });

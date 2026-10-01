@@ -16,7 +16,7 @@ import {
   type RunnerAdmission,
 } from "@/lib/runner/admission";
 import {
-  configuredRunnerClient,
+  configuredPracticeRunnerClient,
   RunnerIndeterminateError,
   runtimeByLanguage,
   type RunnerLanguage,
@@ -102,7 +102,7 @@ export async function GET() {
   if (!authz.session) return authz.response;
   let client;
   try {
-    client = configuredRunnerClient();
+    client = configuredPracticeRunnerClient();
   } catch {
     return NextResponse.json({
       status: "unavailable",
@@ -216,7 +216,7 @@ export async function POST(request: NextRequest) {
 
   let client;
   try {
-    client = configuredRunnerClient();
+    client = configuredPracticeRunnerClient();
   } catch {
     if (admission.duplicate && (admission.status !== "queued" || admission.remoteJobId !== null)) {
       return NextResponse.json({
