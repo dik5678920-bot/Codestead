@@ -154,6 +154,7 @@ async function stagedPublication(stage: "beta" | "verified" = "beta") {
     if (sql.startsWith("select a.specification")) return result();
     if (sql.startsWith("select evidence_version")) return result(release ? [release] : []);
     if (sql.startsWith("select cpp.course_id")) return result(runtimeRows());
+    if (sql.startsWith("select c.slug from curriculum_publication_pointer")) return result(published ? [{ slug: course.id }] : []);
     throw new Error(`Unhandled fixture SQL: ${sql}`);
   });
   mocks.query.mockImplementation(query);
