@@ -122,7 +122,7 @@
       "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
       "field": "/artifactSha256/docs~1evidence~1backup-status-outbox-2026-07-12.json",
       "old": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
-      "new": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269"
+      "new": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
     },
     {
       "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
@@ -164,13 +164,13 @@
       "evidence": "docs/evidence/ai-provider-settings-2026-10-01.json",
       "field": "/ciPinFollowup/changes/0/sha256",
       "old": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
-      "new": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269"
+      "new": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
     },
     {
       "evidence": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
       "field": "/evidenceChanges/1/sha256",
       "old": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
-      "new": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269"
+      "new": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
     },
     {
       "evidence": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
@@ -182,7 +182,7 @@
       "evidence": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
       "field": "/artifactSha256/docs~1evidence~1backup-status-outbox-2026-07-12.json",
       "old": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
-      "new": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269"
+      "new": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
     },
     {
       "evidence": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
@@ -273,7 +273,7 @@
             "field": "/artifactSha256/docs~1evidence~1backup-status-outbox-2026-07-12.json",
             "artifact": "docs/evidence/backup-status-outbox-2026-07-12.json",
             "previousDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
-            "currentDigest": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269"
+            "currentDigest": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
           },
           {
             "field": "/artifactSha256/drizzle~10070_credential_validation_preference.sql",
@@ -327,7 +327,7 @@
             "field": "/ciPinFollowup/changes/0/sha256",
             "artifact": "docs/evidence/backup-status-outbox-2026-07-12.json",
             "previousDigest": "342764d17d36f5e3d96ce3c5476c62c59b0ab848feaffe791674d8dc00011fdc",
-            "currentDigest": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269"
+            "currentDigest": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8"
           },
           {
             "field": "/migration/sqlSha256",
@@ -362,9 +362,9 @@
     }
   ],
   "artifactSha256": {
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "cdfa3e7f12e51edc63b43564a03ee31ce75634fc4ade092a35d53b3a9bad3fd8",
-    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "e587bac871b0ccb257356ea504ca6c882040bf210a18c90ab379b8655fd1f242",
-    "docs/evidence/backup-status-outbox-2026-07-12.json": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "ba22c32b4f629c930235ac2e7f24209140d3739b2495cf9d8fe7e25efaa4a5f1",
+    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "1886fc7b8fccc906d24e895eeb25157f606409523ff96cad441fc190699dbff8",
+    "docs/evidence/backup-status-outbox-2026-07-12.json": "231df3780640dd3500159bb55ecc927b609060ac03f176449a3a5e3059a2d7b8",
     "docs/reviewed-migration-inventory-pins.md": "cfccee3116a90b6e3e2bf262b77a92b43b7c88b14e2d3d8b888a58e9a2aebfda",
     "drizzle/0070_credential_validation_preference.sql": "a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c",
     "drizzle/meta/0070_public_column_attnums.json": "445e46c714041c037d7474a39d940cf065e92951ba6c2bbd0f2b2fdc73bb2e75",
@@ -388,13 +388,13 @@
         "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
         "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
         "previousDigest": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
-        "currentDigest": "cdfa3e7f12e51edc63b43564a03ee31ce75634fc4ade092a35d53b3a9bad3fd8"
+        "currentDigest": "ba22c32b4f629c930235ac2e7f24209140d3739b2495cf9d8fe7e25efaa4a5f1"
       },
       {
         "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-ci-pins-2026-10-01.json",
         "artifact": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
         "previousDigest": "69e1bceb6a7f1a3a3fa93e30246b7a6832f2f9cb6679b2ce354d174982ebd0f9",
-        "currentDigest": "e587bac871b0ccb257356ea504ca6c882040bf210a18c90ab379b8655fd1f242"
+        "currentDigest": "1886fc7b8fccc906d24e895eeb25157f606409523ff96cad441fc190699dbff8"
       },
       {
         "field": "/artifactSha256/integration~1credential-preference-migration.integration.test.ts",

@@ -197,11 +197,11 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "sha256": "31d7b1b22d95279326cb23d08ecc253ab9b5b090e0dde60fb639469be9fb338e"
+      "sha256": "8b2d56912db25e3d936de561489a1b37a372a2c6ffd00502fc7fa10d4a8ecd91"
     },
     {
       "path": "infra/tests/backup-ci-registration.test.mjs",
-      "sha256": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
+      "sha256": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
     }
   ],
   "supersededDigests": [
@@ -476,7 +476,7 @@
       {
         "path": "infra/tests/backup-ci-registration.test.mjs",
         "previousSha256": "8ff5095a2a6385a9f5a42498af21490c98f29c000f02bb86c4feb50d58cbbeac",
-        "sha256": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
+        "sha256": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
       }
     ]
   },
@@ -501,7 +501,7 @@
       {
         "path": "infra/tests/backup-ci-registration.test.mjs",
         "previousDigest": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc",
-        "currentDigest": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
+        "currentDigest": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
       }
     ]
   },

@@ -1124,6 +1124,7 @@ const reviewedJobNames = [
   "backup-production-e2e",
   "runner",
   "postgres-integration",
+  "postgres-integration-shards",
   "integration-mail-races",
   "curriculum-runtime",
   "curriculum-verify",
@@ -1353,6 +1354,36 @@ if (
   fail("the integration split must run every race suite exactly once, as a matrix part");
 }
 
+// The remaining integration files are split into shards of the sorted list by
+// 1-based position modulo the shard count. Shard 0 runs in postgres-integration
+// and the others as matrix shards; together they must partition the files:
+// every shard non-empty (an empty argument list would run every file), each
+// file in exactly one shard, and both commands identical except the shard.
+const integrationShardCount = postgresCiRuntimePolicy.integrationShardCount;
+const integrationMatrixShards = [...postgresCiRuntimePolicy.integrationMatrixShards];
+const shardedIntegrationFiles = readdirSync(resolve(repoRoot, "integration"))
+  .filter((file) => /\.integration\.test\.ts$/u.test(file) && !file.startsWith("mail-delivery-races-"))
+  .sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+const integrationShardListing =
+  "npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name 'mail-delivery-races-*.integration.test.ts' | LC_ALL=C sort | awk ";
+const integrationShards = [0, ...integrationMatrixShards];
+const filesByIntegrationShard = integrationShards.map((shard) =>
+  shardedIntegrationFiles.filter((_file, index) => (index + 1) % integrationShardCount === shard));
+if (
+  !Number.isInteger(integrationShardCount) || integrationShardCount < 2 ||
+  integrationShards.join(",") !==
+    Array.from({ length: integrationShardCount }, (_value, shard) => shard).join(",") ||
+  postgresCiRuntimePolicy.livePg17IntegrationCommand !==
+    `${integrationShardListing}'NR % ${integrationShardCount} == 0')` ||
+  postgresCiRuntimePolicy.integrationShardCommand !==
+    `${integrationShardListing}-v shard=\${{ matrix.shard }} 'NR % ${integrationShardCount} == shard')` ||
+  filesByIntegrationShard.some((files) => files.length === 0) ||
+  [...filesByIntegrationShard.flat()].sort().join("\n") !== [...shardedIntegrationFiles].sort().join("\n") ||
+  new Set(filesByIntegrationShard.flat()).size !== shardedIntegrationFiles.length
+) {
+  fail("the integration shards must partition every non-race integration file exactly once");
+}
+
 const rootNodeInstallProjection = [`      - run: ${rootNodeInstallRun}`];
 const playwrightCacheProjection = (suffix) => [
   "      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0",
@@ -1397,6 +1428,7 @@ const ciOkNeeds = [
   "backup-production-e2e",
   "runner",
   "postgres-integration",
+  "postgres-integration-shards",
   "integration-mail-races",
   "curriculum-runtime",
   "curriculum-verify",
@@ -1416,7 +1448,7 @@ const ciOkScript = [
   "              runner) echo runner ;;",
   "              curriculum-runtime|curriculum-verify|curriculum-dsa-parity|curriculum-dsa-parity-merge) echo curriculum ;;",
   "              auth-browser|browser) echo browser ;;",
-  "              postgres-integration|integration-mail-races) echo database ;;",
+  "              postgres-integration|postgres-integration-shards|integration-mail-races) echo database ;;",
   "              *) echo '' ;;",
   "            esac",
   "          }",
@@ -1684,6 +1716,24 @@ const reviewedJobContracts = new Map([
       ...infraAptRuns.map((command) => `      - run: ${command}`),
       `      - run: ${reviewedDockerEngineRun}`,
       ...partitionRuns("infra-sandbox"),
+    ],
+  ],
+  [
+    "postgres-integration-shards",
+    [
+      '    name: "database: integration files (shard ${{ matrix.shard }})"',
+      "    runs-on: ubuntu-24.04",
+      "    timeout-minutes: 30",
+      ...reviewedDatabaseGateLines,
+      "    strategy:",
+      "      fail-fast: false",
+      "      matrix:",
+      `        shard: [${integrationMatrixShards.join(", ")}]`,
+      "    steps:",
+      ...checkoutProjection,
+      ...setupNodeProjection,
+      "      - run: npm ci",
+      `      - run: ${postgresCiRuntimePolicy.integrationShardCommand}`,
     ],
   ],
   [
@@ -2720,6 +2770,7 @@ function runAdversarialSelfTests(document) {
   );
   for (const jobName of [
     "postgres-integration",
+    "postgres-integration-shards",
     "curriculum-runtime",
     "browser",
     "production-topology",
