@@ -68,7 +68,7 @@
     "src/lib/runner/admission.ts": "2b114931f9f427c96a0da096d27927a8407de43d6c1a5e64849c9784d4322a00",
     "src/lib/runner/client.ts": "619d3dd0da0588caaec523389964c1a7cd091091ce12f267b372de1275121d3f",
     "src/app/api/code/run/route.ts": "c84e1e6d8d90a6505ae6ce5363db943122ebc4d8bfd9ffa8afdde411357348c8",
-    "src/app/api/exams/_lib/service.ts": "e11f966b69b96a65e62e5ab80eb9913986bbcd776b36e2171acd8caa5edc04a2",
+    "src/app/api/exams/_lib/service.ts": "bfe18dc604cbfa11ecd4bb9725276c686f75b49d7c06257890ef9ec756bb6342",
     "src/app/api/exams/_lib/finalization-worker.ts": "930ae6e900a4b33f79cf99d69c94560f023698d8d262ecf8b718dc7e8b60b483",
     "src/lib/assessment-corrections/worker.ts": "6808b90e4cdb1ff26b25570d69b65f376d9202ad05e47c18fd51d7766344db7d",
     "integration/runner-admission.integration.test.ts": "e98e8c2c013c533ccd941eee3cd1c84a24d584588e0394e5cbe35975a03b3852",

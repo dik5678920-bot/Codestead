@@ -35,7 +35,7 @@
       "file": "src/app/api/exams/_lib/service.ts",
       "purpose": "exam sessions and answers",
       "anchors": 4,
-      "sourceSha256": "e11f966b69b96a65e62e5ab80eb9913986bbcd776b36e2171acd8caa5edc04a2"
+      "sourceSha256": "bfe18dc604cbfa11ecd4bb9725276c686f75b49d7c06257890ef9ec756bb6342"
     },
     {
       "file": "src/lib/learning-service/drizzle-store.ts",
