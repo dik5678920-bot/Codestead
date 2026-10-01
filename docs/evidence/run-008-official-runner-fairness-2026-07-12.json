@@ -70,7 +70,7 @@
     "src/app/api/code/run/route.ts": "c84e1e6d8d90a6505ae6ce5363db943122ebc4d8bfd9ffa8afdde411357348c8",
     "src/app/api/exams/_lib/service.ts": "bfe18dc604cbfa11ecd4bb9725276c686f75b49d7c06257890ef9ec756bb6342",
     "src/app/api/exams/_lib/finalization-worker.ts": "930ae6e900a4b33f79cf99d69c94560f023698d8d262ecf8b718dc7e8b60b483",
-    "src/lib/assessment-corrections/worker.ts": "6808b90e4cdb1ff26b25570d69b65f376d9202ad05e47c18fd51d7766344db7d",
+    "src/lib/assessment-corrections/worker.ts": "3c5607c2dbcd5184fecb1f3ec21737b733768ee1780b91ff446ff7356874ef1a",
     "integration/runner-admission.integration.test.ts": "e98e8c2c013c533ccd941eee3cd1c84a24d584588e0394e5cbe35975a03b3852",
     "integration/assessment-correction.integration.test.ts": "57dd7ed53022ba455ce0936c7f8c46a0c4261f369758ce91decdd3cc91811195",
     "src/lib/data-lifecycle/export.ts": "e95fdfc268a2bc17742a1da6d21669dae5f4818ae6179c142b7a90f40434b3a4"

@@ -137,7 +137,7 @@
     "docs/evidence/api-authorization-matrix-2026-07-12.json": "dddb32ecd9ece9201fb5f109afb51790b8ceec6460c6f37ed7aa724a70751238",
     "docs/evidence/backup-status-outbox-2026-07-12.json": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269",
     "docs/evidence/provider-outage-fallback-verification-2026-07-12.json": "d939e054c18f841bec6fb2d110076969a302388dd29c9ec9c7862da3ccad154e",
-    "docs/evidence/run-008-official-runner-fairness-2026-07-12.json": "f53e4656463dc9759bb3cf8d4153d074358d5e350174b29a2b98fe42705e91b6",
+    "docs/evidence/run-008-official-runner-fairness-2026-07-12.json": "3b959497a8d8d2f23b02e78d840e49b9b2b4577103af92e71fe4a69cc9de1872",
     "docs/provider-onboarding.md": "b60bff88b29d242f1fc9eef0ef2053f5ebe7611f14dcfce0026d1eae2c0044f4",
     "drizzle/0070_credential_validation_preference.sql": "a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c",
     "drizzle/meta/0070_snapshot.json": "24c987e88a0664c9b74a5f3f8c2fe727bf4470410a6564c4d0f2289dd6599d1a",
@@ -305,7 +305,7 @@
         "field": "/artifactSha256/docs~1evidence~1run-008-official-runner-fairness-2026-07-12.json",
         "artifact": "docs/evidence/run-008-official-runner-fairness-2026-07-12.json",
         "previousDigest": "7f2aa6fc3f086fc425cd12f2df84d28bb8bb54500fdabc289f5ef47e6401fccf",
-        "currentDigest": "f53e4656463dc9759bb3cf8d4153d074358d5e350174b29a2b98fe42705e91b6"
+        "currentDigest": "3b959497a8d8d2f23b02e78d840e49b9b2b4577103af92e71fe4a69cc9de1872"
       },
       {
         "field": "/artifactSha256/integration~1credential-preference-migration.integration.test.ts",

@@ -86,21 +86,21 @@
       "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
       "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
       "previousDigest": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
-      "currentDigest": "8a2ad8e42089ce714d23cbcb9c7743adef452a14655ca0a7a68917ea78e3c11c"
+      "currentDigest": "cdfa3e7f12e51edc63b43564a03ee31ce75634fc4ade092a35d53b3a9bad3fd8"
     },
     {
       "evidence": "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json",
       "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
       "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
       "previousDigest": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
-      "currentDigest": "8a2ad8e42089ce714d23cbcb9c7743adef452a14655ca0a7a68917ea78e3c11c"
+      "currentDigest": "cdfa3e7f12e51edc63b43564a03ee31ce75634fc4ade092a35d53b3a9bad3fd8"
     },
     {
       "evidence": "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json",
       "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-ci-pins-2026-10-01.json",
       "artifact": "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
       "previousDigest": "69e1bceb6a7f1a3a3fa93e30246b7a6832f2f9cb6679b2ce354d174982ebd0f9",
-      "currentDigest": "2ea6f3150af02aaf127c1f420875828ef25c282f1e41d195f38f8b81a90a8c30"
+      "currentDigest": "e587bac871b0ccb257356ea504ca6c882040bf210a18c90ab379b8655fd1f242"
     },
     {
       "evidence": "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json",
@@ -138,9 +138,9 @@
     }
   ],
   "artifactSha256": {
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "8a2ad8e42089ce714d23cbcb9c7743adef452a14655ca0a7a68917ea78e3c11c",
-    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "2ea6f3150af02aaf127c1f420875828ef25c282f1e41d195f38f8b81a90a8c30",
-    "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json": "522c6f15930f35303ed2ffc731072916010d46fe9f017c89bef3ec88294ac46a",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "cdfa3e7f12e51edc63b43564a03ee31ce75634fc4ade092a35d53b3a9bad3fd8",
+    "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json": "e587bac871b0ccb257356ea504ca6c882040bf210a18c90ab379b8655fd1f242",
+    "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json": "e5e0a0062d9c8fde28d36aae9bb7fda46aa0684b6cf43e4807cc03791c142d29",
     "e2e/assurance.spec.ts": "cd96a09185e4222495c52ffe7e34031ed51ead1e1c05144e99de537f85427985",
     "e2e/access.spec.ts": "d7026f69cb0faf066b39e89b8184434b4c58e521b21a2b9fd6861f1444cb5c75",
     "infra/tests/mail-guarded-delivery-0069.impl.mjs": "77b54c928cc6360bb4a613f122b80696d0be1984111d789482f1dea9cfa0bd54",
