@@ -76,7 +76,7 @@ assert.doesNotMatch(
   "operations image must not duplicate repository migration bytes",
 );
 for (const artifact of [
-  "drizzle/meta/0069_snapshot.json",
+  "drizzle/meta/0070_snapshot.json",
   "scripts/database-runtime-capabilities.mjs",
   "scripts/bootstrap-database-runtime-capabilities.mjs",
   "scripts/verify-database-runtime-capabilities.mjs",

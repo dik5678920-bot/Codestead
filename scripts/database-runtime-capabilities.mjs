@@ -1,30 +1,30 @@
 import { createHash } from "node:crypto";
 
-import journal0069 from "../drizzle/meta/_journal.json" with { type: "json" };
-import physicalPublicColumns0069 from "../drizzle/meta/0069_public_column_attnums.json" with { type: "json" };
-import snapshot0069 from "../drizzle/meta/0069_snapshot.json" with { type: "json" };
+import journal0070 from "../drizzle/meta/_journal.json" with { type: "json" };
+import physicalPublicColumns0070 from "../drizzle/meta/0070_public_column_attnums.json" with { type: "json" };
+import snapshot0070 from "../drizzle/meta/0070_snapshot.json" with { type: "json" };
 
 export const DATABASE_RUNTIME_CAPABILITY_SCHEMA_VERSION = 1;
 
 export const DATABASE_RUNTIME_CAPABILITY_PHASES = Object.freeze({
   FOUNDATION: "foundation",
-  CURRENT_0069: "0069-current",
+  CURRENT_0070: "0070-current",
   EXPAND_PREPARE_0070: "0070-expand-prepare",
   CONTRACTED_0071: "0071-contracted",
 });
 
-export const CURRENT_0069_REVIEWED_MIGRATION_TAG =
-  "0069_mail_outbox_guarded_delivery_authority";
+export const CURRENT_0070_REVIEWED_MIGRATION_TAG =
+  "0070_credential_validation_preference";
 
-const REVIEWED_0069_FULL_LEDGER_SHA256 =
-  "20b480c7dd694d6e8e243704f14aeb05aa42fda4c5b7e863f6c357bf095a2551";
-const REVIEWED_0069_JOURNAL_TAGS_SHA256 =
-  "4b3163fd24c181107a891b42de1095f5137b366f8fb5429a2845753146adba08";
-const REVIEWED_0069_PUBLIC_COLUMN_MANIFEST_SHA256 =
-  "b64e0934d046eb1cc4b1609ffbaf309cccdc2fa12fd4154ace19c9f63a0859af";
+const REVIEWED_0070_FULL_LEDGER_SHA256 =
+  "174fea1500e62ff0824624beb2e6a20147d2931f494ee7fd03db86685949eca9";
+const REVIEWED_0070_JOURNAL_TAGS_SHA256 =
+  "f29657c9a020854098688b3c9edab9c018b3ac51066f844bd06198d69eca84a2";
+const REVIEWED_0070_PUBLIC_COLUMN_MANIFEST_SHA256 =
+  "89496fc9d975fc3941c88c27a94c509efbcbdc053941c9019274c9320f6ac9d4";
 const REVIEWED_MIGRATION_TAGS = Object.freeze(
-  Array.isArray(journal0069.entries)
-    ? journal0069.entries.map((entry) => entry.tag)
+  Array.isArray(journal0070.entries)
+    ? journal0070.entries.map((entry) => entry.tag)
     : [],
 );
 
@@ -257,7 +257,7 @@ const CURRENT_MEMBERSHIPS = [
 ];
 
 const PHYSICAL_PUBLIC_TABLES = new Map(
-  physicalPublicColumns0069.tables.map((table) => [table.identity, table]),
+  physicalPublicColumns0070.tables.map((table) => [table.identity, table]),
 );
 
 function physicalPublicColumns(identity) {
@@ -297,7 +297,7 @@ function tableFromSnapshot(identity, table) {
   };
 }
 
-const SNAPSHOT_PUBLIC_TABLES = Object.entries(snapshot0069.tables)
+const SNAPSHOT_PUBLIC_TABLES = Object.entries(snapshot0070.tables)
   .filter(([identity]) => identity.startsWith("public."))
   .map(([identity, table]) => tableFromSnapshot(identity, table));
 
@@ -348,7 +348,7 @@ const PUBLIC_TABLES = [...SNAPSHOT_PUBLIC_TABLES, ...RAW_0065_TABLES].toSorted(
   (left, right) => compareCodePoints(left.identity, right.identity),
 );
 
-const ENUM_TYPES = Object.entries(snapshot0069.enums)
+const ENUM_TYPES = Object.entries(snapshot0070.enums)
   .filter(([identity]) => identity.startsWith("public."))
   .map(([identity, definition]) => ({
     identity,
@@ -478,12 +478,12 @@ const CURRENT_INVENTORY = {
   routines: PUBLIC_ROUTINES,
 };
 
-const REVIEWED_0069_TABLE_COLUMN_SHA256 =
+const REVIEWED_0070_TABLE_COLUMN_SHA256 =
   "47d662eab56331ce714127a0e3b020eb2c1e0e70c19005cf9654226fc7738d0c";
-const REVIEWED_0069_ENUM_SHA256 =
-  "38eaed74f67a47298214fb8995b4fea131fd4ec794897ed724da11ffeaf21eb7";
+const REVIEWED_0070_ENUM_SHA256 =
+  "bd8a502fb97c9b362316bb48f88d150a2e15090ba4cbe27db46e643a54ff7c00";
 
-function assertReviewed0069InventoryPins() {
+function assertReviewed0070InventoryPins() {
   const publicTables = CURRENT_INVENTORY.tables.filter(
     (table) => table.schema === "public",
   );
@@ -523,22 +523,22 @@ function assertReviewed0069InventoryPins() {
     .update(`${JSON.stringify(REVIEWED_MIGRATION_TAGS)}\n`, "utf8")
     .digest("hex");
   const physicalManifestDigest = createHash("sha256")
-    .update(`${JSON.stringify(physicalPublicColumns0069)}\n`, "utf8")
+    .update(`${JSON.stringify(physicalPublicColumns0070)}\n`, "utf8")
     .digest("hex");
   const physicalManifestExact =
-    physicalPublicColumns0069.schemaVersion === 1 &&
-    physicalPublicColumns0069.contract ===
-      "codestead-public-column-attnums-0069-v1" &&
-    physicalPublicColumns0069.reviewedMigrationTail ===
-      CURRENT_0069_REVIEWED_MIGRATION_TAG &&
-    physicalPublicColumns0069.reviewedMigrationLedgerSha256 ===
-      REVIEWED_0069_FULL_LEDGER_SHA256 &&
-    physicalPublicColumns0069.tables.length === 127 &&
-    physicalPublicColumns0069.tables.reduce(
+    physicalPublicColumns0070.schemaVersion === 1 &&
+    physicalPublicColumns0070.contract ===
+      "codestead-public-column-attnums-0070-v1" &&
+    physicalPublicColumns0070.reviewedMigrationTail ===
+      CURRENT_0070_REVIEWED_MIGRATION_TAG &&
+    physicalPublicColumns0070.reviewedMigrationLedgerSha256 ===
+      REVIEWED_0070_FULL_LEDGER_SHA256 &&
+    physicalPublicColumns0070.tables.length === 127 &&
+    physicalPublicColumns0070.tables.reduce(
       (count, table) => count + table.columns.length,
       0,
     ) === 1_489 &&
-    physicalPublicColumns0069.tables.every(
+    physicalPublicColumns0070.tables.every(
       (table) =>
         table.generation === 1 &&
         table.maxAttnum === table.columns.length &&
@@ -550,19 +550,19 @@ function assertReviewed0069InventoryPins() {
         ),
     );
   const journalExact =
-    REVIEWED_MIGRATION_TAGS.length === 70 &&
-    journal0069.entries.every(
+    REVIEWED_MIGRATION_TAGS.length === 71 &&
+    journal0070.entries.every(
       (entry, index) =>
         entry.idx === index &&
         entry.tag === REVIEWED_MIGRATION_TAGS[index] &&
         entry.tag.startsWith(String(index).padStart(4, "0") + "_"),
     ) &&
-    REVIEWED_MIGRATION_TAGS.at(-1) === CURRENT_0069_REVIEWED_MIGRATION_TAG;
+    REVIEWED_MIGRATION_TAGS.at(-1) === CURRENT_0070_REVIEWED_MIGRATION_TAG;
   if (
     !journalExact ||
-    journalTagsDigest !== REVIEWED_0069_JOURNAL_TAGS_SHA256 ||
+    journalTagsDigest !== REVIEWED_0070_JOURNAL_TAGS_SHA256 ||
     !physicalManifestExact ||
-    physicalManifestDigest !== REVIEWED_0069_PUBLIC_COLUMN_MANIFEST_SHA256 ||
+    physicalManifestDigest !== REVIEWED_0070_PUBLIC_COLUMN_MANIFEST_SHA256 ||
     SNAPSHOT_PUBLIC_TABLES.length !== 125 ||
     SNAPSHOT_PUBLIC_TABLES.reduce(
       (count, table) => count + table.columns.length,
@@ -571,19 +571,19 @@ function assertReviewed0069InventoryPins() {
     publicTables.length !== 127 ||
     publicColumns !== 1_489 ||
     CURRENT_INVENTORY.tables.length !== 128 ||
-    digest !== REVIEWED_0069_TABLE_COLUMN_SHA256 ||
+    digest !== REVIEWED_0070_TABLE_COLUMN_SHA256 ||
     CURRENT_INVENTORY.types.length !== 141 ||
     enums.length !== 13 ||
-    enumLabelCount !== 78 ||
-    fingerprintDatabaseRuntimeCapabilities(enums) !== REVIEWED_0069_ENUM_SHA256
+    enumLabelCount !== 79 ||
+    fingerprintDatabaseRuntimeCapabilities(enums) !== REVIEWED_0070_ENUM_SHA256
   ) {
     throw new DatabaseRuntimeCapabilityValidationError(
-      "the reviewed 0069 inventory pin does not match",
+      "the reviewed 0070 inventory pin does not match",
     );
   }
 }
 
-assertReviewed0069InventoryPins();
+assertReviewed0070InventoryPins();
 
 const MAIL_WORKER_OUTBOX_INSERT_COLUMNS = [
   "operation_id",
@@ -899,12 +899,12 @@ const CURRENT_PROVENANCE = {
   inventorySources: [
     {
       kind: "drizzle-snapshot",
-      path: "drizzle/meta/0069_snapshot.json",
+      path: "drizzle/meta/0070_snapshot.json",
       publicTables: 125,
       publicColumns: 1_480,
       columnOrder: "migration-derived-pg-attribute-attnum-v1",
-      physicalOrderSource: "drizzle/meta/0069_public_column_attnums.json",
-      physicalOrderSha256: REVIEWED_0069_PUBLIC_COLUMN_MANIFEST_SHA256,
+      physicalOrderSource: "drizzle/meta/0070_public_column_attnums.json",
+      physicalOrderSha256: REVIEWED_0070_PUBLIC_COLUMN_MANIFEST_SHA256,
     },
     {
       kind: "reviewed-migration-overlay",
@@ -960,14 +960,14 @@ function makePolicy({
   };
 }
 
-export const CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES = deepFreeze(
+export const CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES = deepFreeze(
   makePolicy({
-    contract: "codestead-database-runtime-capabilities-0069-current-v1",
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069,
+    contract: "codestead-database-runtime-capabilities-0070-current-v1",
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
     available: true,
-    reviewedMigrationTail: CURRENT_0069_REVIEWED_MIGRATION_TAG,
+    reviewedMigrationTail: CURRENT_0070_REVIEWED_MIGRATION_TAG,
     requiredMigrationFile:
-      "drizzle/0069_mail_outbox_guarded_delivery_authority.sql",
+      "drizzle/0070_credential_validation_preference.sql",
     reason: null,
     grants: CURRENT_GRANTS,
     defaultAclRows: CURRENT_DEFAULT_ACL_ROWS,
@@ -1023,12 +1023,12 @@ const TOP_LEVEL_POLICY_KEYS = new Set([
 ]);
 
 const POLICY_PHASE_DESCRIPTORS = Object.freeze({
-  [DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069]: Object.freeze({
-    contract: "codestead-database-runtime-capabilities-0069-current-v1",
+  [DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070]: Object.freeze({
+    contract: "codestead-database-runtime-capabilities-0070-current-v1",
     available: true,
-    reviewedMigrationTail: CURRENT_0069_REVIEWED_MIGRATION_TAG,
+    reviewedMigrationTail: CURRENT_0070_REVIEWED_MIGRATION_TAG,
     requiredMigrationFile:
-      "drizzle/0069_mail_outbox_guarded_delivery_authority.sql",
+      "drizzle/0070_credential_validation_preference.sql",
     reason: null,
   }),
   [DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071]: Object.freeze({
@@ -1627,11 +1627,11 @@ export function validateDatabaseRuntimeCapabilities(value) {
     memberships: CURRENT_MEMBERSHIPS,
     grants: CURRENT_GRANTS,
     defaultAclRows:
-      value.phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069
+      value.phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070
         ? CURRENT_DEFAULT_ACL_ROWS
         : CONTRACTED_DEFAULT_ACL_ROWS,
     defaultAcls:
-      value.phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069
+      value.phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070
         ? CURRENT_DEFAULT_ACLS
         : CONTRACTED_DEFAULT_ACLS,
   };
@@ -2266,7 +2266,7 @@ export function validateDatabaseRuntimeCapabilityAllowance(
     if (
       exactSetDifference(
         value[key],
-        CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES[key],
+        CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES[key],
       ).length !== 0
     ) {
       validationFailure(`allowance ${key} contains non-predecessor authority`);
@@ -2311,7 +2311,7 @@ function classifyExactCollectionDelta({
       isAllowed
     ) {
       reportOnly.push(entry);
-    } else if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069) {
+    } else if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070) {
       revoke.push(entry);
     } else {
       forbidden.push(entry);
@@ -2349,16 +2349,16 @@ export function classifyDatabaseRuntimeCapabilityPredecessorDelta({
   }
   if (
     ![
-      DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069,
+      DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
       DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
       DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071,
     ].includes(phase)
   ) {
     phaseFailure(`unsupported capability delta phase: ${phase}`);
   }
-  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069) {
+  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070) {
     if (allowance !== null) {
-      phaseFailure("the 0069 current phase forbids predecessor allowances");
+      phaseFailure("the 0070 current phase forbids predecessor allowances");
     }
   } else if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070) {
     validateDatabaseRuntimeCapabilityAllowance(allowance);
@@ -2420,9 +2420,9 @@ function validatePlannerAuthority({ phase, policy, allowance }) {
       `planner phase ${phase} does not match policy phase ${policy.phase}`,
     );
   }
-  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069) {
+  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070) {
     if (allowance !== null) {
-      plannerAuthorityFailure("the 0069 current phase forbids an allowance");
+      plannerAuthorityFailure("the 0070 current phase forbids an allowance");
     }
     return;
   }
@@ -2639,7 +2639,7 @@ export function planDatabaseRuntimeCapabilityReconciliation({
     drift.mismatched.roles,
     (entry) => entry.identity,
   );
-  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069) {
+  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070) {
     roleDelta.forbidden.push(...roleDelta.revoke);
     roleDelta.revoke = [];
   }
@@ -2676,7 +2676,7 @@ export function planDatabaseRuntimeCapabilityReconciliation({
     identity: (entry) => entry.identity,
   });
   const defaultAclRowRevocations =
-    phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069
+    phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070
       ? partitionRepairableDefaultAclRowRevocations({
           policy,
           catalog,
@@ -2786,7 +2786,7 @@ export function resolveDatabaseRuntimeCapabilityPhase({
     !Number.isSafeInteger(reviewedMigrationCount) ||
     reviewedMigrationCount < 0 ||
     reviewedMigrationCount > REVIEWED_MIGRATION_TAGS.length ||
-    reviewedMigrationLedgerSha256 !== REVIEWED_0069_FULL_LEDGER_SHA256 ||
+    reviewedMigrationLedgerSha256 !== REVIEWED_0070_FULL_LEDGER_SHA256 ||
     journalPresent !== reviewedMigrationCount > 0 ||
     reviewedPrefixExact !== reviewedMigrationCount > 0
   ) {
@@ -2814,15 +2814,15 @@ export function resolveDatabaseRuntimeCapabilityPhase({
     };
   } else if (reviewedMigrationCount === REVIEWED_MIGRATION_TAGS.length) {
     if (
-      exactTail !== CURRENT_0069_REVIEWED_MIGRATION_TAG ||
-      CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES.ledger
+      exactTail !== CURRENT_0070_REVIEWED_MIGRATION_TAG ||
+      CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.ledger
         .requiredMigrationFile !== `drizzle/${exactTail}.sql`
     ) {
       phaseFailure("current capability policy is not bound to its exact tail");
     }
     resolved = {
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069,
-      policy: CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+      policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
       reconcileApplicationAcls: true,
     };
   } else {
@@ -2848,7 +2848,7 @@ export function resolveDatabaseRuntimeCapabilityPhase({
   });
 }
 
-validateDatabaseRuntimeCapabilities(CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES);
+validateDatabaseRuntimeCapabilities(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
 validateDatabaseRuntimeCapabilities(
   POST_CONTRACT_DATABASE_RUNTIME_CAPABILITIES,
 );

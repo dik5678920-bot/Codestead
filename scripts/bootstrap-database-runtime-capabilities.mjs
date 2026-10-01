@@ -1,6 +1,6 @@
 import {
   BOOTSTRAP_SESSION_AUTHORITY,
-  CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES,
+  CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
   DATABASE_RUNTIME_CAPABILITY_PHASES,
   DatabaseRuntimeCapabilityPhaseError,
   canonicalDatabaseRuntimeCapabilitiesJson,
@@ -1873,7 +1873,7 @@ function expectedFoundationEnvelope(schemaNames) {
     ),
   ];
   const defaultRows =
-    CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES.defaultAclRows.filter(
+    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.defaultAclRows.filter(
       (entry) =>
         entry.schema === null &&
         ["routine", "type"].includes(entry.objectKind) &&
@@ -1881,7 +1881,7 @@ function expectedFoundationEnvelope(schemaNames) {
           entry.creator?.kind === BOOTSTRAP_SESSION_AUTHORITY.kind),
     );
   const defaultAcls =
-    CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES.defaultAcls.filter(
+    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.defaultAcls.filter(
       (entry) =>
         entry.schema === null &&
         ["routine", "type"].includes(entry.objectKind) &&
@@ -1890,10 +1890,10 @@ function expectedFoundationEnvelope(schemaNames) {
     );
   return {
     roles: sortedFoundationCollection(
-      CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES.roles,
+      CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.roles,
     ),
     memberships: sortedFoundationCollection(
-      CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES.memberships,
+      CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.memberships,
     ),
     authority: {
       objects: sortedFoundationCollection(objects),
@@ -2727,7 +2727,7 @@ export async function verifyBootstrapDatabaseRuntimeCapabilities(
   { postgresUser, postgresDatabase, resolution },
 ) {
   if (
-    resolution.phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069 ||
+    resolution.phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070 ||
     resolution.reconcileApplicationAcls !== true ||
     resolution.policy === null
   ) {
@@ -2763,7 +2763,7 @@ export async function reconcileBootstrapDatabaseRuntimeCapabilities(
   { postgresUser, postgresDatabase, resolution },
 ) {
   if (
-    resolution.phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069 ||
+    resolution.phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070 ||
     resolution.reconcileApplicationAcls !== true ||
     resolution.policy === null
   ) {

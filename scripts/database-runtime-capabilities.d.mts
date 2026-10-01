@@ -15,7 +15,7 @@ export const DATABASE_RUNTIME_CAPABILITY_SCHEMA_VERSION: 1;
 
 export const DATABASE_RUNTIME_CAPABILITY_PHASES: Readonly<{
   FOUNDATION: "foundation";
-  CURRENT_0069: "0069-current";
+  CURRENT_0070: "0070-current";
   EXPAND_PREPARE_0070: "0070-expand-prepare";
   CONTRACTED_0071: "0071-contracted";
 }>;
@@ -24,7 +24,7 @@ export type DatabaseRuntimeCapabilityPhase =
   (typeof DATABASE_RUNTIME_CAPABILITY_PHASES)[keyof typeof DATABASE_RUNTIME_CAPABILITY_PHASES];
 
 export type DatabaseRuntimeCapabilityPolicyPhase =
-  | typeof DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069
+  | typeof DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070
   | typeof DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071;
 
 export type DatabaseRuntimeCapabilityReconciliationPhase = Exclude<
@@ -32,7 +32,7 @@ export type DatabaseRuntimeCapabilityReconciliationPhase = Exclude<
   typeof DATABASE_RUNTIME_CAPABILITY_PHASES.FOUNDATION
 >;
 
-export const CURRENT_0069_REVIEWED_MIGRATION_TAG: "0069_mail_outbox_guarded_delivery_authority";
+export const CURRENT_0070_REVIEWED_MIGRATION_TAG: "0070_credential_validation_preference";
 
 export class DatabaseRuntimeCapabilityValidationError extends Error {
   constructor(message: string);
@@ -333,12 +333,12 @@ export interface DatabaseRuntimeCapabilityAuthority {
 export interface DatabaseRuntimeCapabilityCurrentManifest
   extends DatabaseRuntimeCapabilityAuthority {
   readonly schemaVersion: 1;
-  readonly contract: "codestead-database-runtime-capabilities-0069-current-v1";
-  readonly phase: typeof DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069;
+  readonly contract: "codestead-database-runtime-capabilities-0070-current-v1";
+  readonly phase: typeof DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070;
   readonly available: true;
   readonly ledger: Readonly<{
-    reviewedMigrationTail: "0069_mail_outbox_guarded_delivery_authority";
-    requiredMigrationFile: "drizzle/0069_mail_outbox_guarded_delivery_authority.sql";
+    reviewedMigrationTail: "0070_credential_validation_preference";
+    requiredMigrationFile: "drizzle/0070_credential_validation_preference.sql";
     reason: null;
   }>;
 }
@@ -837,13 +837,13 @@ export type DatabaseRuntimeCapabilityResolution =
       ledgerIdentity: DatabaseRuntimeCapabilityLedgerIdentity;
     }>
   | Readonly<{
-      phase: typeof DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069;
+      phase: typeof DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070;
       policy: DatabaseRuntimeCapabilityCurrentManifest;
       reconcileApplicationAcls: true;
       ledgerIdentity: DatabaseRuntimeCapabilityLedgerIdentity;
     }>;
 
-export const CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES: Readonly<DatabaseRuntimeCapabilityCurrentManifest>;
+export const CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES: Readonly<DatabaseRuntimeCapabilityCurrentManifest>;
 
 export const POST_CONTRACT_DATABASE_RUNTIME_CAPABILITIES: Readonly<DatabaseRuntimeCapabilityPostContractManifest>;
 

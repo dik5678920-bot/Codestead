@@ -1,6 +1,6 @@
 import {
   BOOTSTRAP_SESSION_AUTHORITY,
-  CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES,
+  CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
   DATABASE_RUNTIME_CAPABILITY_PHASES,
   DatabaseRuntimeCapabilityPhaseError,
   canonicalDatabaseRuntimeCapabilitiesJson,
@@ -1540,7 +1540,7 @@ function normalizeVerifierFoundationRoleTopology({
   const credentialsByRole = validateVerifierCredentialEvidence(
     credentialEvidence,
     {
-      policy: CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES,
+      policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
       postgresDatabase,
       bootstrapUser,
       roleRows,
@@ -1762,7 +1762,7 @@ function normalizeVerifierFoundationDefaultAcls(
 }
 
 function expectedVerifierFoundationEnvelope(schemaNames) {
-  const policy = CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES;
+  const policy = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
   const owner = "learncoding_owner";
   const loginRoles = EXPECTED_ROLES.filter((role) => role !== owner);
   const objects = [
@@ -1842,7 +1842,7 @@ export async function observeVerifierDatabaseRuntimeCredentialEvidence(
   {
     postgresDatabase,
     postgresUser,
-    policy = CURRENT_0069_DATABASE_RUNTIME_CAPABILITIES,
+    policy = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
   },
 ) {
   postgresUser = validateVerifierBootstrapUser(postgresUser);
@@ -2113,7 +2113,7 @@ export async function verifyDatabaseRuntimeCapabilityCatalog(
     });
   }
   if (
-    resolution.phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0069 ||
+    resolution.phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070 ||
     resolution.reconcileApplicationAcls !== true ||
     resolution.policy === null
   ) {
