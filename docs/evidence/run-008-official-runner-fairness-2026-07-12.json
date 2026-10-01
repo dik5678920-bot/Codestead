@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "sourceCommit": "718666b84c99cde07fe33bcff9d91b755ff535b5",
+  "note": "Source pins are anchored to the current origin/main commit whose blobs match the retained recorded bindings, not the original proof commit. Historical checks were not rerun for this conversion; re-pin logs were removed, and Git history preserves them.",
   "requirement": "RUN-008",
   "generatedAt": "2026-07-12T18:28:00.000Z",
   "revalidatedAt": "2026-09-24T12:09:03.456Z",
@@ -75,90 +77,11 @@
     "integration/assessment-correction.integration.test.ts": "57dd7ed53022ba455ce0936c7f8c46a0c4261f369758ce91decdd3cc91811195",
     "src/lib/data-lifecycle/export.ts": "e95fdfc268a2bc17742a1da6d21669dae5f4818ae6179c142b7a90f40434b3a4"
   },
-  "supersededDigests": [
-    {
-      "artifact": "src/lib/db/schema.ts",
-      "priorDigest": "509fc5330a347db453a04ae874c762a845f70c0bba1b777856c3b5f96527202d",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/lib/runner/client.ts",
-      "priorDigest": "ab1fb85f16a1848c6edd61e0bbcb326ae8defb0cd08ae45cd91b001726de851a",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/lib/assessment-corrections/worker.ts",
-      "priorDigest": "dd6601fe3ef90149e02989d3b83ba326f8b3a161ded21734e2f4684f362df57e",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "integration/assessment-correction.integration.test.ts",
-      "priorDigest": "bd69abe88868dc63d6b12749b21bf462f9247e290401ca291569598415bcaa54",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/lib/data-lifecycle/export.ts",
-      "priorDigest": "85a45ad34b79f36ea821880312f8f73e9cce9c0076a9dc6f25344fe9a9686301",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/lib/db/schema.ts",
-      "priorDigest": "49410735fd4c22f76eaf7091f52106e8a0a05767a8cd2703bcf6b6a49486b10f",
-      "replacedAt": "2026-07-17T17:01:45+05:30"
-    },
-    {
-      "artifact": "src/app/api/exams/_lib/service.ts",
-      "priorDigest": "48949237a92277536e61488dc6bca1bede40c6214bebd45169433cd6f3c7cd62",
-      "replacedAt": "2026-07-17T17:01:45+05:30"
-    },
-    {
-      "artifact": "src/lib/db/schema.ts",
-      "priorDigest": "1793b21d5a9ea2bf40863641a05b421b59dda4036050c792b1f77c92a8099c5b",
-      "replacedAt": "2026-07-28T13:27:44.340Z"
-    },
-    {
-      "artifact": "src/lib/assessment-corrections/worker.ts",
-      "priorDigest": "5e4c27115fd1c02d74eafd161c5dbf4ed067e90d53a75b5db0d2a53e60197c68",
-      "replacedAt": "2026-07-28T13:27:44.340Z"
-    },
-    {
-      "artifact": "integration/runner-admission.integration.test.ts",
-      "priorDigest": "7f09ed1d4ced3b10ddcdd7bf84c96300c84e66275101c3d6dbcc4fb1462e13f9",
-      "replacedAt": "2026-07-28T13:27:44.340Z"
-    },
-    {
-      "artifact": "integration/assessment-correction.integration.test.ts",
-      "priorDigest": "0467f13f359e05d121cc62a408956e68b41e9d5e8342c9885bfb165bd5779978",
-      "replacedAt": "2026-07-28T13:27:44.340Z"
-    },
-    {
-      "artifact": "src/lib/assessment-corrections/worker.ts",
-      "priorDigest": "81a529295ae38f0b3fd69b394deb33deaab424a8c906686428578505d7190970",
-      "replacedAt": "2026-09-24T12:09:03.456Z"
-    },
-    {
-      "artifact": "src/lib/db/schema.ts",
-      "priorDigest": "3575f2617f5cf449848ef5a5fcf01a8e1217823d570e87189313b7eff9cb6b1b",
-      "replacedAt": "2026-09-24T12:09:03.456Z"
-    }
-  ],
   "notProved": [
     "ten-user/two-run NUC load, thermal, latency, and backpressure targets",
     "deployed KVM runner isolation or capacity measurement",
     "remote runner queue survival across process or machine restart",
     "a production power-loss or network-partition recovery drill",
     "browser cancellation; no cancellation UI was added"
-  ],
-  "artifactBindingRefresh": {
-    "date": "2026-10-01",
-    "scope": "Current source hash bindings only. Original run dates, results, and historical scopes are unchanged; historical integration gates were not rerun for this change.",
-    "reviewRecord": "docs/evidence/ai-provider-settings-2026-10-01.json",
-    "changes": [
-      {
-        "path": "src/lib/db/schema.ts",
-        "previousSha256": "e9bf049f9bc3ea51c6184913fbb8a089664bd88efd986d62833e097ba06dd82c",
-        "sha256": "3a8ff39ee033be76170a126769e04f40d1b01dbb573f0ef35cc7638af1a681e4"
-      }
-    ]
-  }
+  ]
 }
