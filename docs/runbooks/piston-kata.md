@@ -80,31 +80,59 @@ docker run --rm --runtime io.containerd.kata.v2 alpine:3.22@sha256:3e9b4b680bfc9
 
 ## Build and start Piston
 
-The image bakes in its language packages (checksum-verified at build time), so
-the running container never needs the network. Build from the deployed
-checkout:
+Every change below goes through `/etc/learncoding/compose.env` and the guarded
+start (`systemctl reload learncoding-compose`), which runs the runtime
+validator before anything starts. The validator accepts `COMPOSE_PROFILES` of
+exactly empty, `uploads`, `piston`, or `uploads,piston`, requires a digest-pinned
+`PISTON_IMAGE` when `piston` is listed, and rejects `CODE_RUNNER_PROVIDER=piston`
+without the profile. The app is always attached to the internal `piston`
+network and reads `PISTON_URL=http://piston:2000` from `compose.yaml`.
 
-```bash
-docker build -t codestead-piston:$(git -C /opt/learncoding rev-parse --short HEAD) /opt/learncoding/infra/piston
-```
+1. Check that Docker uses the containerd image store. Only that store gives a
+   local build a `RepoDigests` entry, which `PISTON_IMAGE` must pin. The output
+   must include `io.containerd.snapshotter.v1`; if it does not, stop here.
 
-Set `PISTON_IMAGE=codestead-piston:<that tag>` in `/etc/learncoding/compose.env`,
-add `piston` to `COMPOSE_PROFILES`, then start only that service:
+   ```bash
+   docker info --format '{{json .DriverStatus}}'
+   ```
 
-```bash
-docker compose -p learncoding --env-file /etc/learncoding/compose.env -f /opt/learncoding/compose.yaml --profile piston up -d --no-deps piston
-```
+2. Build from the deployed checkout. The image bakes in checksum-verified
+   language packages, so the running container never needs the network.
 
-Kata cannot run Docker healthchecks (no exec into the guest), so check the API
-from a throwaway container on the `piston` network. Within about a minute it
-should print `{"run":{...,"stdout":"42\n",...`.
+   ```bash
+   docker build -t codestead-piston:$(git -C /opt/learncoding rev-parse --short HEAD) /opt/learncoding/infra/piston
+   docker image inspect --format '{{json .RepoDigests}}' codestead-piston:$(git -C /opt/learncoding rev-parse --short HEAD)
+   ```
 
-```bash
-docker run --rm --network learncoding_piston alpine:3.22@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 wget -qO- --header content-type:application/json --post-data '{"language":"python","version":"3.12.0","files":[{"content":"print(6*7)"}]}' http://piston:2000/api/v2/execute
-```
+   The second command must print one `codestead-piston@sha256:<64 hex>` entry.
+
+3. Edit `/etc/learncoding/compose.env`: set `PISTON_IMAGE` to that exact
+   `codestead-piston@sha256:<64 hex>` value, add the token (`COMPOSE_PROFILES=piston`,
+   or `uploads,piston` when uploads are on), and keep `CODE_RUNNER_PROVIDER=legacy`.
+   Then run the guarded start, which now also starts `piston`:
+
+   ```bash
+   sudo systemctl reload learncoding-compose
+   ```
+
+4. Kata cannot run Docker healthchecks (no exec into the guest), so check the
+   API from a throwaway container on the `piston` network. Within about a
+   minute it should print `{"run":{...,"stdout":"42
+",...`.
+
+   ```bash
+   docker run --rm --network learncoding_piston alpine:3.22@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 wget -qO- --header content-type:application/json --post-data '{"language":"python","version":"3.12.0","files":[{"content":"print(6*7)"}]}' http://piston:2000/api/v2/execute
+   ```
+
+5. Flag flip (owner approval): set `CODE_RUNNER_PROVIDER=piston` in
+   `/etc/learncoding/compose.env` and run `sudo systemctl reload learncoding-compose`
+   again so the app is recreated with it. Practice runs (`/api/code/run`) now use
+   Piston; exams and corrections still use the legacy runner.
 
 `docker exec` into a Kata container is not supported by this Kata release.
-Debug with `docker logs learncoding-piston-1` instead.
+Debug with `docker logs learncoding-piston-1` instead. Later deploys with
+`infra/ops/redeploy-nuc.sh` restart `piston` with the app while the profile is
+listed; they never build or pull it, so rebuild (steps 2-3) to change it.
 
 ## What protects the host
 
@@ -119,12 +147,15 @@ Debug with `docker logs learncoding-piston-1` instead.
 
 ## Rollback
 
-Stop the service. The app keeps using the legacy runner until
-`CODE_RUNNER_PROVIDER=piston` is set.
+1. Back to the legacy runner: set `CODE_RUNNER_PROVIDER=legacy` and run
+   `sudo systemctl reload learncoding-compose`. This alone is a full rollback for
+   learners; Piston keeps running but receives no requests.
+2. To also stop Piston: remove the `piston` token from `COMPOSE_PROFILES` (leave
+   `PISTON_IMAGE` or clear it), reload as above, then remove the container:
 
-```bash
-docker compose -p learncoding --env-file /etc/learncoding/compose.env -f /opt/learncoding/compose.yaml --profile piston rm -sf piston
-```
+   ```bash
+   docker compose -p learncoding --env-file /etc/learncoding/compose.env -f /opt/learncoding/compose.yaml --profile piston rm -sf piston
+   ```
 
 To remove Kata entirely: delete `/usr/local/bin/containerd-shim-kata-v2`,
 `/etc/kata-containers` and `/opt/kata`.

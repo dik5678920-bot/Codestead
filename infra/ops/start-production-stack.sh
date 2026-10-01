@@ -32,6 +32,9 @@ readonly PATH=/usr/sbin:/usr/bin:/sbin:/bin
 export PATH
 unset DOCKER_CONTEXT DOCKER_TLS DOCKER_TLS_VERIFY DOCKER_CERT_PATH DOCKER_CONFIG
 unset DOCKER_API_VERSION BUILDKIT_HOST
+# systemd loads COMPOSE_PROFILES from compose.env; keep it for service selection
+# (the validator enforces the exact allowed values) before clearing it.
+readonly requested_profiles="${COMPOSE_PROFILES-}"
 unset COMPOSE_FILE COMPOSE_ENV_FILES COMPOSE_PATH_SEPARATOR COMPOSE_PROFILES
 readonly DOCKER_HOST=unix:///var/run/docker.sock
 readonly COMPOSE_PROJECT_NAME=learncoding
@@ -287,6 +290,11 @@ case "${UPLOADS_ENABLED:-}" in
   false) selected_internal_services=("${internal_services[@]}") ;;
   true) selected_internal_services=("${internal_services[@]}" clamav scan-worker) ;;
   *) fatal 'UPLOADS_ENABLED must be literal true or false' ;;
+esac
+case "$requested_profiles" in
+  ''|uploads) ;;
+  piston|uploads,piston) selected_internal_services+=(piston) ;;
+  *) fatal 'COMPOSE_PROFILES must be exactly empty, uploads, piston, or uploads,piston' ;;
 esac
 readonly -a selected_internal_services
 

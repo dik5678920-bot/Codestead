@@ -308,7 +308,7 @@ const expectedNetworks = {
   "backup-status-reporter": ["data"],
   "database-negative-probes": ["data"],
   "database-boundary-verifier": ["data"],
-  app: ["data", "frontend", "runner-client", "glitchtip-ingest"],
+  app: ["data", "frontend", "runner-client", "glitchtip-ingest", "piston"],
   "mail-worker": ["data", "mail-egress", "glitchtip-ingest"],
   "reward-worker": ["data", "glitchtip-ingest"],
   "regrade-worker": ["data", "runner-client", "glitchtip-ingest"],
@@ -684,9 +684,13 @@ for (const [key, value] of Object.entries({
   expect(piston?.environment?.[key] === value, `piston ${key} must be ${value}`);
 }
 for (const [name, service] of Object.entries(config.services ?? {})) {
-  if (name === "piston") continue;
-  expect(!keys(service.networks).includes("piston"), `${name} must not join the piston network yet`);
+  if (name === "piston" || name === "app") continue;
+  expect(!keys(service.networks).includes("piston"), `${name} must not join the piston network`);
 }
+expect(config.networks?.piston?.internal === true, "piston network must be internal");
+expect(config.services?.app?.environment?.CODE_RUNNER_PROVIDER === "legacy", "app CODE_RUNNER_PROVIDER must default to legacy");
+expect(config.services?.app?.environment?.PISTON_URL === "http://piston:2000", "app PISTON_URL must be http://piston:2000");
+expect(config.services?.app?.environment?.PISTON_IMAGE === pistonImage, "app PISTON_IMAGE must come from PISTON_IMAGE");
 
 const operationCommands = {
   "database-role-bootstrap": ["node", "/app/scripts/bootstrap-database-roles.mjs"],
