@@ -105,7 +105,7 @@
   "sourceHashes": [
     {
       "path": "scripts/backup/common.sh",
-      "sha256": "78d5dd6f317e2b54b468efa08a9eef39a310484f7274bb744e5e79b79eafa01c"
+      "sha256": "4a41eacd95beebab9cb7ac035b776f30b70710a6706bebe482d9f013829241fe"
     },
     {
       "path": "scripts/backup/backup.sh",
@@ -137,11 +137,11 @@
     },
     {
       "path": "drizzle/meta/_journal.json",
-      "sha256": "f62f2d8ce0640aa88eab712de40e463fcb27d7c3f78197e56a248612f2309080"
+      "sha256": "24338841f3566bc53b0c3bcdd6afef060b1ff79471246ffc165d5ee21dc727e2"
     },
     {
       "path": "scripts/lib/reviewed-migration-ledger.mjs",
-      "sha256": "ea6edf83dd8ee770013a4be83b6bd9806b08f63e083d449926b6423bd648acd3"
+      "sha256": "c6196ca09009a192534fb99b53ffb59fac453e8b652c36f05dfb08cc9e64260e"
     },
     {
       "path": "scripts/migrate-production.mjs",
@@ -201,7 +201,7 @@
     },
     {
       "path": "infra/tests/backup-ci-registration.test.mjs",
-      "sha256": "de8b62816010582816c59a2e3751729c189543e30375b89ecd2bb0767d80146d"
+      "sha256": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
     }
   ],
   "supersededDigests": [
@@ -452,5 +452,32 @@
     "The selected native evidence run used PostgreSQL 17 only. Separate repository gates cover PostgreSQL 18; this record does not claim that external runtime evidence.",
     "The exact full backup and restore drill is recorded separately; this report does not exercise real backup archives, Google Drive, or real recovery credentials.",
     "The named C:\\tmp log is local run provenance rather than a committed artifact; the active source hashes and rerunnable commands are the repository integrity boundary."
-  ]
+  ],
+  "artifactBindingRefresh": {
+    "date": "2026-10-01",
+    "scope": "Current source hash bindings only. Original run dates, results, and historical scopes are unchanged; the historical PostgreSQL 17 release gates were not rerun for this change.",
+    "reviewRecord": "docs/evidence/ai-provider-settings-2026-10-01.json",
+    "changes": [
+      {
+        "path": "scripts/backup/common.sh",
+        "previousSha256": "78d5dd6f317e2b54b468efa08a9eef39a310484f7274bb744e5e79b79eafa01c",
+        "sha256": "4a41eacd95beebab9cb7ac035b776f30b70710a6706bebe482d9f013829241fe"
+      },
+      {
+        "path": "drizzle/meta/_journal.json",
+        "previousSha256": "f62f2d8ce0640aa88eab712de40e463fcb27d7c3f78197e56a248612f2309080",
+        "sha256": "24338841f3566bc53b0c3bcdd6afef060b1ff79471246ffc165d5ee21dc727e2"
+      },
+      {
+        "path": "scripts/lib/reviewed-migration-ledger.mjs",
+        "previousSha256": "ea6edf83dd8ee770013a4be83b6bd9806b08f63e083d449926b6423bd648acd3",
+        "sha256": "c6196ca09009a192534fb99b53ffb59fac453e8b652c36f05dfb08cc9e64260e"
+      },
+      {
+        "path": "infra/tests/backup-ci-registration.test.mjs",
+        "previousSha256": "8ff5095a2a6385a9f5a42498af21490c98f29c000f02bb86c4feb50d58cbbeac",
+        "sha256": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc"
+      }
+    ]
+  }
 }

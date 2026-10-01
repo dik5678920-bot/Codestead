@@ -71,8 +71,8 @@
   "artifactSha256": {
     "drizzle/0032_short_green_goblin.sql": "ad353e63c2e45c5b46de0266b5f265f20e475771093cc8575aa49abe870b04e5",
     "drizzle/0034_fallback_authority_delete_guard.sql": "ca1ee5a9fe728c83f9d8af42b11ad3a9467d5a93af779a79420f57cdc31d6f73",
-    "drizzle/meta/_journal.json": "f62f2d8ce0640aa88eab712de40e463fcb27d7c3f78197e56a248612f2309080",
-    "src/lib/db/schema.ts": "e9bf049f9bc3ea51c6184913fbb8a089664bd88efd986d62833e097ba06dd82c",
+    "drizzle/meta/_journal.json": "24338841f3566bc53b0c3bcdd6afef060b1ff79471246ffc165d5ee21dc727e2",
+    "src/lib/db/schema.ts": "3a8ff39ee033be76170a126769e04f40d1b01dbb573f0ef35cc7638af1a681e4",
     "src/lib/security/user-authority-lock.ts": "de516e12927515f83ee095364a96f23408f2328e19672b923046782f6557b64a",
     "src/lib/ai/fallback-budget.ts": "e71ea062b326f044850e92d60951e00095609941bc24c7416abe8881782ec145",
     "src/lib/ai/fallback-grants.ts": "275668e91a8c0614762b721677e6b3551aaadb88df1f154e685e9d1104946a68",
@@ -238,5 +238,22 @@
       "priorDigest": "85bb53ec848f7989bbab62c5ec77fbaad3f4cb96300e0f8f2a56c6946ac3040b",
       "replacedAt": "2026-09-26T20:24:58.000Z"
     }
-  ]
+  ],
+  "artifactBindingRefresh": {
+    "date": "2026-10-01",
+    "scope": "Current source hash bindings only. Original run dates, results, and historical scopes are unchanged; historical integration gates were not rerun for this change.",
+    "reviewRecord": "docs/evidence/ai-provider-settings-2026-10-01.json",
+    "changes": [
+      {
+        "path": "drizzle/meta/_journal.json",
+        "previousSha256": "f62f2d8ce0640aa88eab712de40e463fcb27d7c3f78197e56a248612f2309080",
+        "sha256": "24338841f3566bc53b0c3bcdd6afef060b1ff79471246ffc165d5ee21dc727e2"
+      },
+      {
+        "path": "src/lib/db/schema.ts",
+        "previousSha256": "e9bf049f9bc3ea51c6184913fbb8a089664bd88efd986d62833e097ba06dd82c",
+        "sha256": "3a8ff39ee033be76170a126769e04f40d1b01dbb573f0ef35cc7638af1a681e4"
+      }
+    ]
+  }
 }
