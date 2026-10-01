@@ -99,7 +99,7 @@
       "evidence": "docs/evidence/backup-status-outbox-2026-07-12.json",
       "path": "infra/tests/backup-ci-registration.test.mjs",
       "previousSha256": "8ff5095a2a6385a9f5a42498af21490c98f29c000f02bb86c4feb50d58cbbeac",
-      "sha256": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
+      "sha256": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
     },
     {
       "evidence": "docs/evidence/api-authorization-matrix-2026-07-12.json",
@@ -142,7 +142,7 @@
     "drizzle/0070_credential_validation_preference.sql": "a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c",
     "drizzle/meta/0070_snapshot.json": "24c987e88a0664c9b74a5f3f8c2fe727bf4470410a6564c4d0f2289dd6599d1a",
     "drizzle/meta/_journal.json": "24338841f3566bc53b0c3bcdd6afef060b1ff79471246ffc165d5ee21dc727e2",
-    "infra/tests/backup-ci-registration.test.mjs": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27",
+    "infra/tests/backup-ci-registration.test.mjs": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5",
     "infra/tests/backup-production-e2e.test.sh": "fe18804d70da2b6b58ceffd62c48f0d19cfd309ee6d8fcfd223c38cc9754a856",
     "infra/tests/recovery-evidence-verifier.test.sh": "55718a4d326cedb14bec8028ab4a7a954b4203062c96b075ef9ceba29a82e084",
     "infra/tests/restore-drill-reminder.test.sh": "2e04284ae5f37c93e869a585488fc073ad8c409c0be355e2148e4026fbb5fa18",
@@ -196,7 +196,7 @@
       {
         "path": "infra/tests/backup-ci-registration.test.mjs",
         "previousDigest": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc",
-        "currentDigest": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
+        "currentDigest": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
       },
       {
         "path": "docs/evidence/backup-status-outbox-2026-07-12.json",
@@ -206,7 +206,7 @@
       {
         "path": "infra/tests/backup-ci-registration.test.mjs",
         "previousDigest": "05cfa6a409c161f30c87ac869a85de2eab0015555faf0c258d734e4ddb5d57bc",
-        "currentDigest": "acc1a658a3c482cf863811e01646de646eb36bdba13ac0194d677b24c9232f27"
+        "currentDigest": "2e0ef100b44cd37461ea7a544e62d83e47b340ed3098d712248a13ef587573c5"
       },
       {
         "path": "docs/evidence/backup-status-outbox-2026-07-12.json",

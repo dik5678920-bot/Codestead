@@ -722,7 +722,7 @@ jobs:
       - run: npm run test:mail-durable-replay-0067:roles
       - run: npm run test:mail-retention-redaction-0068:roles
       - run: npm run test:mail-guarded-delivery-0069:roles
-      - run: npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name 'mail-delivery-races-*.integration.test.ts' | LC_ALL=C sort)
+      - run: npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name 'mail-delivery-races-*.integration.test.ts' | LC_ALL=C sort | awk 'NR % 5 == 0')
       - run: docker pull postgres:17-bookworm@sha256:4f736ae292687621d4dbe0d499ffd024a36bd2ee7d8ca6f2ccd4c800f047b394
       - run: docker pull node:22.23.3-alpine3.23@sha256:489418a947387da1c5b4c0c5749c963da56ecaac0ced1da74c67db60e42f2b3a
       - run: CODESTEAD_DISPOSABLE_HOST=1 bash infra/tests/database-least-privilege-integration.sh
@@ -769,6 +769,31 @@ jobs:
       - run: POSTGRES_18_BIN=/usr/lib/postgresql/18/bin npm run test:mail-retention-redaction-0068:pg18
       - run: POSTGRES_18_BIN=/usr/lib/postgresql/18/bin npm run test:mail-guarded-delivery-0069:pg18
       - run: POSTGRES_18_BIN=/usr/lib/postgresql/18/bin npm run test:restore-drill-role-boundary:pg18
+
+  # The other integration files run in five shards of the sorted file list
+  # (shard k = files at 1-based positions p with p % 5 == k): shard 0 inside
+  # postgres-integration, shards 1-4 here, each with its own disposable
+  # database. backup-ci-registration proves the shards partition every file.
+  postgres-integration-shards:
+    name: "database: integration files (shard ${{ matrix.shard }})"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    needs: changes
+    if: needs.changes.outputs.database == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - run: npm ci
+      - run: npm run test:integration -- $(find integration -maxdepth 1 -type f -name '*.integration.test.ts' ! -name 'mail-delivery-races-*.integration.test.ts' | LC_ALL=C sort | awk -v shard=${{ matrix.shard }} 'NR % 5 == shard')
 
   # The mail-delivery race suites (about 7.5 minutes of tests in total) run as
   # three parallel parts beside postgres-integration, which runs every other
@@ -1105,6 +1130,7 @@ jobs:
       - backup-production-e2e
       - runner
       - postgres-integration
+      - postgres-integration-shards
       - integration-mail-races
       - curriculum-runtime
       - curriculum-verify
@@ -1125,7 +1151,7 @@ jobs:
               runner) echo runner ;;
               curriculum-runtime|curriculum-verify|curriculum-dsa-parity|curriculum-dsa-parity-merge) echo curriculum ;;
               auth-browser|browser) echo browser ;;
-              postgres-integration|integration-mail-races) echo database ;;
+              postgres-integration|postgres-integration-shards|integration-mail-races) echo database ;;
               *) echo '' ;;
             esac
           }
