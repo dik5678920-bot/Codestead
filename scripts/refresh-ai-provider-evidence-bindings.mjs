@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { execFileSync } from "node:child_process";
 import { REVIEWED_MIGRATION_LEDGER, REVIEWED_MIGRATION_LEDGER_SHA256 } from "./lib/reviewed-migration-ledger.mjs";
 
 // Refresh this PR's current-source bindings only. Preserve historical run data
@@ -14,12 +13,14 @@ const records = [
   "docs/evidence/backup-status-outbox-2026-07-12.json",
   "docs/evidence/ai-provider-settings-2026-10-01.json",
   "docs/evidence/ai-provider-settings-ci-pins-2026-10-01.json",
+  "docs/evidence/ai-provider-settings-migrator-schema-2026-10-01.json",
 ];
-const changedPaths = new Set(execFileSync("git", ["diff", "--name-only"], { cwd: root, encoding: "utf8" }).trim().split("\n"));
-const requiresRefresh = (target) => changedPaths.has(target) || records.includes(target);
+// Rebase changes are already committed, so refresh every current binding in
+// these four task-scoped records rather than inspecting the working-tree diff.
 const pointerPart = (key) => key.replaceAll("~", "~0").replaceAll("/", "~1");
 async function digest(target) {
-  if (!/^(?:src\/|scripts\/|integration\/|infra\/tests\/|drizzle\/|docs\/)/.test(target) || target.split("/").some((part) => part.startsWith("."))) {
+  const publicConfig = ["compose.yaml", "Dockerfile", "vitest.integration.config.ts", ".github/workflows/ci.yml"].includes(target);
+  if (!publicConfig && (!/^(?:src\/|scripts\/|integration\/|infra\/tests\/|drizzle\/|docs\/)/.test(target) || target.split("/").some((part) => part.startsWith(".")))) {
     throw new Error("Evidence binding target is outside the public source inventory");
   }
   return createHash("sha256").update((await readFile(path.join(root, target), "utf8")).replaceAll("\r\n", "\n")).digest("hex");
@@ -36,14 +37,14 @@ for (const file of records) {
   };
   async function walk(record, pointer = "") {
     if (!record || typeof record !== "object") return;
-    if (typeof record.path === "string" && requiresRefresh(record.path) && /^[a-f0-9]{64}$/.test(record.sha256 ?? "")) {
+    if (typeof record.path === "string" && /^[a-f0-9]{64}$/.test(record.sha256 ?? "")) {
       update(record, "sha256", await digest(record.path), pointer, record.path);
     }
     for (const key of ["artifactSha256", "sha256"]) {
       const bindings = record[key];
       if (!bindings || typeof bindings !== "object" || Array.isArray(bindings)) continue;
       for (const [target, expected] of Object.entries(bindings)) {
-        if (typeof expected === "string" && requiresRefresh(target)) update(bindings, target, await digest(target), `${pointer}/${key}`, target);
+        if (typeof expected === "string") update(bindings, target, await digest(target), `${pointer}/${key}`, target);
       }
     }
     for (const [key, child] of Object.entries(record)) await walk(child, `${pointer}/${pointerPart(key)}`);
@@ -57,8 +58,8 @@ for (const file of records) {
   changed = true;
   inventory.push({ evidence: file, changes });
   if (apply) {
-    value.schemaQualificationRefresh = {
-      scope: "Current-source bindings and current 0070 migration identity only. Historical results are preserved; restricted-migrator verification is recorded separately.",
+    value.ciFollowupRefresh = {
+      scope: "Current-source bindings after rebasing and fixing owner-helper, browser and historical mail harness failures. Historical run results and schema-qualification refresh are preserved; follow-up checks are recorded separately.",
       changes,
     };
     await writeFile(path.join(root, file), `${JSON.stringify(value, null, 2)}\n`);
