@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "sourceCommit": "718666b84c99cde07fe33bcff9d91b755ff535b5",
+  "note": "Source pins are anchored to the current origin/main commit whose blobs match the retained recorded bindings, not the original proof commit. Historical checks were not rerun for this conversion; re-pin logs were removed, and Git history preserves them.",
   "generatedAt": "2026-07-13T00:45:40+05:30",
   "revalidatedAt": "2026-07-28T13:27:44.340Z",
   "scope": [
@@ -56,103 +58,6 @@
       "docs/release-audit.md": "2f4b6dab1cc922e5cee3863fe177aa34db81a536dccb2d224eef893ba9cdf8e2"
     }
   },
-  "supersededDigests": [
-    {
-      "artifact": "src/app/api/exams/_lib/runner-replay-policy.ts",
-      "priorDigest": "534fd7dfbe9a5ebeecb7174e6d5bf662609583b1225b569af50dacc7ae7a2d52",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/app/api/exams/_lib/contracts.ts",
-      "priorDigest": "ff067e6560e1b1c6f58031aa213dd2bccfd2f36b7411c996395e03544859a918",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/app/api/exams/_lib/service.ts",
-      "priorDigest": "feab3e6187920b3c345ccc732674c5c16dad4800e9c9f6cef08e6597cc0993f9",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/lib/runner/admission.ts",
-      "priorDigest": "1d9cb8a6a90c45a06c8011947c8378d5bef67803dcf2959c531da7415fec23e1",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/lib/runner/client.ts",
-      "priorDigest": "fe5a1444b329a02b8cf68b0283b6a9c2d4207d6db65c558328f95753ccb8de11",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/lib/runner/client.ts",
-      "priorDigest": "ab1fb85f16a1848c6edd61e0bbcb326ae8defb0cd08ae45cd91b001726de851a",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "integration/exam-reliability.integration.test.ts",
-      "priorDigest": "d089beaf99df4b280fd86ce5e961fa5be51958a02d83ff5eae207181b73b9755",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "docs/release-audit.md",
-      "priorDigest": "1aab12b8f54b4a39edafb40a5b43355b1c9ca2fe164aaa22f3138b395fa3bb3b",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "docs/release-audit.md",
-      "priorDigest": "5ea7124e20911615a1f4575a9cd82e8419d4c4336c063a278ed5f36c30a491cc",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "docs/release-audit.md",
-      "priorDigest": "63b387e65756dde78b5570e3cfde2545da1a71fcb87556503aaadc92132d1042",
-      "replacedAt": "2026-07-14T13:34:00+05:30"
-    },
-    {
-      "artifact": "docs/release-audit.md",
-      "priorDigest": "0a08131bbb3f519f73f814a90298c4a807cdf2f8ae038a1a80baf20640e7d1df",
-      "replacedAt": "2026-07-14T13:38:00+05:30"
-    },
-    {
-      "artifact": "docs/release-audit.md",
-      "priorDigest": "1dbe9dd612cc183a6b91684c1c9f6b3e43b4b4b207f12b412c2792b917dcb10c",
-      "replacedAt": "2026-07-14T13:42:57+05:30"
-    },
-    {
-      "artifact": "src/app/api/exams/_lib/service.ts",
-      "priorDigest": "48949237a92277536e61488dc6bca1bede40c6214bebd45169433cd6f3c7cd62",
-      "replacedAt": "2026-07-17T17:01:45+05:30"
-    },
-    {
-      "artifact": "docs/release-audit.md",
-      "priorDigest": "3ebae1e679f91b01de22d3a99577c8da6448d36f6d01bbf21f5b5d2f535ea385",
-      "replacedAt": "2026-07-17T17:01:45+05:30"
-    },
-    {
-      "artifact": "src/app/api/exams/_lib/service.ts",
-      "priorDigest": "bfe18dc604cbfa11ecd4bb9725276c686f75b49d7c06257890ef9ec756bb6342",
-      "replacedAt": "2026-07-18T04:35:43.439Z"
-    },
-    {
-      "artifact": "docs/release-audit.md",
-      "priorDigest": "93b9a5f77426adde17929501c9cae9e470aa0ae51d16e66070ceb4fd0fe7ee12",
-      "replacedAt": "2026-07-18T04:35:43.439Z"
-    },
-    {
-      "artifact": "docs/release-audit.md",
-      "priorDigest": "25adfd121c797ebb2223d161e05ea0a59765b987bc42de20681af0b700527a8b",
-      "replacedAt": "2026-07-20T05:12:20.472Z"
-    },
-    {
-      "artifact": "integration/exam-reliability.integration.test.ts",
-      "priorDigest": "7e47064d52944651acf0920df558fc29aa9fb89eab3479e0e60456bc41cd64e4",
-      "replacedAt": "2026-07-28T13:27:44.340Z"
-    },
-    {
-      "artifact": "docs/release-audit.md",
-      "priorDigest": "28725af8f713c7d5cc759b82298fc905645ac139a10bc8cd3df897bb52d06afd",
-      "replacedAt": "2026-07-28T22:49:31.5166481+05:30"
-    }
-  ],
   "verification": {
     "typecheck": {
       "command": "npm.cmd run typecheck",

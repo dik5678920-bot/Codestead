@@ -1,7 +1,8 @@
 # Piston code runner: Phase A spike results and plan
 
 Status: Phase A spike done on 2026-10-01 (local Docker Desktop, Windows host, WSL2 kernel, cgroup v2).
-Decision needed before Phase B: **Piston needs a privileged container.** See "Blocker" below.
+**Decision (owner, 2026-10-01): Piston runs under Kata Containers** on the NUC, without
+`--privileged`. See "Decision: Kata Containers" below; the VM and gVisor options were dropped.
 
 ## What was tested
 
@@ -117,36 +118,129 @@ compile_timeout, run_timeout, compile_memory_limit, run_memory_limit}` -> `{comp
 | Error bodies | Malformed JSON returns a Node stack trace | Never expose Piston responses to the browser; adapter sends fixed JSON |
 | Language versions | gcc 10.2, java 15, python 3.12 | Custom package builds (Piston `packages/` format) for GCC 14, Java 21, Python 3.14, baked into our image |
 
-## Target architecture (if approved)
+## Decision: Kata Containers
 
-- Piston runs in a small dedicated VM on the NUC (the existing `infra/runner-vm` plan), not as a
-  privileged container on the NUC host. Packages are baked into the image at build time; the VM has no
-  egress and no route to the homelab LAN.
+Measured on a GitHub-hosted KVM runner (Ubuntu 24.04, host kernel 6.17), Kata 4.2.0 runtime-rs with
+QEMU, branch `spike/kata-piston`. Kata could not be tested on the Windows laptop: the WSL2 kernel has
+no vsock (`ENOSYS`).
+
+What was tried:
+
+| Isolation | Result |
+|---|---|
+| gVisor (runsc 20260928.0) | **Fails.** isolate needs cgroup v2 (`--in-sandbox-cgroup=v2` plus `--privileged` gets past that), and gVisor has no `io` controller. It also ignores the setuid isolate binary, and finally `Failed to switch FS UID: Function not implemented` (no `setfsuid`). Would need a patched isolate. |
+| Kata, `--privileged` | Fails: Docker passes every host device and Kata cannot map them (`get host path failed`). |
+| Kata, SYS_ADMIN + NET_ADMIN + cgroupfs remount | **Works.** The capabilities apply to the micro-VM's kernel only. |
+| Dedicated VM | Works, but costs a full VM. Dropped by the owner as too heavy. |
+
+Containment, probed from inside a learner submission under Kata:
+
+- Kernel 6.18.35 (guest) on a 6.17 host. `MemTotal` is the VM's 1.45 GB, not the host's 16 GB.
+- `/dev` has only `fd full mqueue null ptmx pts random shm std* tty urandom zero`. Plain Docker
+  `--privileged` exposes `kvm`, `loop*`, `fuse`, `dri` and more.
+- uid 60003, effective capabilities 0, network unreachable, `/`, `/etc` and the packages read-only,
+  2 processes visible.
+- Memory bombs are killed (exit 137); fork bombs and infinite loops are contained (TO at 3 s).
+
+Cost (host RSS of qemu + shim + virtiofsd; VM sized at 1536 MB, since 1024 MB did not boot Piston):
+
+| | Plain Docker | Kata |
+|---|---|---|
+| Idle RSS | 198 MB | 446 MB |
+| RSS under 2 concurrent jobs | 291 MB | 881 MB |
+| C hello p50 | 114 ms | 403 ms |
+| Java hello p50 | 488 ms | 988 ms |
+| Python hello p50 | 30 ms | 93 ms |
+
+Even under Kata, Piston is faster than the legacy runner (C 877 ms, Java 1838 ms, Python 1702 ms).
+`docker exec` into a Kata container does not work in this release, so health checks and debugging go
+through the API and `docker logs`.
+
+## Target architecture
+
+- Piston is a compose service (`piston`, profile `piston`, off by default) with
+  `runtime: io.containerd.kata.v2`, on its own `internal` network with no egress, no published ports,
+  no mounts and no secrets. Packages are baked into the image at build time. Install steps:
+  [docs/runbooks/piston-kata.md](../runbooks/piston-kata.md).
 - The app reaches Piston only through a server-side adapter behind `/api/code/run` (existing route),
   with session auth, per-user rate limits, and source/stdin/test size caps. The browser never calls Piston.
 - Piston env: `PISTON_RUN_MEMORY_LIMIT=268435456`, `PISTON_COMPILE_MEMORY_LIMIT=536870912`,
-  `PISTON_MAX_CONCURRENT_JOBS=4`, `PISTON_OUTPUT_MAX_SIZE=65536`, `PISTON_DISABLE_NETWORKING=true`,
+  `PISTON_MAX_CONCURRENT_JOBS=2`, `PISTON_OUTPUT_MAX_SIZE=65536`, `PISTON_DISABLE_NETWORKING=true`,
   `PISTON_MAX_PROCESS_COUNT=32`.
 - The `RunnerClient` interface stays; a `PistonRunnerClient` implements it and is selected by
   `CODE_RUNNER_PROVIDER=legacy|piston` (default `legacy`).
 
+## Languages and packages
+
+The app supports five languages (`src/app/api/code/run/route.ts`, `services/runner/src/types.ts`).
+There is no in-browser runtime in `src/` today: no Pyodide and no browser JavaScript sandbox. The
+lesson workspace sends every language, Python and JavaScript included, to `/api/code/run`, so all of
+them reach the server runner.
+
+| Language | Legacy runner | Newest in Piston's package index | Baked in PR1 |
+|---|---|---|---|
+| C | GCC 14.2 (C23) | gcc 10.2.0 | gcc 10.2.0 |
+| C++ | G++ 14.2 (C++20) | gcc 10.2.0 | gcc 10.2.0 |
+| Java | Java 21.0.12 | java 15.0.2 | java 15.0.2 |
+| Python | Python 3.14.7 | python 3.12.0 | python 3.12.0 |
+| JavaScript | Node 22 | node 20.11.1 | node 20.11.1 |
+
+PR1 ships the official packages so the service can be measured. Matching the lessons needs our own
+packages (PR5). Plan:
+
+- **Own Piston image on a current base.** The upstream image is Debian buster (EOL, glibc 2.28), so
+  modern toolchains cannot run on it. Build the Piston API and isolate from a pinned upstream commit on
+  a pinned `debian:trixie-slim` digest instead. Toolchains installed in the image root are visible inside
+  isolate boxes, so each Piston package becomes a thin `compile`/`run`/`environment` wrapper.
+- **C/C++:** `gcc-14`/`g++-14` from Debian trixie, pinned through `snapshot.debian.org`.
+- **Java 21:** the Eclipse Temurin 21 JDK tarball (sha256-pinned). Split into a real `javac` compile
+  step and a `java -cp` run, so compile errors are reported as COMPILE_ERROR (gap in the table above).
+  Add an AppCDS archive built at image build time (`-XX:ArchiveClassesAtExit` over a javac + hello
+  run, then `-XX:SharedArchiveFile` for both javac and java) to cut JVM start-up.
+- **Python 3.14:** the python-build-standalone `install_only` tarball (sha256-pinned).
+- **Node 22:** the official nodejs.org linux-x64 tarball (sha256-pinned).
+
+## Speed and resources
+
+Measured on a GitHub KVM runner (run 36905595755). Every variant starts from zero Kata VMs, and the
+guest's vCPU count is printed to prove the setting applied. Latency is the p50 of 10 warm runs
+(stdin echo + print) in ms. RSS is the host RSS of qemu + shim + virtiofsd in MB.
+
+| Variant | Cold start | C | C++ | Java | Python | JS | RSS idle | RSS load | RSS +30 s |
+|---|---|---|---|---|---|---|---|---|---|
+| Job dirs on virtio-fs (before) | 3162 | 347 | 679 | 1045 | 79 | 116 | 396 | 692 | 831 |
+| Job dirs on guest tmpfs (PR1 compose) | 3192 | 320 | 664 | 1014 | 71 | 102 | 397 | 695 | 831 |
+| + 2 vCPUs (max 4) | 3097 | 410 | 770 | 626 | 88 | 137 | 411 | 941 | 958 |
+| + virtio-fs cache `always`, 4 virtiofsd threads | 3095 | 296 | 612 | 547 | 48 | 60 | 396 | 761 | 849 |
+| + free-page reporting (**adopted**) | 3150 | 292 | 616 | 552 | 50 | 58 | 406 | 818 | 900 |
+
+Before → adopted: C -16%, C++ -9%, Java -47%, Python -37%, JS -50%. Cold start (container up → first
+successful run) is about 3.1 s in every variant. Free-page reporting returned no memory within 30 s,
+but it is kept for long idle periods. Shared-runner noise is roughly ±15%; one earlier run measured
+every variant about 30% faster.
+
+What each item does:
+
+1. Per-job directories (`/piston/jobs`, isolate's box root `/var/local/lib/isolate`, `/tmp`) are tmpfs
+   inside the guest, so compiling and running never round-trips through virtio-fs.
+2. 2 vCPUs by default, up to 4 (idle vCPUs cost the host nothing). The 1536 MB ceiling stays, with
+   balloon free-page reporting (`reclaim_guest_freed_memory`) so freed guest RAM returns to the host.
+   virtio-fs read cache `always` is safe because the image is read-only.
+3. Java AppCDS (PR5, above).
+4. Warm by default. An optional idle stop (`PISTON_IDLE_STOP_MINUTES`, off by default) lets the app stop
+   Piston after N idle minutes and start it on the next run, at the measured cold-start cost.
+
 ## Migration (small PRs, each behind the flag)
 
-1. Piston VM/compose definition with pinned digest, baked packages, limits, no egress, and an infra
-   test that the sandbox has no network.
+1. Kata-only Piston compose service with a pinned digest, baked packages, limits and no egress,
+   compose validator checks, and the NUC install runbook.
 2. `PistonRunnerClient` adapter + status mapping + unit tests from the table above (no callers changed).
 3. Wire `/api/code/run` (practice RUN/COMPILE) to the provider flag.
 4. Wire exam TEST runs and assessment corrections to the flag.
-5. Custom Piston packages for GCC 14, Java 21 and Python 3.14 so results match lessons.
+5. Own Piston image on Debian trixie with GCC 14, Java 21 (+ AppCDS), Python 3.14 and Node 22.
+   Optional idle stop.
 6. After a week on `piston` with no regressions: delete `services/runner`, `infra/runner*`, the runtime
    image release tooling, and their evidence files.
 
 Rollback: set `CODE_RUNNER_PROVIDER=legacy` and restart the app. Nothing is deleted until step 6.
 
-## Options for the blocker (owner decision)
-
-1. **Piston in a dedicated VM on the NUC** (recommended). Privileged mode stays inside the VM. Same
-   boundary the current runner already expects; costs about 2 GB RAM and one VM to maintain.
-2. **Piston privileged directly on the NUC.** Fastest, but an isolate escape is NUC root. Not recommended.
-3. **Keep our runner and add a warm container pool.** No privileged mode, but it is more custom code,
-   which goes against the open-source preference.

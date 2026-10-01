@@ -65,6 +65,7 @@ const repositoryRootFiles = new Set([
   "package-lock.json",
   "package.json",
   "playwright.config.ts",
+  "vitest.integration.config.ts",
 ]);
 
 const sha256Pattern = /^[0-9a-f]{64}$/i;
