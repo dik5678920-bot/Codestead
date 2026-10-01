@@ -44,7 +44,7 @@ So HEAD-relative pins of mutable files in historical records give a false sense 
 2. **No evidence → evidence pins between historical records.** Remove the `ai-provider-settings*` → `backup-status-outbox` and ai-provider ↔ ai-provider pins. Each record anchors its own `sourceCommit`. Git already shows that the files existed together.
 3. **Delete the in-file change logs.** Remove `ciFollowupRefresh`, `addedEvidenceMetadata[].changes`, `evidenceBindingChanges` and the `previousDigest`/`currentDigest` arrays, plus `scripts/refresh-ai-provider-evidence-bindings.mjs`. They record re-pins, which (see above) add no proof, and git history keeps them.
 4. **Currency checks are tests, not pins.** Where a record needs "the current CI still runs this check", that belongs in a registration test, as today, not in a hash of `ci.yml`.
-5. **Guard against regression.** The verifier rejects a mutable path pin (outside `docs/evidence/**` artifacts) in a record that has no `sourceCommit`. New records can't reintroduce HEAD-relative pins.
+5. **Guard against regression.** The verifier rejects a mutable path pin (outside `docs/evidence/**` artifacts) in a record that has no `sourceCommit`. It also fails closed on every unknown declared pin path, in both anchored and unanchored records; an unrecognized path must never be silently skipped. New records can't reintroduce HEAD-relative pins or bypass verification through unknown paths.
 
 Result: a normal PR that touches `ci.yml`, tests or source needs **zero** evidence hash changes. Approvals are left for real artifact regenerations.
 
@@ -63,7 +63,27 @@ Each PR is test-first and keeps `evidence:verify` green at every step.
 2. **Anchor `backup-status-outbox`** (the root of the cascade): add `sourceCommit` and keep its hashes as they are. Pick the commit where they are all true (see the open question below).
 3. **Anchor the four `ai-provider-settings*` records.** Drop their cross-pins and change logs, and delete the refresh script and its references.
 4. **Anchor the remaining historical records**: exm-003, project-revisions, provider-outage, run-008.
-5. **Guard:** the verifier rejects new unanchored mutable-path pins, with a test-first allowlist of immutable artifact roots. This is the PR that makes the policy permanent.
+5. **Guard:** the verifier rejects new unanchored mutable-path pins, with a test-first allowlist of immutable artifact roots. **Required in this PR:** reject every unknown declared pin path outside the recognized root-file allowlist and repository roots, regardless of whether the record has `sourceCommit`. Apply this to every supported pin representation; retain all existing commit, hash, traversal, and immutable-artifact checks. Distinguish non-pin metadata explicitly instead of silently ignoring an unknown declared pin. This is the PR that makes the policy permanent.
+
+   Required regression: create a real Git fixture repository containing the root-level file `unlisted-evidence-input.ts`, commit it, and declare this pin in an evidence record:
+
+   ```ts
+   sourceHashes: [{
+     path: "unlisted-evidence-input.ts",
+     sha256: "0".repeat(64),
+   }]
+   ```
+
+   Run the fixture both with a valid ancestor `sourceCommit` and without `sourceCommit`. The counterexample found during PR 2 currently returns **zero issues and zero hashes checked** in both modes because `repositoryPath` returns `null` and the checker silently returns. PR 5 must make this regression pass by rejecting the declared path:
+
+   ```ts
+   const report = await verifyEvidenceIntegrity({ root, markdownRoots: [] });
+   expect(report.issues).toContainEqual(expect.objectContaining({
+     detail: expect.stringContaining("unlisted-evidence-input.ts"),
+   }));
+   ```
+
+   Repeat both modes with the correct SHA-256 of the same fixture blob: an unknown path must still be rejected even when its digest matches. The CLI must exit unsuccessfully for these records. Recognized paths with valid pins must continue to pass. This broader path guard is deferred to PR 5 and is not implemented in PR 2.
 
 PRs 2–4 are independent of each other once PR 1 lands. Each one removes HEAD dependence from one cluster.
 
