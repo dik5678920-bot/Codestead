@@ -120,7 +120,7 @@
     "src/app/api/lost-device/verify/route.ts": "4c79bec6743f3af0eccbb67ff262fd281b17ee6b62f91243e7f41a37e0166e75",
     "src/components/auth/lost-device-recovery-form.tsx": "76c5b8c621faa382878bcdd69a839ccf3759790a5edc496d08b4143fe71b7a88",
     "src/lib/notifications/delivery-variables.ts": "724ee03bbdba671091d749a5105f41689a376f800a9f2a72b4b9a1996defd697",
-    "scripts/process-outbox.ts": "c4c28640d14c64c01c116d789cc14589aa51143b8cd72e78cf27d9b5bfbcd5e5",
+    "scripts/process-outbox.ts": "88ec4a016e952e43a990352f9489eb6db8e9e29164ac4b6d2f04a96934f40a5b",
     "src/app/api/admin/session-revocation-requests/[id]/decision/route.ts": "d9feded1e1fc726c030297bc464ebf68849f0cfc6ec834c57da5fbd51395bbd9",
     "src/lib/session-controls.ts": "93277961c05935cb917f4f4bd47da646a46aa49c9cdf42e20e7561143cb4b7d3",
     "src/lib/auth.ts": "5d96b843e40c2baf5a34a0d270a36569d2defd3c9155a80e9822c3e19d498e6b",

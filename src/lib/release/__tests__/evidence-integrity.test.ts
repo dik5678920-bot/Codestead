@@ -10,6 +10,8 @@ import { verifyEvidenceIntegrity } from "../../../../scripts/lib/evidence-integr
 
 const fixtures: string[] = [];
 const dsaDeclarationPath = "docs/evidence/dsa-parity-declaration-2026-07-12.json";
+const authRecoveryPath = "docs/evidence/auth-recovery-verification-2026-07-12.json";
+const outboxWorkerPath = "scripts/process-outbox.ts";
 const runtimePinsPath = "scripts/curriculum-runtime-pins.json";
 const dsaDigests = Object.fromEntries(DSA_PARITY_LANGUAGES.map((language, index) =>
   [language, `sha256:${String(index + 1).repeat(64)}`],
@@ -115,6 +117,67 @@ describe("evidence integrity verifier", () => {
 
     expect(report.issues).toEqual([]);
     expect(report.evidence.hashes).toBe(1);
+  });
+
+  it("checks auth-recovery source pins and rejects worker drift without rewriting evidence", async () => {
+    const root = await fixture();
+    const evidencePath = authRecoveryPath;
+    const workerPath = outboxWorkerPath;
+    const source = "export const ready = true;\n";
+    const evidence = JSON.stringify({ sourceSha256: { [workerPath]: sha256(source) } });
+    await write(root, evidencePath, evidence);
+    await write(root, workerPath, source.replaceAll("\n", "\r\n"));
+
+    const current = await verifyEvidenceIntegrity({ root, markdownRoots: [] });
+    expect(current.issues).toEqual([]);
+    expect(current.evidence.hashes).toBe(1);
+
+    const changed = "export const ready = false;\n";
+    await write(root, workerPath, changed);
+    const stale = await verifyEvidenceIntegrity({ root, markdownRoots: [] });
+    expect(stale.issues).toEqual([{
+      kind: "STALE_HASH",
+      source: evidencePath,
+      detail: `${workerPath} expected=${sha256(source)} actual=${sha256(changed)}`,
+    }]);
+    expect(await readFile(path.join(root, evidencePath), "utf8")).toBe(evidence);
+
+    await write(root, workerPath, source);
+    expect((await verifyEvidenceIntegrity({ root, markdownRoots: [] })).issues).toEqual([]);
+  });
+
+  it("reports a missing pinned outbox worker", async () => {
+    const root = await fixture();
+    await write(root, authRecoveryPath, JSON.stringify({
+      sourceSha256: { [outboxWorkerPath]: "0".repeat(64) },
+    }));
+
+    const report = await verifyEvidenceIntegrity({ root, markdownRoots: [] });
+
+    expect(report.issues).toEqual([
+      { kind: "MISSING_EVIDENCE_PATH", source: authRecoveryPath, detail: outboxWorkerPath },
+    ]);
+  });
+
+  it.each([
+    ["missing map", undefined],
+    ["null map", null],
+    ["array map", ["0".repeat(64)]],
+    ["missing pin", {}],
+    ["different worker", { "scripts/other.ts": "0".repeat(64) }],
+    ["invalid hash", { [outboxWorkerPath]: "latest" }],
+    ["non-string hash", { [outboxWorkerPath]: 42 }],
+  ])("rejects auth recovery evidence with a %s without rewriting it", async (_label, sourceSha256) => {
+    const root = await fixture();
+    const evidence = JSON.stringify({ sourceSha256 });
+    await write(root, authRecoveryPath, evidence);
+
+    const report = await verifyEvidenceIntegrity({ root, markdownRoots: [] });
+
+    expect(report.issues).toEqual([
+      expect.objectContaining({ kind: "INVALID_SOURCE_DECLARATION", source: authRecoveryPath }),
+    ]);
+    expect(await readFile(path.join(root, authRecoveryPath), "utf8")).toBe(evidence);
   });
 
   it.each([

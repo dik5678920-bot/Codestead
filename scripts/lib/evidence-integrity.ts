@@ -11,6 +11,7 @@ export type EvidenceIntegrityIssueKind =
   | "INVALID_JSON"
   | "MISSING_EVIDENCE_PATH"
   | "STALE_HASH"
+  | "INVALID_SOURCE_DECLARATION"
   | "INVALID_RUNTIME_DECLARATION"
   | "STALE_RUNTIME_DIGEST";
 
@@ -65,6 +66,8 @@ const repositoryRootFiles = new Set([
 const sha256Pattern = /^[0-9a-f]{64}$/i;
 const runtimeDigestPattern = /^sha256:[0-9a-f]{64}$/;
 const dsaDeclarationPath = "docs/evidence/dsa-parity-declaration-2026-07-12.json";
+const authRecoveryPath = "docs/evidence/auth-recovery-verification-2026-07-12.json";
+const outboxWorkerPath = "scripts/process-outbox.ts";
 const runtimePinsPath = "scripts/curriculum-runtime-pins.json";
 
 const byteExactExtensions = new Set([
@@ -368,6 +371,17 @@ async function verifyEvidence(
     try {
       const value: unknown = JSON.parse(await readFile(file, "utf8"));
       if (source === dsaDeclarationPath) await verifyDsaRuntimeDigests(root, value, issues);
+      if (source === authRecoveryPath) {
+        const pinned = object(object(value)?.sourceSha256)?.[outboxWorkerPath];
+        if (typeof pinned !== "string" || !sha256Pattern.test(pinned)) {
+          issues.push({
+            kind: "INVALID_SOURCE_DECLARATION", source,
+            detail: `Auth recovery evidence must pin ${outboxWorkerPath} in sourceSha256 with a valid sha256 hash.`,
+          });
+        } else {
+          await checkHash(source, outboxWorkerPath, pinned);
+        }
+      }
       await walk(source, value);
     } catch (error) {
       issues.push({
