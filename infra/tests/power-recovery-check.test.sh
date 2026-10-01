@@ -1101,7 +1101,10 @@ state_root="$work/state"
 events="$work/events.log"
 diagnostic_file="$state_root/diagnostic"
 scenario_file="$state_root/scenario"
-clock_file="$state_root/clock"
+# The fake sleep renames a new clock into place, which needs a writable
+# directory: bind a directory that holds only the clock, never the file itself.
+clock_dir="$state_root/clock.d"
+clock_file="$clock_dir/clock"
 runner_body_file="$state_root/runner-body"
 runner_signature_file="$state_root/runner-signature"
 runner_concurrency_body_file="$state_root/runner-concurrency-body"
@@ -1129,7 +1132,7 @@ compose_env_reviewed="$state_root/compose.env.reviewed"
 compose_file_reviewed="$state_root/compose.yaml.reviewed"
 runner_secret_file="$host_root/etc/learncoding/secrets/runner_shared_secret"
 postgres_sql="SELECT name, setting FROM pg_settings WHERE name IN ('data_checksums', 'fsync', 'synchronous_commit', 'full_page_writes');"
-mkdir -m 0700 -p "$fake_bin" "$state_root" "$curl_root" "$host_root/etc/learncoding/secrets" \
+mkdir -m 0700 -p "$fake_bin" "$state_root" "$clock_dir" "$curl_root" "$host_root/etc/learncoding/secrets" \
   "$host_root/opt/learncoding"
 : >"$diagnostic_file"
 printf '%s' preflight >"$scenario_file"
@@ -1382,7 +1385,19 @@ case "$command_name" in
       next=900
     fi
     (( next <= 900 )) || exit 98
-    printf '%s' "$next" >"$FAKE_CLOCK_FILE"
+    # The checker polls the clock while this fake sleep runs. Truncate-then-write
+    # would expose an empty clock ("test monotonic source malformed"), so the
+    # new value replaces the file whole.
+    /usr/bin/python3 -I -S -c 'import os, sys
+path, value = sys.argv[1], sys.argv[2].encode("ascii")
+staged = path + ".next"
+descriptor = os.open(staged, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+try:
+    if os.write(descriptor, value) != len(value):
+        raise SystemExit(97)
+finally:
+    os.close(descriptor)
+os.replace(staged, path)' "$FAKE_CLOCK_FILE" "$next"
     ;;
   systemctl)
     verb="${1:-}"
@@ -2094,7 +2109,7 @@ EOF
   )
   containment_rw_mounts=(--bind "$containment_probe_dir" "$containment_probe_dir")
   recovery_execution_rw_mounts=(
-    --bind "$clock_file" "$clock_file"
+    --bind "$clock_dir" "$clock_dir"
     --bind "$curl_root" "$curl_root"
     --bind "$events" "$events"
     --bind "$diagnostic_file" "$diagnostic_file"

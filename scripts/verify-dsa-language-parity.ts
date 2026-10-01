@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -30,6 +30,75 @@ const imageTags: Readonly<Record<Language, string>> = {
 
 function digest(value: string): string {
   return `sha256:${createHash("sha256").update(value).digest("hex")}`;
+}
+
+type ParityResult = {
+  itemId: string;
+  skillId: string;
+  language: string;
+  visibility: string;
+  status: "passed" | "failed";
+  sourceHash: string;
+  failure?: string;
+};
+
+// CI can run the full runtime case list as N shards. A shard executes every
+// N-th case and writes only a partial result file; --merge-shards re-derives
+// the complete case list from content, requires every case exactly once with
+// matching identity and source hash, and then performs the normal deterministic
+// evidence check, so the merged run is byte-identical to an unsharded run.
+const shardDirectory = path.join(root, "services", "runner", "dist", "dsa-parity-shards");
+const shardPath = (index: number, count: number) => path.join(shardDirectory, `shard-${index}-of-${count}.json`);
+
+function parseShardArguments(argv: readonly string[]): { shard?: { index: number; count: number }; mergeCount?: number } {
+  const shardArguments = argv.filter((argument) => argument.startsWith("--shard="));
+  const mergeArguments = argv.filter((argument) => argument.startsWith("--merge-shards="));
+  if (shardArguments.length > 1 || mergeArguments.length > 1 || (shardArguments.length > 0 && mergeArguments.length > 0)) {
+    throw new Error("Provide at most one of --shard=I/N or --merge-shards=N, once.");
+  }
+  if (shardArguments[0] !== undefined) {
+    const match = /^--shard=([1-8])\/([2-8])$/.exec(shardArguments[0]);
+    const index = Number(match?.[1]);
+    const count = Number(match?.[2]);
+    if (!match || index > count) throw new Error("--shard must be I/N with 1 <= I <= N and 2 <= N <= 8.");
+    return { shard: { index, count } };
+  }
+  if (mergeArguments[0] !== undefined) {
+    const match = /^--merge-shards=([2-8])$/.exec(mergeArguments[0]);
+    if (!match) throw new Error("--merge-shards must be N with 2 <= N <= 8.");
+    return { mergeCount: Number(match[1]) };
+  }
+  return {};
+}
+
+function exactResult(value: unknown, item: CodeAssessmentItem, visibility: string): ParityResult {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) throw new Error("Shard result is not an object.");
+  const candidate = value as Record<string, unknown>;
+  const status = candidate.status;
+  const expectedKeys = status === "failed"
+    ? ["failure", "itemId", "language", "skillId", "sourceHash", "status", "visibility"]
+    : ["itemId", "language", "skillId", "sourceHash", "status", "visibility"];
+  if (
+    Object.keys(candidate).sort().join(",") !== expectedKeys.join(",")
+    || (status !== "passed" && status !== "failed")
+    || candidate.itemId !== item.id
+    || candidate.skillId !== item.skillId
+    || candidate.language !== item.runtime.language
+    || candidate.visibility !== visibility
+    || candidate.sourceHash !== digest(item.answer.referenceSolution)
+    || (status === "failed" && typeof candidate.failure !== "string")
+  ) {
+    throw new Error(`Shard result does not match the authored case for ${item.id}.`);
+  }
+  return {
+    itemId: item.id,
+    skillId: item.skillId,
+    language: item.runtime.language,
+    visibility,
+    status,
+    sourceHash: digest(item.answer.referenceSolution),
+    ...(status === "failed" ? { failure: candidate.failure as string } : {}),
+  };
 }
 function dockerAvailable(): boolean {
   return spawnSync("docker", ["info"], { stdio: "ignore", windowsHide: true }).status === 0;
@@ -122,6 +191,12 @@ async function main(): Promise<void> {
   }
   const limit = limitArguments[0] ? Number.parseInt(limitArguments[0].slice("--limit=".length), 10) : items.length;
   const selected = items.slice(0, limit);
+  const sharding = parseShardArguments(process.argv.slice(2));
+  const shard = sharding.shard;
+  const mergeCount = sharding.mergeCount;
+  if ((shard || mergeCount) && (structureOnly || limitArguments.length > 0)) {
+    throw new Error("--shard and --merge-shards require the complete runtime case list.");
+  }
 
   let runtimeIdentities: Readonly<Record<string, LocalRuntimeIdentityEvidence>> = {};
   let imageEvidence: Readonly<Record<string, unknown>> = Object.fromEntries(
@@ -137,7 +212,7 @@ async function main(): Promise<void> {
       independentlyValidated: false,
     }]),
   );
-  if (!structureOnly) {
+  if (!structureOnly && !mergeCount) {
     if (!dockerAvailable()) {
       throw new Error("Docker is unavailable; use --structure-only only when runtime execution is intentionally deferred.");
     }
@@ -159,21 +234,14 @@ async function main(): Promise<void> {
   }
 
   const jobs = selected.flatMap((item) => item.tests.map((test) => ({ item, test })));
-  const results: Array<{
-    itemId: string;
-    skillId: string;
-    language: string;
-    visibility: string;
-    status: "passed" | "failed";
-    sourceHash: string;
-    failure?: string;
-  }> = [];
+  const results: ParityResult[] = [];
+  const assigned = jobs.map((_, index) => index).filter((index) => !shard || index % shard.count === shard.index - 1);
   let next = 0;
   let completed = 0;
   async function worker(): Promise<void> {
     for (;;) {
-      const index = next++;
-      if (index >= jobs.length) return;
+      if (next >= assigned.length) return;
+      const index = assigned[next++]!;
       const { item, test } = jobs[index]!;
       try {
         const runtimeIdentity = runtimeIdentities[item.runtime.language];
@@ -204,12 +272,77 @@ async function main(): Promise<void> {
         };
       }
       completed += 1;
-      if (completed % 40 === 0 || completed === jobs.length) {
-        console.log(`DSA parity runtime progress: ${completed}/${jobs.length} cases.`);
+      if (completed % 40 === 0 || completed === assigned.length) {
+        console.log(`DSA parity runtime progress: ${completed}/${assigned.length} cases.`);
       }
     }
   }
-  if (!structureOnly) await Promise.all([worker(), worker()]);
+  if (!structureOnly && !mergeCount) await Promise.all([worker(), worker()]);
+
+  if (shard) {
+    const shardFailures = assigned.filter((index) => results[index]?.status !== "passed").length;
+    await mkdir(shardDirectory, { recursive: true });
+    await writeFile(shardPath(shard.index, shard.count), `${JSON.stringify({
+      schemaVersion: 1,
+      shard,
+      declaredItems: items.length,
+      jobCount: jobs.length,
+      imageEvidence,
+      cases: assigned.map((index) => ({ index, result: results[index] })),
+    }, null, 2)}\n`);
+    console.log(`DSA parity runtime shard ${shard.index}/${shard.count}: ${assigned.length} executed cases, ${shardFailures} failures.`);
+    if (shardFailures) process.exitCode = 1;
+    return;
+  }
+
+  if (mergeCount) {
+    let mergedImageEvidence: string | undefined;
+    for (let index = 1; index <= mergeCount; index += 1) {
+      const partial = JSON.parse(await readFile(shardPath(index, mergeCount), "utf8")) as {
+        schemaVersion?: unknown;
+        shard?: { index?: unknown; count?: unknown };
+        declaredItems?: unknown;
+        jobCount?: unknown;
+        imageEvidence?: unknown;
+        cases?: unknown;
+      };
+      if (
+        partial.schemaVersion !== 1
+        || partial.shard?.index !== index
+        || partial.shard?.count !== mergeCount
+        || partial.declaredItems !== items.length
+        || partial.jobCount !== jobs.length
+        || !Array.isArray(partial.cases)
+      ) {
+        throw new Error(`DSA parity shard ${index}/${mergeCount} does not match the authored case list.`);
+      }
+      const shardImageEvidence = JSON.stringify(partial.imageEvidence);
+      if (mergedImageEvidence === undefined) mergedImageEvidence = shardImageEvidence;
+      else if (mergedImageEvidence !== shardImageEvidence) {
+        throw new Error("DSA parity shards executed against different runtime image identities.");
+      }
+      for (const entry of partial.cases as Array<{ index?: unknown; result?: unknown }>) {
+        const caseIndex = entry.index;
+        if (
+          typeof caseIndex !== "number"
+          || !Number.isInteger(caseIndex)
+          || caseIndex < 0
+          || caseIndex >= jobs.length
+          || caseIndex % mergeCount !== index - 1
+          || results[caseIndex] !== undefined
+        ) {
+          throw new Error(`DSA parity shard ${index}/${mergeCount} contains an unassigned or duplicate case.`);
+        }
+        const { item, test } = jobs[caseIndex]!;
+        results[caseIndex] = exactResult(entry.result, item, test.visibility);
+      }
+    }
+    for (let caseIndex = 0; caseIndex < jobs.length; caseIndex += 1) {
+      if (results[caseIndex] === undefined) throw new Error(`DSA parity shards are missing case ${caseIndex}.`);
+    }
+    imageEvidence = JSON.parse(mergedImageEvidence ?? "null") as Readonly<Record<string, unknown>>;
+  }
+
   const failures = results.filter((result) => result.status === "failed");
   const fullRuntimeRun = !structureOnly && selected.length === items.length;
   const buildEvidence = () => ({
@@ -243,10 +376,14 @@ async function main(): Promise<void> {
     buildEvidence,
     applyCommand: structureOnly
       ? "npm run dsa:parity:structure:apply"
-      : fullRuntimeRun
-        ? "npm run dsa:parity:evidence:apply"
-        : `npm run dsa:parity:evidence:apply -- --limit=${selected.length}`,
-    allowArgument: (argument) => argument === "--structure-only" || /^--limit=[1-9]\d*$/.test(argument),
+      : mergeCount
+        ? `npm run dsa:parity:evidence:apply -- --merge-shards=${mergeCount}`
+        : fullRuntimeRun
+          ? "npm run dsa:parity:evidence:apply"
+          : `npm run dsa:parity:evidence:apply -- --limit=${selected.length}`,
+    allowArgument: (argument) => argument === "--structure-only"
+      || /^--limit=[1-9]\d*$/.test(argument)
+      || /^--merge-shards=[2-8]$/.test(argument),
   });
   console.log(`DSA parity ${structureOnly ? "structure" : "runtime"} verification: ${structure.skillCount} skills, ${structure.itemCount} items, ${results.length} executed cases, ${failures.length} failures, full=${fullRuntimeRun}.`);
   if (failures.length || (process.argv.includes("--check") && !structureOnly && !fullRuntimeRun)) process.exitCode = 1;
