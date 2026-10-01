@@ -134,10 +134,10 @@
   ],
   "historicalEvidence": "Only current source bindings refreshed in three historical records, with previous hashes retained and annotations distinguishing bindings from the original test dates and results. The API matrix changes only two operation source hashes; its authorization rules and counts are unchanged.",
   "artifactSha256": {
-    "docs/evidence/api-authorization-matrix-2026-07-12.json": "25e499dec80e020d60e9a05a9a9c1536484a6238be5de6938ea71ed327840e07",
+    "docs/evidence/api-authorization-matrix-2026-07-12.json": "dddb32ecd9ece9201fb5f109afb51790b8ceec6460c6f37ed7aa724a70751238",
     "docs/evidence/backup-status-outbox-2026-07-12.json": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269",
     "docs/evidence/provider-outage-fallback-verification-2026-07-12.json": "d939e054c18f841bec6fb2d110076969a302388dd29c9ec9c7862da3ccad154e",
-    "docs/evidence/run-008-official-runner-fairness-2026-07-12.json": "7f2aa6fc3f086fc425cd12f2df84d28bb8bb54500fdabc289f5ef47e6401fccf",
+    "docs/evidence/run-008-official-runner-fairness-2026-07-12.json": "f53e4656463dc9759bb3cf8d4153d074358d5e350174b29a2b98fe42705e91b6",
     "docs/provider-onboarding.md": "b60bff88b29d242f1fc9eef0ef2053f5ebe7611f14dcfce0026d1eae2c0044f4",
     "drizzle/0070_credential_validation_preference.sql": "a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c",
     "drizzle/meta/0070_snapshot.json": "24c987e88a0664c9b74a5f3f8c2fe727bf4470410a6564c4d0f2289dd6599d1a",
@@ -147,7 +147,7 @@
     "infra/tests/recovery-evidence-verifier.test.sh": "55718a4d326cedb14bec8028ab4a7a954b4203062c96b075ef9ceba29a82e084",
     "infra/tests/restore-drill-reminder.test.sh": "2e04284ae5f37c93e869a585488fc073ad8c409c0be355e2148e4026fbb5fa18",
     "infra/tests/reviewed-migration-ledger-registration.test.mjs": "ad39dd85c0e55dd04cbf0b219905c1eb3cc631d6cf1d1b6e21de1f88842eebec",
-    "integration/credential-preference-migration.integration.test.ts": "a9b7382068c7ff13fb160c7f397e30cf03cf31615c3b7f532f0a6c394e51c3b1",
+    "integration/credential-preference-migration.integration.test.ts": "ceab46370093b4b69bd2682511b88d5fc97705e483a0de918eb82fd868cadc32",
     "integration/credential-preference.integration.test.ts": "b194dc0c4ad0758674aa546c3658cfd5c574473ad82243abd07ed63ac7e9ae00",
     "scripts/backup/common.sh": "1fdc86e957a5523da851faa63fecc05e9b9c339931224282c4b53a1d05cafd49",
     "scripts/lib/reviewed-migration-ledger.mjs": "b472f3384219f0490423b043e2078fd5d5afedd2480cb65837a9c79525fbfef2",
@@ -289,6 +289,29 @@
         "artifact": "reviewed-migration-ledger-identity",
         "previousDigest": "174fea1500e62ff0824624beb2e6a20147d2931f494ee7fd03db86685949eca9",
         "currentDigest": "8baecb4eedbb6f55a41b685438f9329197431d72580645c8c01a6017d7cfeeb6"
+      }
+    ]
+  },
+  "ciFollowupRefresh": {
+    "scope": "Current-source bindings after rebasing and fixing owner-helper, browser and historical mail harness failures. Historical run results and schema-qualification refresh are preserved; follow-up checks are recorded separately.",
+    "changes": [
+      {
+        "field": "/artifactSha256/docs~1evidence~1api-authorization-matrix-2026-07-12.json",
+        "artifact": "docs/evidence/api-authorization-matrix-2026-07-12.json",
+        "previousDigest": "25e499dec80e020d60e9a05a9a9c1536484a6238be5de6938ea71ed327840e07",
+        "currentDigest": "dddb32ecd9ece9201fb5f109afb51790b8ceec6460c6f37ed7aa724a70751238"
+      },
+      {
+        "field": "/artifactSha256/docs~1evidence~1run-008-official-runner-fairness-2026-07-12.json",
+        "artifact": "docs/evidence/run-008-official-runner-fairness-2026-07-12.json",
+        "previousDigest": "7f2aa6fc3f086fc425cd12f2df84d28bb8bb54500fdabc289f5ef47e6401fccf",
+        "currentDigest": "f53e4656463dc9759bb3cf8d4153d074358d5e350174b29a2b98fe42705e91b6"
+      },
+      {
+        "field": "/artifactSha256/integration~1credential-preference-migration.integration.test.ts",
+        "artifact": "integration/credential-preference-migration.integration.test.ts",
+        "previousDigest": "a9b7382068c7ff13fb160c7f397e30cf03cf31615c3b7f532f0a6c394e51c3b1",
+        "currentDigest": "ceab46370093b4b69bd2682511b88d5fc97705e483a0de918eb82fd868cadc32"
       }
     ]
   }

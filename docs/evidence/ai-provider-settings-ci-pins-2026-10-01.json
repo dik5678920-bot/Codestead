@@ -98,7 +98,7 @@
   ],
   "artifactSha256": {
     "Dockerfile": "891fb214ac486fb484ebcaae1587046e6a397e63a12e2d1b044734809b54ff79",
-    "docs/evidence/ai-provider-settings-2026-10-01.json": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
+    "docs/evidence/ai-provider-settings-2026-10-01.json": "8a2ad8e42089ce714d23cbcb9c7743adef452a14655ca0a7a68917ea78e3c11c",
     "docs/evidence/backup-status-outbox-2026-07-12.json": "8ad1361dbb36494165e5ea6aba7ac43f5582bfdb67a68fbdeb82457f0d6fc269",
     "docs/reviewed-migration-inventory-pins.md": "cfccee3116a90b6e3e2bf262b77a92b43b7c88b14e2d3d8b888a58e9a2aebfda",
     "drizzle/meta/0070_public_column_attnums.json": "445e46c714041c037d7474a39d940cf065e92951ba6c2bbd0f2b2fdc73bb2e75",
@@ -168,6 +168,17 @@
         "artifact": "docs/reviewed-migration-inventory-pins.md",
         "previousDigest": "553d5cedaa7f4722e7e8a3b1b43cd0d6c2b0e1bb4f61c4aa965aad5e12a3fa9e",
         "currentDigest": "cfccee3116a90b6e3e2bf262b77a92b43b7c88b14e2d3d8b888a58e9a2aebfda"
+      }
+    ]
+  },
+  "ciFollowupRefresh": {
+    "scope": "Current-source bindings after rebasing and fixing owner-helper, browser and historical mail harness failures. Historical run results and schema-qualification refresh are preserved; follow-up checks are recorded separately.",
+    "changes": [
+      {
+        "field": "/artifactSha256/docs~1evidence~1ai-provider-settings-2026-10-01.json",
+        "artifact": "docs/evidence/ai-provider-settings-2026-10-01.json",
+        "previousDigest": "df702adbf280c91fcf36b067ae5258e394536cd4a9ea179e2486f04b74d5fab2",
+        "currentDigest": "8a2ad8e42089ce714d23cbcb9c7743adef452a14655ca0a7a68917ea78e3c11c"
       }
     ]
   }
