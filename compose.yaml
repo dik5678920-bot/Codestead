@@ -310,6 +310,11 @@ services:
       RUNNER_BASE_URL: http://runner-egress-gateway:4100
       RUNNER_SHARED_SECRET_FILE: /run/secrets/runner_shared_secret
       RUNNER_MAX_CONCURRENCY: "2"
+      # Practice-run provider (docs/plans/piston-runner.md). legacy unless set to
+      # piston; piston also needs the piston profile and fails closed without it.
+      CODE_RUNNER_PROVIDER: ${CODE_RUNNER_PROVIDER:-legacy}
+      PISTON_URL: http://piston:2000
+      PISTON_IMAGE: ${PISTON_IMAGE:-}
       UPLOADS_ENABLED: ${UPLOADS_ENABLED:-false}
       OBJECT_STORAGE_PATH: /var/lib/learncoding/objects
       MAIL_ADAPTER: ${MAIL_ADAPTER:-outbox}
@@ -352,6 +357,9 @@ services:
         interface_name: data
       runner-client:
         interface_name: runner-client
+      # Always attached: internal, no egress, empty unless the piston profile is on.
+      piston:
+        interface_name: piston
     <<: [*hardened, *codestead-managed]
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=128m

@@ -229,24 +229,54 @@ case "${MAIL_OUTBOX_PHASE:-}|${OUTBOX_WORKER_MODE:-}" in
     ;;
 esac
 
+# The only reviewed profile sets. No wildcard: anything else (including
+# operations, which is selected only by explicit --profile) is rejected.
+profile_uploads=false
+profile_piston=false
+case "${COMPOSE_PROFILES:-}" in
+  "") ;;
+  uploads) profile_uploads=true ;;
+  piston) profile_piston=true ;;
+  uploads,piston) profile_uploads=true; profile_piston=true ;;
+  *) fatal "COMPOSE_PROFILES must be exactly empty, uploads, piston, or uploads,piston" ;;
+esac
+readonly profile_uploads profile_piston
+
 case "${UPLOADS_ENABLED:-}" in
   true)
-    [[ "${COMPOSE_PROFILES:-}" == uploads ]] || {
-      fatal "UPLOADS_ENABLED=true requires COMPOSE_PROFILES=uploads exactly"
+    [[ "$profile_uploads" == true ]] || {
+      fatal "UPLOADS_ENABLED=true requires the uploads profile"
     }
     image_is_digest_pinned "${CLAMAV_IMAGE:-}" || {
       fatal "CLAMAV_IMAGE must be pinned by sha256 digest when uploads are enabled"
     }
     ;;
   false)
-    [[ -z "${COMPOSE_PROFILES:-}" ]] || {
-      fatal "UPLOADS_ENABLED=false requires COMPOSE_PROFILES to be empty"
+    [[ "$profile_uploads" == false ]] || {
+      fatal "UPLOADS_ENABLED=false requires COMPOSE_PROFILES without uploads"
     }
     ;;
   *)
     fatal "UPLOADS_ENABLED must be literal true or false"
     ;;
 esac
+
+# Piston (learner code runner) runs only under Kata, behind the piston profile.
+# Practice runs use it only when CODE_RUNNER_PROVIDER=piston; the default and
+# empty value keep the legacy runner. Selecting piston without the profile
+# would fail closed in the app, so it is rejected here before startup.
+case "${CODE_RUNNER_PROVIDER:-}" in
+  ""|legacy) ;;
+  piston)
+    [[ "$profile_piston" == true ]] || fatal "CODE_RUNNER_PROVIDER=piston requires the piston profile"
+    ;;
+  *) fatal "CODE_RUNNER_PROVIDER must be empty, legacy, or piston" ;;
+esac
+if [[ "$profile_piston" == true ]]; then
+  image_is_digest_pinned "${PISTON_IMAGE:-}" || {
+    fatal "PISTON_IMAGE must be pinned by sha256 digest when the piston profile is enabled"
+  }
+fi
 
 raw_secrets_dir="${SECRETS_DIR:-/etc/learncoding/secrets}"
 [[ "$raw_secrets_dir" == /* ]] || fatal "secrets directory path must be absolute"
@@ -558,6 +588,10 @@ runner_client_subnet_seen=false
 runner_client_internal_seen=false
 runner_subnet_seen=false
 runner_bridge_seen=false
+declare -A rendered_piston_members=()
+declare -A rendered_piston_urls=()
+piston_runtime_seen=false
+piston_network_internal_seen=false
 postgres_fsync_seen=false
 postgres_synchronous_commit_seen=false
 postgres_full_page_writes_seen=false
@@ -580,14 +614,14 @@ fi
 
 is_known_service() {
   case "$1" in
-    postgres|app|mail-worker|reward-worker|regrade-worker|exam-finalization-worker|practice-runner-recovery-worker|project-review-correction-worker|file-erasure-worker|scan-worker|cloudflared|runner-egress-gateway|database-role-bootstrap|database-negative-probes|database-boundary-verifier|backup-status-reporter|migrate|lifecycle|platform-seed|admin-bootstrap|clamav) return 0 ;;
+    postgres|app|mail-worker|reward-worker|regrade-worker|exam-finalization-worker|practice-runner-recovery-worker|project-review-correction-worker|file-erasure-worker|scan-worker|cloudflared|runner-egress-gateway|database-role-bootstrap|database-negative-probes|database-boundary-verifier|backup-status-reporter|migrate|lifecycle|platform-seed|admin-bootstrap|clamav|piston) return 0 ;;
     *) return 1 ;;
   esac
 }
 
 is_long_running_service() {
   case "$1" in
-    postgres|app|mail-worker|reward-worker|regrade-worker|exam-finalization-worker|practice-runner-recovery-worker|project-review-correction-worker|scan-worker|file-erasure-worker|cloudflared|runner-egress-gateway|clamav) return 0 ;;
+    postgres|app|mail-worker|reward-worker|regrade-worker|exam-finalization-worker|practice-runner-recovery-worker|project-review-correction-worker|scan-worker|file-erasure-worker|cloudflared|runner-egress-gateway|clamav|piston) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -678,6 +712,29 @@ while IFS= read -r line; do
       [[ -z "${rendered_runner_client_members[$current_service]:-}" ]] || fatal "rendered runner-client membership must be unique per service"
       rendered_runner_client_members["$current_service"]=1
     fi
+    if [[ "$line" =~ ^[[:space:]]{4}privileged:[[:space:]]+true$ ]]; then
+      fatal "trusted Compose stack must not run privileged containers"
+    fi
+    if [[ "$line" =~ ^[[:space:]]{4}runtime:[[:space:]]+([^[:space:]]+)$ ]]; then
+      [[ "$current_service" == piston && "${BASH_REMATCH[1]}" == io.containerd.kata.v2 ]] || {
+        fatal "only piston may set a container runtime, and it must be io.containerd.kata.v2"
+      }
+      piston_runtime_seen=true
+    fi
+    if [[ "$line" =~ ^[[:space:]]{6}PISTON_URL:[[:space:]]+([^[:space:]]+)$ ]]; then
+      [[ "$current_service" == app && "${BASH_REMATCH[1]}" == "http://piston:2000" ]] || {
+        fatal "PISTON_URL must be exactly http://piston:2000 and only on app"
+      }
+      [[ -z "${rendered_piston_urls[$current_service]:-}" ]] || fatal "rendered PISTON_URL must be unique"
+      rendered_piston_urls["$current_service"]=1
+    fi
+    if [[ "$line" =~ ^[[:space:]]{6}(-[[:space:]]+piston|piston:([[:space:]]+null)?)$ ]]; then
+      [[ "$current_service" == app || "$current_service" == piston ]] || {
+        fatal "only app and piston may attach to the piston network"
+      }
+      [[ -z "${rendered_piston_members[$current_service]:-}" ]] || fatal "rendered piston membership must be unique per service"
+      rendered_piston_members["$current_service"]=1
+    fi
     if [[ "$line" =~ ^[[:space:]]{6}(-[[:space:]]+runner-egress|runner-egress:([[:space:]]+null)?)$ ]]; then
       [[ "$current_service" == runner-egress-gateway ]] || fatal "runner-egress must be attached only to runner-egress-gateway"
       [[ "$runner_gateway_egress_seen" == false ]] || fatal "runner gateway egress membership must be unique"
@@ -718,6 +775,13 @@ while IFS= read -r line; do
         fatal "runner-egress subnet must be exactly 172.29.40.0/24"
       }
       runner_subnet_seen=true
+    fi
+  fi
+
+  if [[ "$current_section" == networks && "$current_network" == piston ]]; then
+    if [[ "$line" =~ ^[[:space:]]{4}internal:[[:space:]]+([^[:space:]]+)$ ]]; then
+      [[ "${BASH_REMATCH[1]}" == true ]] || fatal "piston network must be internal"
+      piston_network_internal_seen=true
     fi
   fi
 
@@ -769,6 +833,18 @@ for service in app regrade-worker exam-finalization-worker practice-runner-recov
   [[ -n "${rendered_runner_client_members[$service]:-}" ]] || fatal "every runner client must attach to runner-client"
 done
 [[ -n "${rendered_runner_client_members[runner-egress-gateway]:-}" ]] || fatal "runner gateway must attach to runner-client"
+# app always joins the internal piston network; Piston itself renders only
+# with the piston profile and only under Kata.
+[[ -n "${rendered_piston_members[app]:-}" ]] || fatal "app must attach to the piston network"
+[[ -n "${rendered_piston_urls[app]:-}" ]] || fatal "PISTON_URL must be exactly http://piston:2000 and only on app"
+[[ "$piston_network_internal_seen" == true ]] || fatal "piston network must be internal"
+if [[ "$profile_piston" == true ]]; then
+  [[ -n "${rendered_services[piston]:-}" ]] || fatal "piston profile must render the piston service"
+  [[ "$piston_runtime_seen" == true ]] || fatal "piston must run under the io.containerd.kata.v2 runtime"
+  [[ -n "${rendered_piston_members[piston]:-}" ]] || fatal "piston must attach to the piston network"
+else
+  [[ -z "${rendered_services[piston]:-}" ]] || fatal "piston must not render without the piston profile"
+fi
 [[ "$runner_gateway_upstream_seen" == true ]] || fatal "runner gateway upstream must be exactly http://192.168.122.12:4100"
 [[ "$runner_gateway_egress_seen" == true ]] || fatal "runner gateway must be the sole runner-egress consumer"
 [[ "$runner_gateway_source_seen" == true ]] || fatal "runner gateway runner-egress address must be exactly 172.29.40.2"
