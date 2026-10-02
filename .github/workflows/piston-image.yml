@@ -1,0 +1,55 @@
+name: Piston image
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/piston-image.yml
+      - infra/piston/**
+      - src/lib/runner/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/piston-image.yml
+      - infra/piston/**
+      - src/lib/runner/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.3
+          cache: npm
+      - name: Install test dependencies
+        run: |
+          npm ci > npm-ci.log 2>&1 || { cat npm-ci.log; exit 1; }
+          rm npm-ci.log
+      - name: Check and fetch locked inputs
+        run: |
+          node --test infra/piston/prepare.test.mjs > inputs.log 2>&1 || { cat inputs.log; exit 1; }
+          node infra/piston/prepare.mjs > downloads.log 2>&1 || { cat downloads.log; exit 1; }
+          rm inputs.log downloads.log
+      - name: Build without network access
+        run: |
+          docker buildx build --load --network=none --platform linux/amd64 --provenance=false \
+            --metadata-file infra/piston/build-metadata.json -t codestead-piston:ci infra/piston \
+            > build.log 2>&1 || { tail -n 120 build.log; exit 1; }
+          rm build.log
+      - name: Test actual image and record its manifest
+        run: |
+          node infra/piston/test-image.mjs codestead-piston:ci > smoke.log 2>&1 || { cat smoke.log; exit 1; }
+          rm smoke.log
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: piston-image-runtime-handoff
+          path: |
+            infra/piston/image-result.json
+            infra/piston/build-metadata.json
+          if-no-files-found: error

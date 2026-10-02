@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "platform": "linux/amd64",
+  "imageReference": "codestead-piston@sha256:da7c26b38e7112eb1073696e65c2dfec9449d9d84ea4b4355d49a212246fe46a",
+  "imageConfigDigest": "sha256:9a0d56f824f90ccb5b5c8bf8b3e7e6264bd8994048fb560687ac7994a078b325",
+  "runtimeLabels": {
+    "c": {
+      "language": "c",
+      "version": "14.2.0",
+      "label": "C23 / GCC 14.2.0 (Piston)"
+    },
+    "cpp": {
+      "language": "c++",
+      "version": "14.2.0",
+      "label": "C++20 / G++ 14.2.0 (Piston)"
+    },
+    "java": {
+      "language": "java",
+      "version": "21.0.12",
+      "label": "Java 21.0.12.1+1 / Temurin (Piston)"
+    },
+    "python": {
+      "language": "python",
+      "version": "3.14.8",
+      "label": "Python 3.14.8 (Piston)"
+    },
+    "javascript": {
+      "language": "javascript",
+      "version": "22.23.3",
+      "label": "Node.js 22.23.3 (Piston)"
+    }
+  },
+  "observedInventory": [
+    {
+      "language": "c",
+      "version": "14.2.0",
+      "aliases": [
+        "gcc"
+      ],
+      "runtime": "gcc"
+    },
+    {
+      "language": "c++",
+      "version": "14.2.0",
+      "aliases": [
+        "cpp",
+        "g++"
+      ],
+      "runtime": "gcc"
+    },
+    {
+      "language": "java",
+      "version": "21.0.12",
+      "aliases": [],
+      "runtime": "java"
+    },
+    {
+      "language": "javascript",
+      "version": "22.23.3",
+      "aliases": [
+        "node",
+        "js"
+      ],
+      "runtime": "node"
+    },
+    {
+      "language": "python",
+      "version": "3.14.8",
+      "aliases": [
+        "python3"
+      ],
+      "runtime": "python"
+    }
+  ],
+  "buildInputSha256": {
+    "Dockerfile": "ab92693eced86a7192695e8dd3d9ae8ff6a895004e0dba4f1d1d2e6b6b1f7dc4",
+    "entrypoint.sh": "7ee5301283c7af996c3df931a7797df46b2e04513147d795f29b6f01eb9029bc",
+    "build-cds.sh": "4e9659e2da4e3fc7857ec795b0e15cfb3acb54852ca5acc20410f8fc02ffae94",
+    "install-packages.mjs": "d0c95da04cb8c0196d5a05ac48343e629f8e5287c092d3e0ddc1db65dd7bde47",
+    "api-package.json": "128398b4394d3facbda38b27fdce6ccbac9bee024fa3774e7f4fe80ff35bc168",
+    "api-package-lock.json": "5df84af17e80386b3ee90278c65d914c5db5f6e13cadcf65559343d8dc3e9f0b",
+    "image-inputs.lock.json": "9219a8a7f7c4ce1b9a5fe82c601296d94213ae891e74a2acbc5f5e7900e58908",
+    "downloads.sha256": "bcc85ff6de59772998cea73b2df7189cba2bda55fbc375336ff0aa276b8cf7b8",
+    ".dockerignore": "bd52ce28ab83c8b81157e33384229ea4b0360ae1523e0fb2e7121f6d05535875"
+  },
+  "testInputSha256": {
+    "src/lib/runner/client.ts": "191abbbff6b498611abad4156e8af7cf7a40ef77cdc7604c92ac0cc9ad79e078",
+    "src/lib/runner/piston-client.ts": "37b4a4f35bd65fb5be9c44ed106e68f1cd2c04d4ac1723a3892815f7db640e3f",
+    "src/lib/runner/__tests__/piston-client.integration.test.ts": "1e5be550f43270408f2b9afb8f13c599333e9a15dc10fba14285a07bdcdae474",
+    "infra/piston/test-image.mjs": "e2808817a6802104351bb44ca27bf2ee4021c28c23838ca439430668095f1a6c"
+  },
+  "validation": {
+    "liveTests": 20,
+    "passed": true,
+    "host": "Docker Desktop",
+    "kernel": "6.6.87.2-microsoft-standard-WSL2",
+    "isolation": "isolate inside disposable Docker Desktop/CI VM; production Kata unchanged"
+  },
+  "availability": "Local Docker Desktop build only; no registry publication or NUC deployment",
+  "publicationRequirement": "PR4b must publish new forms with these exact labels and the verified deployed-image manifest; immutable legacy-pinned attempts must not be rewritten",
+  "baseCommit": "39a774a0d3d43ce776eec297db5cecfbb5ba2a62",
+  "taskStatus": "PR5 implementation complete; paused for tonight after opening the PR",
+  "remainingSteps": [
+    "Confirm the Piston image CI job and required repository checks on the PR; investigate any failures when explicitly resumed.",
+    "Review and merge the single PR5 PR; no remaining local implementation or test steps.",
+    "For separate PR4b: validate the actual deployed-image build digest and these exact labels, update publication/runtime-pin tooling, and publish new forms without rewriting immutable legacy attempt snapshots. Keep the provider legacy until that migration and active-attempt transition are ready."
+  ]
+}

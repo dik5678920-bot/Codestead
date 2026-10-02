@@ -1,0 +1,20 @@
+{
+  "name": "piston-api",
+  "version": "3.1.1",
+  "description": "API for piston - a high performance code execution engine",
+  "main": "src/index.js",
+  "dependencies": {
+    "body-parser": "file:/downloads/npm/baf486279ba41c728b4a0f10f1fd4b8ac47ad05ce277a51758ff610381439c44.tgz",
+    "chownr": "file:/downloads/npm/4e0220ee56bb72b93c9ff560c88d3e0d7d8dcdd64fd22d7ee58c29c3156158b3.tgz",
+    "express": "file:/downloads/npm/7c4c7e6fc48b30659bb200146a502b612b2de682557b7b9365c3ffbb72f163fc.tgz",
+    "express-ws": "file:/downloads/npm/2ba65b0846b842df665e56d93a5f5a9164517f02c52fe9b4c1f3d7639c8299e7.tgz",
+    "is-docker": "file:/downloads/npm/b4a71fb8bcc781056dcb19ca698ab94c1044e26af60bd368ff82bb85c99c28b3.tgz",
+    "logplease": "file:/downloads/npm/2d053a137b370f41d723c15661a69423bd61abc5a5164d4d0a6703df10f06889.tgz",
+    "nocamel": "file:/downloads/npm/af6b141dc116cc1bf6852229b0d0d0d3c543bcec37c3e0f32364b1715e9b9f71.tgz",
+    "node-fetch": "file:/downloads/npm/5131d08c46129907f004b226f4d0b10f25efab9ed8ffa46e445c6540eb77987d.tgz",
+    "semver": "file:/downloads/npm/366076c9f49becfbbc5e0622c02dbbd7b840214266f646c3b966ad5d000fa998.tgz",
+    "uuid": "file:/downloads/npm/4a5f97d0ae56bb22f35dc116bcd868e1a7b0381c518a2040551b8dce0fa9da1b.tgz",
+    "waitpid": "file:/downloads/npm/96f962a70812b1a7c142a64046bdd18704d4055f0cea7eae18f31545bdd6e23a.tgz"
+  },
+  "license": "MIT"
+}

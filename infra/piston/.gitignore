@@ -1,0 +1,5 @@
+.downloads/
+image-result.json
+build-metadata.json
+build-inputs.sha256
+*.log

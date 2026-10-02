@@ -100,7 +100,9 @@ network and reads `PISTON_URL=http://piston:2000` from `compose.yaml`.
    language packages, so the running container never needs the network.
 
    ```bash
-   docker build -t codestead-piston:$(git -C /opt/learncoding rev-parse --short HEAD) /opt/learncoding/infra/piston
+   cd /opt/learncoding
+   node infra/piston/prepare.mjs
+   docker buildx build --load --network=none --platform linux/amd64 --provenance=false --metadata-file infra/piston/build-metadata.json -t codestead-piston:$(git rev-parse --short HEAD) infra/piston
    docker image inspect --format '{{json .RepoDigests}}' codestead-piston:$(git -C /opt/learncoding rev-parse --short HEAD)
    ```
 
@@ -121,13 +123,16 @@ network and reads `PISTON_URL=http://piston:2000` from `compose.yaml`.
 ",...`.
 
    ```bash
-   docker run --rm --network learncoding_piston alpine:3.22@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 wget -qO- --header content-type:application/json --post-data '{"language":"python","version":"3.12.0","files":[{"content":"print(6*7)"}]}' http://piston:2000/api/v2/execute
+   docker run --rm --network learncoding_piston alpine:3.22@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 wget -qO- --header content-type:application/json --post-data '{"language":"python","version":"3.14.8","files":[{"content":"print(6*7)"}]}' http://piston:2000/api/v2/execute
    ```
 
 5. Flag flip (owner approval): set `CODE_RUNNER_PROVIDER=piston` in
    `/etc/learncoding/compose.env` and run `sudo systemctl reload learncoding-compose`
-   again so the app is recreated with it. Practice runs (`/api/code/run`) now use
-   Piston; exams and corrections still use the legacy runner.
+   again so the app is recreated with it. Practice, exam code and grading corrections all
+   select Piston. **Do not flip the flag until the PR4b publication migration is ready:**
+   legacy-pinned exam forms reject Piston runtime/image evidence, with no fallback.
+   Finish active legacy-pinned attempts first; their snapshots must stay immutable.
+   See [the image build and PR4b handoff](../../infra/piston/README.md).
 
 `docker exec` into a Kata container is not supported by this Kata release.
 Debug with `docker logs learncoding-piston-1` instead. Later deploys with

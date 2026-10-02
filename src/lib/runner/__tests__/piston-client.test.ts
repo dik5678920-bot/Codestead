@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
 
 import {
   configuredPracticeRunnerClient,
@@ -99,11 +100,32 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+it("uses the exact runtime inventory recorded in the reviewed image lock", () => {
+  const lock = JSON.parse(readFileSync("infra/piston/image-inputs.lock.json", "utf8"));
+  expect(PISTON_RUNTIMES).toEqual(lock.runtimes);
+});
+
+it.each(["c", "cpp", "java"] as const)("rejects a missing %s compile stage instead of fabricating OK", async (language) => {
+  const piston = fakePiston(() => ({ run: { code: 0 } }));
+  await expect(client(piston.fetchImpl).submit(request(language), "id"))
+    .rejects.toMatchObject({ code: "PISTON_RESPONSE_UNTRUSTED" });
+});
+
+it("uses Java's real compile stage and never sends the old source-launcher shim", async () => {
+  const piston = fakePiston(() => ({ compile: { code: 1, stderr: "javac error" }, run: { code: 0 } }));
+  const job = await client(piston.fetchImpl).submit(request("java"), "id");
+  expect(job.result?.status).toBe("COMPILE_ERROR");
+  expect(job.result?.compile.stderr).toBe("javac error");
+  expect(job.result?.run).toBeUndefined();
+  expect(piston.calls).toHaveLength(1);
+  expect(piston.calls[0]?.files).toEqual([{ name: "Main.java", content: "source" }]);
+});
+
 describe("Piston practice runner client", () => {
   it.each(languages)("returns a trusted legacy-shaped ACCEPTED result for %s", async (language) => {
     const piston = fakePiston((call) => isCheckCall(call)
       ? { run: { code: 0 } }
-      : { ...(["c", "cpp"].includes(language) ? { compile: { code: 0 } } : {}), run: { stdout: "x\nhello\n" } });
+      : { ...(["c", "cpp", "java"].includes(language) ? { compile: { code: 0 } } : {}), run: { stdout: "x\nhello\n" } });
     const runnerRequest = request(language);
     const job = await client(piston.fetchImpl).submit(runnerRequest, "33333333-3333-4333-8333-333333333333");
 
@@ -136,7 +158,7 @@ describe("Piston practice runner client", () => {
     expect(job.result?.run).toBeUndefined();
   });
 
-  it.each(["python", "javascript", "java"] as const)(
+  it.each(["python", "javascript"] as const)(
     "checks %s syntax first and reports COMPILE_ERROR without running the program",
     async (language) => {
       const piston = fakePiston((call) => isCheckCall(call)

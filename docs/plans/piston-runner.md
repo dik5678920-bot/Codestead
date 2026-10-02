@@ -243,7 +243,11 @@ What each item does:
    live toolchain equivalence still depends on step 5. Project reviews stay bounded static analysis
    (`repositoryExecution: none`) with provider-independent findings and scores.
 5. Own Piston image on Debian trixie with GCC 14, Java 21 (+ AppCDS), Python 3.14 and Node 22.
-   Optional idle stop.
+   The reviewed inputs and offline build live in `infra/piston`; live tests cover all five
+   languages, modern syntax and isolate containment. `infra/piston/pr4b-runtime-handoff.json`
+   records the tested image manifest and exact runtime labels for the separate PR4b publication
+   migration. This step does not rewrite existing exam snapshots or deploy to the NUC.
+   Optional idle stop remains a separate follow-up.
 6. After a week on `piston` with no regressions: delete `services/runner`, `infra/runner*`, the runtime
    image release tooling, and their evidence files.
 

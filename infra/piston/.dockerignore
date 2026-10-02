@@ -1,0 +1,6 @@
+*.log
+image-result.json
+build-metadata.json
+*.test.mjs
+README.md
+prepare.mjs
