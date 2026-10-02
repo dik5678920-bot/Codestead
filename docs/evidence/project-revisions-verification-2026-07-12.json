@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "sourceCommit": "5ffe8623dd9d1701a86aa954457fb5300c924c09",
+  "note": "Source pins are anchored to the current origin/main commit whose blobs match the retained recorded bindings, not the original proof commit. Historical checks were not rerun for this conversion; re-pin logs were removed, and Git history preserves them.",
   "generatedAt": "2026-07-12T17:45:30+05:30",
   "revalidatedAt": "2026-09-26T21:29:00.000Z",
   "scope": "Launch 1 learner-owned project revision workspace; local source, UI, and disposable PostgreSQL evidence only",
@@ -86,28 +88,6 @@
       "sha256": "e2677387e1852c5bb8dfbcc8c2c17c7327706b25e9960411458a90105b682a69"
     }
   },
-  "supersededDigests": [
-    {
-      "artifact": "src/components/product/project-revision-dialog.tsx",
-      "priorDigest": "a3a5589503a67666b92ac2724f5c5bc0121d90aa260e4ea584e89fe6e9937174",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/lib/projects/revision-service.ts",
-      "priorDigest": "de8da8181f80f05785c8faef6e311b026010cc6b7cfe45a398312b0aba1936e8",
-      "replacedAt": "2026-07-28T13:27:44.340Z"
-    },
-    {
-      "artifact": "integration/project-revisions.integration.test.ts",
-      "priorDigest": "03d08a34d7c3569ddba4a63530ca5a3709a934703d85ebe540e8bbe6a4b00dec",
-      "replacedAt": "2026-07-28T13:27:44.340Z"
-    },
-    {
-      "artifact": "src/components/product/project-revision-dialog.tsx",
-      "priorDigest": "e86365156af8122b54020fe0439e27ecbde671132f492ee9cd2e72334ca960ef",
-      "replacedAt": "2026-09-26T21:29:00.000Z"
-    }
-  ],
   "notProven": [
     "Live production NUC/PostgreSQL deployment, physical-device accessibility, and Cloudflare/browser session testing are outside this local evidence.",
     "Private GitHub App installation/token lifecycle and live GitHub API/repository outage/rate-limit/force-push drills are not implemented.",
