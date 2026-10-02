@@ -409,6 +409,58 @@ describe("adaptive learning application service", () => {
     });
   });
 
+  it.each([false, true])("returns only the stored result when a graded attempt (passed=%s) is probed", async (passed) => {
+    const base = attemptContext({ grading: { kind: "exact", acceptedAnswers: ["42"] } });
+    const ownedAttempt: AttemptContext = {
+      ...base,
+      attempt: {
+        ...base.attempt,
+        status: "graded",
+        score: passed ? 1 : 0,
+        passed,
+        masteryAwarded: passed,
+        submittedAt: NOW,
+        gradedAt: NOW,
+      },
+    };
+    // Any transaction call beyond locking and reading the attempt throws.
+    const service = serviceWith({ getAttempt: vi.fn(async () => ownedAttempt) });
+    const probe = (answer: Record<string, unknown>, responseRevision: number) =>
+      service.submitAttempt(USER_ID, ownedAttempt.attempt.id, {
+        itemKey: "main",
+        responseRevision,
+        answer,
+        assistanceLevel: "A0",
+        solutionRevealed: false,
+        submittedAt: NOW,
+      });
+
+    const wrong = await probe({ value: "41" }, 2);
+    const right = await probe({ value: "42" }, 3);
+    const malformed = await probe({}, 4);
+    expect(wrong).toEqual(right);
+    expect(malformed).toEqual(right);
+    expect(right).toEqual({
+      state: "graded",
+      attemptId: ownedAttempt.attempt.id,
+      attemptStatus: "graded",
+      score: ownedAttempt.attempt.score,
+      passed,
+      officialEvidenceRecorded: true,
+      masteryAwarded: ownedAttempt.attempt.masteryAwarded,
+      progress: null,
+      criticalGates: [],
+      remediation: { activeTags: [], confirmingProbeTags: [] },
+      feedback: null,
+      reviewDueAt: null,
+      idempotent: true,
+    });
+
+    const readAnswer = vi.fn(() => "42");
+    await expect(probe({ get value() { return readAnswer(); } }, 5)).resolves.toEqual(right);
+    expect(readAnswer).not.toHaveBeenCalled();
+  });
+
   it("grades authored deterministic work and persists evidence, mastery, review, and attempt atomically", async () => {
     const ownedAttempt = attemptContext({ grading: { kind: "exact", acceptedAnswers: ["42"] } });
     const callOrder: string[] = [];
