@@ -5,8 +5,13 @@ const source = readFileSync(new URL("../ops/validate-runtime.sh", import.meta.ur
 
 assert.match(
   source,
-  /case "\$\{UPLOADS_ENABLED:-\}" in[\s\S]*?true\)[\s\S]*?"\$\{COMPOSE_PROFILES:-\}" == uploads[\s\S]*?false\)[\s\S]*?-z "\$\{COMPOSE_PROFILES:-\}"[\s\S]*?UPLOADS_ENABLED must be literal true or false/u,
-  "ambient profiles must be exactly uploads when enabled and empty when disabled",
+  /case "\$\{COMPOSE_PROFILES:-\}" in\n  ""\) ;;\n  uploads\) profile_uploads=true ;;\n  piston\) profile_piston=true ;;\n  uploads,piston\) profile_uploads=true; profile_piston=true ;;\n  \*\) fatal "COMPOSE_PROFILES must be exactly empty, uploads, piston, or uploads,piston" ;;\nesac\nreadonly profile_uploads profile_piston/u,
+  "ambient profiles must be one of the exact reviewed sets, with no wildcard",
+);
+assert.match(
+  source,
+  /case "\$\{UPLOADS_ENABLED:-\}" in[\s\S]*?true\)[\s\S]*?"\$profile_uploads" == true[\s\S]*?false\)[\s\S]*?"\$profile_uploads" == false[\s\S]*?UPLOADS_ENABLED must be literal true or false/u,
+  "uploads profile must be on exactly when uploads are enabled",
 );
 assert.doesNotMatch(
   source,

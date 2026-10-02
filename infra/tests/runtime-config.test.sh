@@ -11,7 +11,7 @@ sha256_bin=/usr/bin/sha256sum
 perl_bin=/usr/bin/perl
 validator="$repo_root/infra/ops/validate-runtime.sh"
 validator_shebang='#!/usr/bin/env bash'
-validator_reviewed_sha256='27b872bc9c1c6691b31bef76dbb75c4af108198524fb2022016c26f79765e248'
+validator_reviewed_sha256='7fd72f537ade57c439aa624e44b2308ef30dc0505e883434c04d1c7e3ebc67f1'
 
 if [[ "$(/usr/bin/uname -s 2>/dev/null || true)" != Linux ]]; then
   echo 'FAIL: authoritative runtime contract requires Linux Bubblewrap containment' >&2
@@ -785,11 +785,29 @@ if [[ "${1:-}" == "compose" ]]; then
     "    stop_grace_period: $app_stop" \
     '    environment:' \
     "      RUNNER_BASE_URL: $FAKE_RUNNER_CLIENT_URL" \
+    "      PISTON_URL: $(value_for app piston-url http://piston:2000)" \
     '    networks:' \
     '      - data' \
     '      - frontend' \
     '      - runner-client'
+  [[ "$(value_for app piston-network true)" != true ]] || printf '%s\n' '      - piston'
   emit_host_port app
+  # Compose reads COMPOSE_PROFILES from the env file; mirror the piston token.
+  piston_profile=false
+  while IFS= read -r env_line; do
+    case "$env_line" in
+      COMPOSE_PROFILES=piston|COMPOSE_PROFILES=uploads,piston) piston_profile=true ;;
+    esac
+  done <"$FAKE_EXPECTED_COMPOSE_ENV"
+  if [[ "$piston_profile" == true || "$FAKE_MUTATE_FIELD" == piston-without-profile ]]; then
+    printf '%s\n' '  piston:' \
+      "    image: $(value_for piston image 'registry.example.test/piston@sha256:4444444444444444444444444444444444444444444444444444444444444444')" \
+      "    restart: $(value_for piston restart unless-stopped)" \
+      "    runtime: $(value_for piston runtime io.containerd.kata.v2)" \
+      '    networks:'
+    [[ "$(value_for piston piston-network true)" != true ]] || printf '%s\n' '      piston: null'
+    emit_host_port piston
+  fi
   for service in mail-worker reward-worker regrade-worker exam-finalization-worker \
     practice-runner-recovery-worker project-review-correction-worker file-erasure-worker scan-worker; do
     service_image="$(value_for "$service" image 'registry.example.test/worker@sha256:3333333333333333333333333333333333333333333333333333333333333333')"
@@ -873,7 +891,9 @@ if [[ "${1:-}" == "compose" ]]; then
     "      com.docker.network.bridge.name: $FAKE_RUNNER_BRIDGE" \
     '    ipam:' \
     '      config:' \
-    "        - subnet: $FAKE_RUNNER_SUBNET"
+    "        - subnet: $FAKE_RUNNER_SUBNET" \
+    '  piston:' \
+    "    internal: $(value_for piston-network internal true)"
   exit 0
 fi
 
@@ -1125,6 +1145,8 @@ POSTGRES_UID=999
 POSTGRES_GID=999
 CLOUDFLARED_IMAGE=cloudflare/cloudflared:2026.1.0@sha256:$digest_3
 CLAMAV_IMAGE=$pilot_clamav
+CODE_RUNNER_PROVIDER=legacy
+PISTON_IMAGE=
 REQUIRE_BOOTSTRAP_ADMIN_SECRET=false
 MAIL_ADAPTER=console
 MAIL_FROM=
@@ -2323,17 +2345,114 @@ set_config COMPOSE_PROFILES uploads
 set_config CLAMAV_IMAGE "clamav/clamav:1.4.3_base@sha256:$digest_c"
 expect_success 'uploads profile accepts an immutable ClamAV digest without operations validation'
 
+set_piston_profile() {
+  set_config COMPOSE_PROFILES "$1"
+  set_config PISTON_IMAGE "codestead-piston@sha256:$digest_c"
+}
+
+make_fixture valid-piston
+set_piston_profile piston
+set_config CODE_RUNNER_PROVIDER piston
+expect_success 'piston profile accepts a digest-pinned Kata piston and the piston provider'
+
+make_fixture valid-uploads-piston
+set_config UPLOADS_ENABLED true
+set_piston_profile uploads,piston
+set_config CLAMAV_IMAGE "clamav/clamav:1.4.3_base@sha256:$digest_c"
+expect_success 'uploads,piston enables both reviewed profiles'
+
+make_fixture valid-piston-profile-legacy-provider
+set_piston_profile piston
+expect_success 'piston can run before the provider flag is flipped'
+
+make_fixture valid-empty-provider
+set_config CODE_RUNNER_PROVIDER ''
+expect_success 'empty provider keeps the legacy runner'
+
+make_fixture piston-reversed-profile
+set_piston_profile piston,uploads
+expect_failure \
+  'unlisted profile order is rejected' \
+  'fatal: COMPOSE_PROFILES must be exactly empty, uploads, piston, or uploads,piston'
+
+make_fixture piston-provider-without-profile
+set_config CODE_RUNNER_PROVIDER piston
+expect_failure \
+  'piston provider without the piston profile' \
+  'fatal: CODE_RUNNER_PROVIDER=piston requires the piston profile'
+
+make_fixture unknown-provider
+set_config CODE_RUNNER_PROVIDER firecracker
+expect_failure \
+  'unknown runner provider' \
+  'fatal: CODE_RUNNER_PROVIDER must be empty, legacy, or piston'
+
+make_fixture piston-without-digest
+set_config COMPOSE_PROFILES piston
+set_config PISTON_IMAGE codestead-piston:latest
+expect_failure \
+  'piston profile without an immutable image digest' \
+  'fatal: PISTON_IMAGE must be pinned by sha256 digest when the piston profile is enabled'
+
+make_fixture piston-wrong-runtime
+set_piston_profile piston
+fake_mutate_service=piston
+fake_mutate_field=runtime
+fake_mutate_value=runc
+expect_failure \
+  'piston outside Kata' \
+  'fatal: only piston may set a container runtime, and it must be io.containerd.kata.v2'
+
+make_fixture piston-missing-runtime
+set_piston_profile piston
+fake_mutate_service=piston
+fake_mutate_field=runtime
+fake_mutate_value=''
+expect_failure \
+  'piston without an explicit runtime' \
+  'fatal: piston must run under the io.containerd.kata.v2 runtime'
+
+make_fixture piston-rendered-without-profile
+fake_mutate_field=piston-without-profile
+expect_failure \
+  'piston rendered without its profile' \
+  'fatal: piston must not render without the piston profile'
+
+make_fixture app-off-piston-network
+fake_mutate_service=app
+fake_mutate_field=piston-network
+fake_mutate_value=false
+expect_failure \
+  'app must always attach to the piston network' \
+  'fatal: app must attach to the piston network'
+
+make_fixture piston-network-egress
+fake_mutate_service=piston-network
+fake_mutate_field=internal
+fake_mutate_value=false
+expect_failure \
+  'piston network with egress' \
+  'fatal: piston network must be internal'
+
+make_fixture wrong-piston-url
+fake_mutate_service=app
+fake_mutate_field=piston-url
+fake_mutate_value=http://attacker.invalid:2000
+expect_failure \
+  'app PISTON_URL off the internal service' \
+  'fatal: PISTON_URL must be exactly http://piston:2000 and only on app'
+
 make_fixture forbidden-operations-profile
 set_config COMPOSE_PROFILES operations
 expect_failure \
   'operations profile cannot be activated by the Compose environment' \
-  'fatal: UPLOADS_ENABLED=false requires COMPOSE_PROFILES to be empty'
+  'fatal: COMPOSE_PROFILES must be exactly empty, uploads, piston, or uploads,piston'
 
 make_fixture forbidden-profile-token
 set_config COMPOSE_PROFILES operations-notuploads
 expect_failure \
   'unreviewed profile token is rejected' \
-  'fatal: UPLOADS_ENABLED=false requires COMPOSE_PROFILES to be empty'
+  'fatal: COMPOSE_PROFILES must be exactly empty, uploads, piston, or uploads,piston'
 
 make_fixture forbidden-mixed-uploads-profile
 set_config UPLOADS_ENABLED true
@@ -2341,7 +2460,7 @@ set_config COMPOSE_PROFILES operations,uploads
 set_config CLAMAV_IMAGE "clamav/clamav:1.4.3_base@sha256:$digest_c"
 expect_failure \
   'uploads cannot smuggle the operations profile through the environment' \
-  'fatal: UPLOADS_ENABLED=true requires COMPOSE_PROFILES=uploads exactly'
+  'fatal: COMPOSE_PROFILES must be exactly empty, uploads, piston, or uploads,piston'
 
 make_fixture caller-ambient-profile-is-cleared
 export COMPOSE_PROFILES=operations
@@ -2505,13 +2624,13 @@ make_fixture uploads-without-profile
 set_config UPLOADS_ENABLED true
 expect_failure \
   'uploads enabled without uploads profile' \
-  'fatal: UPLOADS_ENABLED=true requires COMPOSE_PROFILES=uploads exactly'
+  'fatal: UPLOADS_ENABLED=true requires the uploads profile'
 
 make_fixture disabled-with-uploads-profile
 set_config COMPOSE_PROFILES uploads
 expect_failure \
   'uploads profile while uploads are disabled' \
-  'fatal: UPLOADS_ENABLED=false requires COMPOSE_PROFILES to be empty'
+  'fatal: UPLOADS_ENABLED=false requires COMPOSE_PROFILES without uploads'
 
 make_fixture uploads-without-digest
 set_config UPLOADS_ENABLED true

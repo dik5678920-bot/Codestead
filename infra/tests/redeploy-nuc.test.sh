@@ -204,6 +204,7 @@ for stored_release in "" "previous-release"; do
   done <"$TEST_COMPOSE_TRACE"
   grep -qF -- 'up -d --no-build --pull never --no-deps runner-egress-gateway app mail-worker reward-worker regrade-worker exam-finalization-worker practice-runner-recovery-worker project-review-correction-worker file-erasure-worker' "$TEST_COMPOSE_TRACE" \
     || fail "deploy did not restart the app and every pilot worker"
+  ! grep -qF -- 'file-erasure-worker piston' "$TEST_COMPOSE_TRACE" || fail "deploy restarted piston without its profile"
   grep -qF -- '--exit-code-from migrate migrate' "$TEST_COMPOSE_TRACE" || fail "migration invocation was not exercised"
   grep -qF -- 'exec -T app node -e' "$TEST_COMPOSE_TRACE" || fail "health invocation was not exercised"
   grep -v '^APP_.*_IMAGE=' "$fake_compose_env" >"$work/unrelated-after"
@@ -211,5 +212,14 @@ for stored_release in "" "previous-release"; do
     || fail "deploy changed SENTRY_RELEASE or another non-image compose.env setting"
   [[ "$(<"$DEPLOY_STATE_FILE")" == "$head_sha" ]] || fail "deploy did not record the resolved commit"
 done
+
+# --- the piston profile adds the piston runner to the restarted services ----
+printf '%s
+' 'COMPOSE_PROFILES=uploads,piston' >>"$fake_compose_env"
+: >"$TEST_COMPOSE_TRACE"
+rm -f "$DEPLOY_STATE_FILE"
+deploy_output="$(PATH="$fake_bin:$PATH" REPO_ROOT="$fake_repo" BUILD_ROOT="$work/build"   "$script" --no-scan "${head_sha:0:7}" 2>&1)" || fail "piston-profile deploy failed:
+$deploy_output"
+grep -qF -- '--no-deps runner-egress-gateway app mail-worker reward-worker regrade-worker exam-finalization-worker practice-runner-recovery-worker project-review-correction-worker file-erasure-worker piston' "$TEST_COMPOSE_TRACE"   || fail "piston-profile deploy did not restart piston"
 
 echo "redeploy-nuc-ok"

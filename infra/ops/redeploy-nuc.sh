@@ -130,7 +130,7 @@ readonly application_image_vars=(
 # The exact non-database services the last manual pilot redeploy restarted
 # (see memory/homelab-nuc.md "REDEPLOY STEPS"). postgres and the system
 # cloudflared unit are intentionally never touched here.
-readonly app_services=(
+app_services=(
   runner-egress-gateway
   app
   mail-worker
@@ -141,6 +141,15 @@ readonly app_services=(
   project-review-correction-worker
   file-erasure-worker
 )
+# The piston practice runner (docs/runbooks/piston-kata.md) is restarted with
+# the app only when compose.env enables its profile; its image is built on the
+# NUC and pinned in PISTON_IMAGE, so this script never builds or pulls it.
+compose_profiles=""
+[[ -r "$compose_env_file" ]] && compose_profiles="$(sed -n 's/^COMPOSE_PROFILES=//p' "$compose_env_file" | tail -n 1)"
+case "$compose_profiles" in
+  piston|uploads,piston) app_services+=(piston) ;;
+esac
+readonly app_services
 
 run() {
   if [[ "$dry_run" == true ]]; then

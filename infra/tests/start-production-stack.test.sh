@@ -143,7 +143,7 @@ run_subject() {
   : >"$work/trace"
   printf '%s\n' "$old_tunnel" >"$work/tunnels"
   set +e
-  FAKE_FAIL_STAGE="${1:-}" UPLOADS_ENABLED="${2:-false}" \
+  FAKE_FAIL_STAGE="${1:-}" UPLOADS_ENABLED="${2:-false}" COMPOSE_PROFILES="${3-}" \
     "$subject" --test-harness-root "$work" --startup-wait 60 >"$work/stdout" 2>"$work/stderr"
   result=$?
   set -e
@@ -175,5 +175,17 @@ assert_line control:status
 run_subject '' true
 (( result == 0 )) || fail 'uploads start failed'
 assert_line "docker:up:internal:$internal clamav scan-worker"
+
+run_subject '' false piston
+(( result == 0 )) || fail 'piston start failed'
+assert_line "docker:up:internal:$internal piston"
+
+run_subject '' true uploads,piston
+(( result == 0 )) || fail 'uploads and piston start failed'
+assert_line "docker:up:internal:$internal clamav scan-worker piston"
+
+run_subject '' false piston,uploads
+(( result != 0 )) || fail 'unlisted COMPOSE_PROFILES order was accepted'
+[[ ! -s "$work/tunnels" ]] || fail 'invalid COMPOSE_PROFILES left ingress running'
 
 printf '%s\n' start-production-stack-tests-ok
