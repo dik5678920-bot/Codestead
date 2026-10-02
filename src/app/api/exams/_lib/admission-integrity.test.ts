@@ -105,6 +105,7 @@ vi.mock("@/app/api/exams/_lib/blueprint", async (importOriginal) => ({
 
 import {
   listExamCatalog,
+  recordExamEvent,
   startExam,
   startMasteryRecheck,
   submitExamAppeal,
@@ -163,6 +164,58 @@ beforeEach(() => {
   mocks.listPublishedExamCourses.mockResolvedValue([]);
   mocks.listPointerSelectedCourseSlugs.mockResolvedValue(new Set());
   mocks.buildEquivalentExamForm.mockReturnValue(form);
+});
+
+describe("B.2: client integrity events require an open owned session", () => {
+  const event = {
+    userId, sessionId, clientEventId: "81000000-0000-4000-8000-000000000001",
+    type: "window_blur" as const, metadata: { target: "window" }, now,
+  };
+
+  function eventRoute(status: string, duplicate = false) {
+    return (operation: Operation) => {
+      if (operation.kind === "select" && operation.table === "exam_session") {
+        return [{ session: { id: sessionId, status }, attempt: { id: attemptId } }];
+      }
+      if (operation.kind === "insert" && operation.table === "exam_event") {
+        return duplicate ? [] : [{ id: "event-row" }];
+      }
+      return [];
+    };
+  }
+
+  it.each(["scheduled", "submitted", "expired", "graded", "under_review", "invalidated"])(
+    "rejects a %s session before writing an integrity event", async (status) => {
+      state.route = eventRoute(status);
+      await expect(recordExamEvent(event)).rejects.toMatchObject({ code: "EXAM_NOT_ACTIVE", status: 409 });
+      expect(anyWrites()).toEqual([]);
+    },
+  );
+
+  it.each(["active", "paused_by_system"])("accepts and deduplicates events for a %s session", async (status) => {
+    state.route = eventRoute(status);
+    await expect(recordExamEvent(event)).resolves.toEqual({ accepted: true, duplicate: false });
+    expect(writes("exam_event")[0]?.values).toMatchObject({
+      examSessionId: sessionId, clientEventId: event.clientEventId, type: event.type, occurredAt: now,
+    });
+    state.route = eventRoute(status, true);
+    await expect(recordExamEvent(event)).resolves.toEqual({ accepted: true, duplicate: true });
+  });
+
+  it("checks the session under lock so finalization cannot race the event write", async () => {
+    const base = eventRoute("active");
+    state.route = (operation) => operation.kind === "select" && operation.table === "exam_session" && operation.locked
+      ? [{ session: { id: sessionId, status: "submitted" }, attempt: { id: attemptId } }]
+      : base(operation);
+    await expect(recordExamEvent(event)).rejects.toMatchObject({ code: "EXAM_NOT_ACTIVE" });
+    expect(anyWrites()).toEqual([]);
+    expect(state.operations.some((operation) => operation.table === "exam_session" && operation.locked)).toBe(true);
+  });
+
+  it("rejects an unknown or unowned session without writing", async () => {
+    await expect(recordExamEvent(event)).rejects.toMatchObject({ code: "EXAM_NOT_FOUND", status: 404 });
+    expect(anyWrites()).toEqual([]);
+  });
 });
 
 describe("N02: an appeal cannot strand an unfinished finalization", () => {
