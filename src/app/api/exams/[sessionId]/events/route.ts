@@ -8,7 +8,7 @@ import { examError, examJson } from "../../_lib/http";
 import { recordExamEvent } from "../../_lib/service";
 
 const eventSchema = z.object({
-  clientEventId: z.string().trim().min(16).max(200).regex(/^[A-Za-z0-9._:-]+$/),
+  clientEventId: z.string().uuid(),
   type: z.enum(CLIENT_EXAM_EVENT_TYPES),
   metadata: z.record(z.string(), z.unknown()).default({}),
 });

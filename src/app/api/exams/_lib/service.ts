@@ -1470,19 +1470,34 @@ export async function recordExamEvent(input: {
   readonly metadata: Readonly<Record<string, unknown>>;
   readonly now?: Date;
 }): Promise<{ readonly accepted: boolean; readonly duplicate: boolean }> {
-  await ownedSession(input.userId, input.sessionId);
-  const inserted = await db
-    .insert(examEvent)
-    .values({
-      examSessionId: input.sessionId,
-      clientEventId: input.clientEventId,
-      type: input.type,
-      metadata: sanitizeEventMetadata(input.metadata),
-      occurredAt: input.now ?? new Date(),
-    })
-    .onConflictDoNothing({ target: [examEvent.examSessionId, examEvent.clientEventId] })
-    .returning({ id: examEvent.id });
-  return { accepted: true, duplicate: inserted.length === 0 };
+  return db.transaction(async (tx) => {
+    // Serialize event admission with finalization; only open sessions accept client events.
+    const [owned] = await tx
+      .select({ session: examSession, attempt })
+      .from(examSession)
+      .innerJoin(attempt, eq(examSession.attemptId, attempt.id))
+      .where(and(eq(examSession.id, input.sessionId), eq(examSession.userId, input.userId)))
+      .limit(1)
+      .for("update", { of: examSession });
+    if (!owned) {
+      throw new ExamServiceError("Exam session was not found.", 404, "EXAM_NOT_FOUND");
+    }
+    if (owned.session.status !== "active" && owned.session.status !== "paused_by_system") {
+      throw new ExamServiceError("This exam no longer accepts integrity events.", 409, "EXAM_NOT_ACTIVE");
+    }
+    const inserted = await tx
+      .insert(examEvent)
+      .values({
+        examSessionId: input.sessionId,
+        clientEventId: input.clientEventId,
+        type: input.type,
+        metadata: sanitizeEventMetadata(input.metadata),
+        occurredAt: input.now ?? new Date(),
+      })
+      .onConflictDoNothing({ target: [examEvent.examSessionId, examEvent.clientEventId] })
+      .returning({ id: examEvent.id });
+    return { accepted: true, duplicate: inserted.length === 0 };
+  });
 }
 
 function stableRunnerId(prefix: string, value: string): string {
