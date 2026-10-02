@@ -12,7 +12,7 @@ import {
   type RunnerAdmission,
 } from "@/lib/runner/admission";
 import {
-  configuredRunnerClient,
+  configuredCodeRunnerClient,
   RunnerClientError,
   RunnerIndeterminateError,
   runtimeByLanguage,
@@ -233,7 +233,7 @@ export const configuredRegradeExecutor: RegradeExecutor = {
     let trustedRemoteResponseReceived = false;
     let trustedTerminalResponseReceived = false;
     try {
-      const client = configuredRunnerClient();
+      const client = configuredCodeRunnerClient();
       const idempotencyKey = stableId("correction-idempotency", attemptKey);
       const dispatchBoundary = await beginRunnerDispatch({ admission });
       if (dispatchBoundary.replayed) return reconcileRegradeRunnerResult(admission);

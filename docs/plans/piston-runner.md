@@ -236,11 +236,15 @@ What each item does:
    compose validator checks, and the NUC install runbook.
 2. `PistonRunnerClient` adapter + status mapping + unit tests from the table above (no callers changed).
 3. Wire `/api/code/run` (practice RUN/COMPILE) to the provider flag.
-4. Wire exam TEST runs and assessment corrections to the flag.
+4. Wire exam TEST runs, assessment corrections and persisted practice recovery to the flag through
+   the shared runner factory (default legacy, invalid configuration fails closed, no fallback).
+   Keep exam runtime/image pins, test manifests and critical-test scoring unchanged. Provider parity
+   tests compare all five languages' verdicts and scores using injected process/HTTP outcomes;
+   live toolchain equivalence still depends on step 5. Project reviews stay bounded static analysis
+   (`repositoryExecution: none`) with provider-independent findings and scores.
 5. Own Piston image on Debian trixie with GCC 14, Java 21 (+ AppCDS), Python 3.14 and Node 22.
    Optional idle stop.
 6. After a week on `piston` with no regressions: delete `services/runner`, `infra/runner*`, the runtime
    image release tooling, and their evidence files.
 
 Rollback: set `CODE_RUNNER_PROVIDER=legacy` and restart the app. Nothing is deleted until step 6.
-

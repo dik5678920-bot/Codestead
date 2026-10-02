@@ -581,13 +581,19 @@ export function isTrustedRunnerJob(job: unknown, request: RunnerRequest): job is
 }
 
 /**
- * Runner for learner practice runs (/api/code/run). CODE_RUNNER_PROVIDER picks
+ * Runner for code execution, including official assessment and recovery.
+ * CODE_RUNNER_PROVIDER picks
  * the backend: "legacy" (default) or "piston". A selected provider that is not
  * configured throws; it never falls back to the other provider.
  */
-export function configuredPracticeRunnerClient(): RunnerClient | PistonRunnerClient {
+export function configuredCodeRunnerClient(): RunnerClient | PistonRunnerClient {
   const provider = process.env.CODE_RUNNER_PROVIDER || "legacy";
   if (provider === "legacy") return configuredRunnerClient();
   if (provider === "piston") return configuredPistonRunnerClient();
   throw new Error("CODE_RUNNER_PROVIDER must be legacy or piston.");
+}
+
+/** Kept for the existing practice route and its caller contract. */
+export function configuredPracticeRunnerClient(): RunnerClient | PistonRunnerClient {
+  return configuredCodeRunnerClient();
 }

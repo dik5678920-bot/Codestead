@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   reviewedReplacement: vi.fn(),
   runnerEvidenceManifest: vi.fn(),
   settleRunnerJob: vi.fn(),
-  configuredRunnerClient: vi.fn(),
+  configuredCodeRunnerClient: vi.fn(),
   submit: vi.fn(),
   verifyImpactSnapshot: vi.fn(),
   waitForJob: vi.fn(),
@@ -71,7 +71,7 @@ vi.mock("@/lib/runner/admission", async (importOriginal) => {
 });
 vi.mock("@/lib/runner/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/runner/client")>();
-  return { ...actual, configuredRunnerClient: mocks.configuredRunnerClient };
+  return { ...actual, configuredCodeRunnerClient: mocks.configuredCodeRunnerClient };
 });
 
 import { AssessmentCorrectionError } from "../domain";
@@ -328,7 +328,7 @@ describe("assessment correction runner reconciliation", () => {
     mocks.beginRunnerDispatch.mockResolvedValue({ replayed: false, remoteJobId: null });
     mocks.recordRunnerDispatch.mockResolvedValue({ replayed: false });
     mocks.settleRunnerJob.mockResolvedValue({ replayed: false });
-    mocks.configuredRunnerClient.mockReturnValue({
+    mocks.configuredCodeRunnerClient.mockReturnValue({
       submit: mocks.submit,
       waitForJob: mocks.waitForJob,
       waitFrom: mocks.waitFrom,

@@ -11,7 +11,7 @@ import {
   type RunnerAdmission,
 } from "./admission";
 import {
-  configuredRunnerClient,
+  configuredCodeRunnerClient,
   RunnerIndeterminateError,
   type RunnerClient,
 } from "./client";
@@ -333,7 +333,7 @@ export async function processPracticeRunnerRecoveryBatch(input: {
       skipped: 0,
     };
   }
-  const runner = input.runner ?? configuredRunnerClient();
+  const runner = input.runner ?? configuredCodeRunnerClient();
   const clock = input.clock ?? (() => new Date());
   const outcomes: RecoveryOutcome[] = [];
   for (const candidate of candidates.rows) {
