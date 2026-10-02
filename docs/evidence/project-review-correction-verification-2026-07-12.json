@@ -1,5 +1,7 @@
 {
   "schemaVersion": 3,
+  "sourceCommit": "5ffe8623dd9d1701a86aa954457fb5300c924c09",
+  "note": "Source pins are anchored to the current origin/main commit whose blobs match the retained recorded bindings, not the original proof commit. Historical checks were not rerun for this conversion; re-pin logs were removed, and Git history preserves them.",
   "generatedAt": "2026-07-12T17:45:00.000Z",
   "revalidatedAt": "2026-09-24T12:09:03.456Z",
   "status": "passed",
@@ -99,43 +101,6 @@
     "src/lib/data-lifecycle/export.ts": "e95fdfc268a2bc17742a1da6d21669dae5f4818ae6179c142b7a90f40434b3a4",
     "src/lib/data-lifecycle/deletion.ts": "86357867c19ae18c0ccd5c06c8e0dbc0d484c51f8e9755105dd71b09ca6973e5"
   },
-  "supersededDigests": [
-    {
-      "artifact": "src/lib/data-lifecycle/export.ts",
-      "priorDigest": "85a45ad34b79f36ea821880312f8f73e9cce9c0076a9dc6f25344fe9a9686301",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/lib/data-lifecycle/deletion.ts",
-      "priorDigest": "12f35aef8f8834fd15d5a0c402a5bac85b4ab4318982f856022a72be5ca013d0",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/lib/data-lifecycle/export.ts",
-      "priorDigest": "41a26e6be621af2b84eea6d4c7477c512e6bb1095d690a115461b72c25a5bbe4",
-      "replacedAt": "2026-07-18T04:35:43.439Z"
-    },
-    {
-      "artifact": "scripts/process-project-review-corrections.ts",
-      "priorDigest": "69583268a523fdfdb123e1f8dd3be7c40c5cd84c94ed2f67e87f51d3533bac05",
-      "replacedAt": "2026-07-19T22:38:32.478Z"
-    },
-    {
-      "artifact": "integration/project-review-correction.integration.test.ts",
-      "priorDigest": "ee953e62d747e3d45cd09be703ccf454ea8aeee23f9bd320a2d084a7c3b59292",
-      "replacedAt": "2026-07-28T13:27:44.340Z"
-    },
-    {
-      "artifact": "src/lib/data-lifecycle/deletion.ts",
-      "priorDigest": "d9d6e9d333d71f4d14eca5699eb32e806cfad90ef08cc62283db2dfcd3c5aab5",
-      "replacedAt": "2026-07-28T13:27:44.340Z"
-    },
-    {
-      "artifact": "src/lib/data-lifecycle/deletion.ts",
-      "priorDigest": "fad4507e9f96b03e695b2ea0335ffdf2ed353c8fc7dcd990a7c69f5f178a96b3",
-      "replacedAt": "2026-09-24T12:09:03.456Z"
-    }
-  ],
   "auditImpact": {
     "materiallyImproved": [
       "PRJ-005",

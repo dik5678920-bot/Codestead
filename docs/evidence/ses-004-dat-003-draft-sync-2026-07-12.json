@@ -1,5 +1,7 @@
 {
   "schemaVersion": 1,
+  "sourceCommit": "5ffe8623dd9d1701a86aa954457fb5300c924c09",
+  "note": "Source pins are anchored to the current origin/main commit whose blobs match the retained recorded bindings, not the original proof commit. Historical checks were not rerun for this conversion; re-pin logs were removed, and Git history preserves them.",
   "generatedAt": "2026-07-12T17:42:00+05:30",
   "revalidatedAt": "2026-09-26T21:02:16.000Z",
   "requirements": [
@@ -148,53 +150,6 @@
     "src/components/lesson/lesson-workspace.tsx": "b175b5369350433909f720001733ba463f95c36df7856b72c491203806eec537",
     "integration/learner-drafts.integration.test.ts": "10c060a3992d80b603fbf3472981f65925c5d0b539021e931a7ddfc8ddc89da2"
   },
-  "supersededDigests": [
-    {
-      "artifact": "src/components/lesson/lesson-workspace.tsx",
-      "priorDigest": "6e35dfebae85c1e1f401112523563adbd30c95b45d264b210b6e9fab0f2385be",
-      "replacedAt": "2026-07-14T13:20:00+05:30"
-    },
-    {
-      "artifact": "src/components/lesson/lesson-workspace.tsx",
-      "priorDigest": "1513850b1153012a60667da8252571a86d711df2e3228275ed0b816ff34e4da2",
-      "replacedAt": "2026-07-14T16:47:00+05:30"
-    },
-    {
-      "artifact": "src/lib/drafts/browser-cache.ts",
-      "priorDigest": "e804647fc84cf609dd28b558a00b7c4c8c3d27b95390d1c25051edbcc5e42c6f",
-      "replacedAt": "2026-07-17T17:01:45+05:30"
-    },
-    {
-      "artifact": "src/lib/drafts/use-synced-draft.ts",
-      "priorDigest": "05637931e5849c95d01ef90141c171043ad493ecc2d18d05f83e480e34805df6",
-      "replacedAt": "2026-07-17T17:01:45+05:30"
-    },
-    {
-      "artifact": "src/lib/drafts/logout.ts",
-      "priorDigest": "74e8cd1b70036d8d1c1c8c7ef1eaf7510d5ecb087c45392bc90f0414ec14764f",
-      "replacedAt": "2026-07-17T17:01:45+05:30"
-    },
-    {
-      "artifact": "src/components/lesson/lesson-workspace.tsx",
-      "priorDigest": "be93f416bb6b02e2887913179ffa37f8e53d769e37049992a2d4bb5ff4e1006b",
-      "replacedAt": "2026-07-17T17:01:45+05:30"
-    },
-    {
-      "artifact": "integration/learner-drafts.integration.test.ts",
-      "priorDigest": "ef15f3a605a8d02adb240a484be12ab8f259a6bca7b943acc147b9f71a9cc91f",
-      "replacedAt": "2026-07-28T13:27:44.340Z"
-    },
-    {
-      "artifact": "src/components/lesson/lesson-workspace.tsx",
-      "priorDigest": "6e657ffd958bfed113f6f49a9f2f0b5af97f285421ea0fd95f14db814410bce9",
-      "replacedAt": "2026-09-26T21:02:16.000Z"
-    },
-    {
-      "artifact": "src/lib/drafts/use-synced-draft.ts",
-      "priorDigest": "5ce6d04576e3c6b7d9046f3a88caae38b5497418ca8a992e2cf66c104c1ab93c",
-      "replacedAt": "2026-09-27T00:00:00.000Z"
-    }
-  ],
   "remainingLimitations": [
     "Offline support is warm-page/browser-session only; a cold offline launch is impossible by design because the product is not an installable PWA.",
     "Unsynced local-only text can be lost if sessionStorage is evicted before synchronization; the UI states this explicitly.",
