@@ -458,11 +458,7 @@ export class LearningService {
         solutionRevealed: context.attempt.solutionRevealed,
       };
       if (context.attempt.status === "graded") {
-        const repeatedEvaluation = evaluateAuthoredActivity(context.activity, effectiveResponse.answer);
-        const feedback = repeatedEvaluation.state === "graded"
-          && repeatedEvaluation.passed === context.attempt.passed
-          ? practiceFeedbackFor(context.activity, repeatedEvaluation, effectiveResponse)
-          : null;
+        // Replays must not grade new answers or expose an unrecorded answer oracle.
         return {
           state: "graded",
           attemptId,
@@ -474,7 +470,7 @@ export class LearningService {
           progress: null,
           criticalGates: [],
           remediation: { activeTags: [], confirmingProbeTags: [] },
-          feedback,
+          feedback: null,
           reviewDueAt: null,
           idempotent: true,
         };
