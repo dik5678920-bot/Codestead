@@ -70,6 +70,7 @@ const TERMINAL_RECOVERY_STATUSES = new Set<ExamSessionView["status"]>([
 ]);
 
 const FINAL_SUBMIT_TIMEOUT_MS = 10_000;
+const DEADLINE_FLUSH_WINDOW_MS = 5_000;
 
 function navigateWindow(destination: string) {
   window.location.assign(destination);
@@ -365,6 +366,14 @@ function ActiveExam({
   const purgeOutbox = outbox.purge;
   const prepareUnloadEvent = outbox.prepareUnloadEvent;
 
+  const flushBeforeDeadline = useCallback(() => {
+    const remainingMs = Date.parse(exam.serverDeadlineAt) - (Date.now() + clockOffsetRef.current);
+    if (mountedRef.current && remainingMs > 0 && remainingMs <= DEADLINE_FLUSH_WINDOW_MS) {
+      // Bypass debounce/backoff before the cutoff; the outbox still enforces the exact deadline.
+      void flushOutbox().catch(() => undefined);
+    }
+  }, [exam.serverDeadlineAt, flushOutbox]);
+
   const logEvent = useCallback((
     type: ClientExamEventType,
     metadata: Record<string, unknown> = {},
@@ -381,6 +390,7 @@ function ActiveExam({
         && current.sequence < sequence
         ? null
         : current);
+      flushBeforeDeadline();
     }).catch(() => {
       if (!mountedRef.current || answerWriteSequenceRef.current.get(itemId) !== sequence) return;
       setLocalPersistenceNotice({
@@ -389,7 +399,7 @@ function ActiveExam({
         message: "This edit did not reach browser recovery. Try again or copy it before leaving.",
       });
     });
-  }, [updateOutboxAnswer]);
+  }, [flushBeforeDeadline, updateOutboxAnswer]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -468,6 +478,7 @@ function ActiveExam({
         clockOffsetRef.current,
       );
       setRemaining(seconds);
+      flushBeforeDeadline();
       if (
         seconds === 0
         && !expiryStartedRef.current
@@ -479,7 +490,7 @@ function ActiveExam({
       }
     }, 500);
     return () => clearInterval(interval);
-  }, [exam.serverDeadlineAt, submit, submitRecoveryPending, submitting]);
+  }, [exam.serverDeadlineAt, flushBeforeDeadline, submit, submitRecoveryPending, submitting]);
 
   useEffect(() => {
     const interval = setInterval(() => {
