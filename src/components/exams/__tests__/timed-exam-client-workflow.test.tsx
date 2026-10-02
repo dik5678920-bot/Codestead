@@ -1470,6 +1470,88 @@ describe("timed exam client workflows", () => {
     expect(await screen.findByRole("heading", { name: "mastered" })).toBeInTheDocument();
   });
 
+  it("sends the last edit before its debounce would cross the deadline and does not wait for its acknowledgement to finalize", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    const now = new Date("2026-07-15T10:00:00.000Z");
+    vi.setSystemTime(now);
+    vi.stubGlobal("indexedDB", new FakeIDBFactory());
+    const deadline = now.getTime() + 1_500;
+    const expiring = activeExam({ serverDeadlineAt: new Date(deadline).toISOString() });
+    let currentExam = expiring;
+    const acknowledgement = deferred<Response>();
+    const autosaves: Array<{ body: Record<string, unknown>; receivedAt: number }> = [];
+    let submitCalls = 0;
+    let savedAnswer = "The saved explanation.";
+    vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/api/exams/${sessionId}`) return Promise.resolve(json({ exam: currentExam }));
+      if (url.endsWith("/events")) return Promise.resolve(json({ accepted: true, duplicate: false }));
+      if (url.endsWith("/autosave")) {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        autosaves.push({ body, receivedAt: Date.now() });
+        if (Date.now() >= deadline) return Promise.resolve(json({ code: "EXAM_EXPIRED" }, { status: 409 }));
+        savedAnswer = (body.answer as { text: string }).text;
+        // The server saved before the cutoff, but the acknowledgement arrives after it.
+        return acknowledgement.promise;
+      }
+      if (url.endsWith("/submit")) {
+        submitCalls += 1;
+        currentExam = gradedExam({
+          answers: { "written-1": { revision: 3, answer: { text: savedAnswer }, savedAt: new Date().toISOString() } },
+        });
+        return Promise.resolve(json({ exam: currentExam }));
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+    renderWithNamespace(<TimedExamClient sessionId={sessionId} />);
+    const answer = await screen.findByLabelText("Your response");
+    await act(async () => { await vi.advanceTimersByTimeAsync(900); });
+    fireEvent.change(answer, { target: { value: "last edit before the cutoff" } });
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    await waitFor(() => expect(autosaves).toHaveLength(1), { timeout: 300 });
+    expect(autosaves[0]?.receivedAt).toBeLessThan(deadline);
+    expect(savedAnswer).toBe("last edit before the cutoff");
+    expect(submitCalls).toBe(0);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(100); });
+    await waitFor(() => expect(submitCalls).toBe(1));
+    await act(async () => { acknowledgement.resolve(autosaveAck(autosaves[0]!.body)); });
+    expect(await screen.findByRole("heading", { name: "mastered" })).toBeInTheDocument();
+    expect(autosaves).toHaveLength(1);
+  });
+
+  it("retries a queued autosave before the deadline instead of waiting for its backoff", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] });
+    const now = new Date("2026-07-15T10:00:00.000Z");
+    vi.setSystemTime(now);
+    vi.stubGlobal("indexedDB", new FakeIDBFactory());
+    const expiring = activeExam({ serverDeadlineAt: new Date(now.getTime() + 6_000).toISOString() });
+    const autosaves: Array<Record<string, unknown>> = [];
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === `/api/exams/${sessionId}`) return json({ exam: expiring });
+      if (url.endsWith("/events")) return json({ accepted: true, duplicate: false });
+      if (url.endsWith("/autosave")) {
+        const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+        autosaves.push(body);
+        return autosaves.length === 1 ? json({ error: "offline" }, { status: 503 }) : autosaveAck(body);
+      }
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+    renderWithNamespace(<TimedExamClient sessionId={sessionId} />);
+    await screen.findByLabelText("Your response");
+    fireEvent.click(screen.getByRole("button", { name: /Code challenge/i }));
+    fireEvent.change(screen.getByLabelText("Source code"), { target: { value: "print('queued final answer')" } });
+    fireEvent.click(screen.getByRole("button", { name: "Compile" }));
+    await screen.findByText(/could not synchronize the answer/i);
+    expect(autosaves).toHaveLength(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_500); });
+    await waitFor(() => expect(autosaves).toHaveLength(2), { timeout: 300 });
+    expect(autosaves[1]).toEqual(autosaves[0]);
+    expect(Date.now()).toBeLessThan(Date.parse(expiring.serverDeadlineAt));
+  });
+
   it("auto-finalizes at the server deadline and explains an offline failure", async () => {
     vi.stubGlobal("indexedDB", new FakeIDBFactory());
     const expired = activeExam({ serverDeadlineAt: new Date(Date.now() - 1_000).toISOString() });
