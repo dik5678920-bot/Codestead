@@ -19,6 +19,9 @@ Dockerfile text eol=lf
 *.sql text eol=lf
 *.json text eol=lf
 *.txt text eol=lf
+infra/piston/*.sha256 text eol=lf
+infra/piston/.dockerignore text eol=lf
+infra/piston/.gitignore text eol=lf
 infra/security/application-image-local-risk-acceptance.json text eol=lf
 infra/runtime/production-load-network-attestation text eol=lf
 
