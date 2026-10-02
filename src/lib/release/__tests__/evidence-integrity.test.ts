@@ -57,9 +57,9 @@ describe("evidence integrity verifier", () => {
     const source = "export const ready = true;\n";
     await write(root, "README.md", "[Guide](docs/guide.md#usage)\n");
     await write(root, "docs/guide.md", "# Usage\n");
-    await write(root, "integration/example.integration.test.ts", source);
+    await write(root, "docs/evidence/example.txt", source);
     await write(root, "docs/evidence/current.json", JSON.stringify({
-      nested: [{ artifacts: [{ path: "integration/example.integration.test.ts", sha256: sha256(source) }] }],
+      nested: [{ artifacts: [{ path: "docs/evidence/example.txt", sha256: sha256(source) }] }],
     }));
 
     const report = await verifyEvidenceIntegrity({ root, markdownRoots: ["README.md", "docs"] });
@@ -89,9 +89,9 @@ describe("evidence integrity verifier", () => {
   it("reports stale hashes, missing links, and malformed encoded links", async () => {
     const root = await fixture();
     await write(root, "README.md", "[Missing](docs/missing.md) [Malformed](docs/%ZZ.md)\n");
-    await write(root, "scripts/check.ts", "changed\n");
+    await write(root, "docs/evidence/check.ts", "changed\n");
     await write(root, "docs/evidence/stale.json", JSON.stringify({
-      artifactSha256: { "scripts/check.ts": "0".repeat(64) },
+      artifactSha256: { "docs/evidence/check.ts": "0".repeat(64) },
     }));
 
     const report = await verifyEvidenceIntegrity({ root, markdownRoots: ["README.md"] });
@@ -108,9 +108,9 @@ describe("evidence integrity verifier", () => {
   it("accepts a uniform CRLF checkout for Git-normalized text evidence", async () => {
     const root = await fixture();
     const canonical = "export const checked = true;\nexport const count = 2;\n";
-    await write(root, "scripts/check.ts", canonical.replaceAll("\n", "\r\n"));
+    await write(root, "docs/evidence/check.ts", canonical.replaceAll("\n", "\r\n"));
     await write(root, "docs/evidence/text.json", JSON.stringify({
-      artifactSha256: { "scripts/check.ts": sha256(canonical) },
+      artifactSha256: { "docs/evidence/check.ts": sha256(canonical) },
     }));
 
     const report = await verifyEvidenceIntegrity({ root, markdownRoots: [] });
@@ -174,15 +174,16 @@ describe("evidence integrity verifier", () => {
 
     const report = await verifyEvidenceIntegrity({ root, markdownRoots: [] });
 
-    expect(report.issues).toEqual([
+    expect(report.issues).toContainEqual(
       expect.objectContaining({ kind: "INVALID_SOURCE_DECLARATION", source: authRecoveryPath }),
-    ]);
+    );
+    expect(report.issues.every((issue) => ["INVALID_SOURCE_DECLARATION", "UNANCHORED_SOURCE_PIN", "MISSING_EVIDENCE_PATH"].includes(issue.kind))).toBe(true);
     expect(await readFile(path.join(root, authRecoveryPath), "utf8")).toBe(evidence);
   });
 
   it.each([
-    ["infra/check.sh", "forced-LF deployment script"],
-    ["docs/check.png", "binary asset"],
+    ["docs/evidence/check.sh", "forced-LF deployment script"],
+    ["docs/evidence/check.png", "binary asset"],
   ])("keeps %s byte-exact as a %s", async (target) => {
     const root = await fixture();
     const canonical = "first\nsecond\n";
@@ -204,13 +205,13 @@ describe("evidence integrity verifier", () => {
   it("checks recursive named path and Sha256 pairs without treating metadata as artifacts", async () => {
     const root = await fixture();
     const source = "export const checked = true;\n";
-    await write(root, "scripts/check.ts", source);
+    await write(root, "docs/evidence/check.ts", source);
     await write(root, "docs/evidence/named.json", JSON.stringify({
       implementation: {
-        runnerClient: "scripts/check.ts",
+        runnerClient: "docs/evidence/check.ts",
         runnerClientSha256: "0".repeat(64),
         nested: {
-          migration: "scripts/check.ts",
+          migration: "docs/evidence/check.ts",
           migrationSha256: sha256(source),
         },
         generatedAt: "2026-07-14T00:00:00.000Z",
@@ -226,7 +227,7 @@ describe("evidence integrity verifier", () => {
       expect.objectContaining({
         kind: "STALE_HASH",
         source: "docs/evidence/named.json",
-        detail: expect.stringContaining("scripts/check.ts expected="),
+        detail: expect.stringContaining("docs/evidence/check.ts expected="),
       }),
     ]);
     expect(report.evidence.hashes).toBe(2);

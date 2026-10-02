@@ -16,6 +16,7 @@ export type EvidenceIntegrityIssueKind =
   | "INVALID_RUNTIME_DECLARATION"
   | "STALE_RUNTIME_DIGEST"
   | "INVALID_SOURCE_COMMIT"
+  | "UNANCHORED_SOURCE_PIN"
   | "SOURCE_COMMIT_UNAVAILABLE"
   | "SOURCE_COMMIT_NOT_ANCESTOR";
 
@@ -52,6 +53,7 @@ const repositoryPathPrefixes = [
   "docs/",
   "drizzle/",
   "e2e/",
+  "evals/",
   "infra/",
   "integration/",
   "scripts/",
@@ -72,8 +74,26 @@ const sha256Pattern = /^[0-9a-f]{64}$/i;
 const runtimeDigestPattern = /^sha256:[0-9a-f]{64}$/;
 const dsaDeclarationPath = "docs/evidence/dsa-parity-declaration-2026-07-12.json";
 const authRecoveryPath = "docs/evidence/auth-recovery-verification-2026-07-12.json";
+const apiAuthorizationPath = "docs/evidence/api-authorization-matrix-2026-07-12.json";
 const outboxWorkerPath = "scripts/process-outbox.ts";
 const runtimePinsPath = "scripts/curriculum-runtime-pins.json";
+
+// Release artifacts continue to bind their current bytes, even in an anchored
+// record. Everything else in the repository allowlist is a source pin.
+const immutableArtifactPrefixes = ["docs/evidence/"] as const;
+
+function isImmutableArtifact(candidate: string) {
+  return immutableArtifactPrefixes.some((prefix) => candidate.startsWith(prefix));
+}
+
+// These named pairs describe metadata, not repository file pins. Keep this
+// distinction explicit: an arbitrary unrecognized input is never metadata.
+function isNonPinPair(source: string, key: string, candidate: string) {
+  return (key === "generatedAtSha256" && /^\d{4}-\d{2}-\d{2}T/.test(candidate))
+    || (key === "externalReportSha256" && /^https?:\/\//.test(candidate))
+    || (source === "docs/evidence/backup-status-outbox-2026-07-12.json"
+      && key === "localLogSha256" && path.win32.isAbsolute(candidate) && candidate.endsWith(".log"));
+}
 
 const byteExactExtensions = new Set([
   ".gif",
@@ -333,6 +353,7 @@ async function verifyEvidence(
   const checkedPaths = new Set<string>();
   const checkedHashes = new Set<string>();
   const invalidPaths = new Set<string>();
+  const unanchoredPins = new Set<string>();
 
   function rejectTraversal(source: string, value: string) {
     if (!hasTraversal(value)) return false;
@@ -342,6 +363,19 @@ async function verifyEvidence(
       issues.push({ kind: "INVALID_EVIDENCE_PATH", source, detail: value });
     }
     return true;
+  }
+
+  function pinPath(source: string, value: string) {
+    if (rejectTraversal(source, value)) return null;
+    const candidate = repositoryPath(root, value);
+    if (!candidate) {
+      const key = `${source}\0${value}`;
+      if (!invalidPaths.has(key)) {
+        invalidPaths.add(key);
+        issues.push({ kind: "INVALID_EVIDENCE_PATH", source, detail: value });
+      }
+    }
+    return candidate;
   }
 
   const sourceCommitStatus = new Map<string, Promise<EvidenceIntegrityIssueKind | null>>();
@@ -402,15 +436,30 @@ async function verifyEvidence(
     if (!present) {
       issues.push({ kind: "MISSING_EVIDENCE_PATH", source, detail: commit ? `${candidate}@${commit}` : candidate });
     }
+    if (commit && isImmutableArtifact(candidate) && !await exists(path.join(root, candidate))) {
+      issues.push({ kind: "MISSING_EVIDENCE_PATH", source, detail: candidate });
+    }
   }
 
-  async function checkHash(source: string, value: string, expected: string, commit: string | null) {
-    if (rejectTraversal(source, value)) return;
-    const candidate = repositoryPath(root, value);
-    if (!candidate || !sha256Pattern.test(expected)) return;
+  async function checkHash(source: string, value: string, expected: unknown, commit: string | null, currentProjection = false) {
+    const candidate = pinPath(source, value);
+    if (!candidate) return;
+    if (typeof expected !== "string" || !sha256Pattern.test(expected)) {
+      issues.push({ kind: "INVALID_SOURCE_DECLARATION", source, detail: `${candidate} must declare a valid SHA-256 hash` });
+      return;
+    }
+    const liveWorker = source === authRecoveryPath && candidate === outboxWorkerPath;
+    if (liveWorker || currentProjection) commit = null;
     const key = `${source}\0${candidate}\0${expected.toLowerCase()}\0${commit ?? ""}`;
     if (checkedHashes.has(key)) return;
     checkedHashes.add(key);
+    if (!commit && !isImmutableArtifact(candidate) && !liveWorker && !currentProjection) {
+      const pin = `${source}\0${candidate}`;
+      if (!unanchoredPins.has(pin)) {
+        unanchoredPins.add(pin);
+        issues.push({ kind: "UNANCHORED_SOURCE_PIN", source, detail: `${candidate} requires sourceCommit` });
+      }
+    }
     const target = path.join(root, candidate);
     const label = commit ? `${candidate}@${commit}` : candidate;
     let actual: ReturnType<typeof digestsOf>;
@@ -435,36 +484,61 @@ async function verifyEvidence(
         detail: `${label} expected=${expected.toLowerCase()} actual=${actual.reported}`,
       });
     }
+    // Preserve the original anchored check and additionally require immutable
+    // release artifacts to match their live bytes. Neither binding can bypass
+    // a failure in the other.
+    if (commit && isImmutableArtifact(candidate)) {
+      if (!await exists(target)) {
+        issues.push({ kind: "MISSING_EVIDENCE_PATH", source, detail: candidate });
+      } else {
+        const current = await digests(target);
+        if (!current.accepted.has(expected.toLowerCase())) {
+          issues.push({ kind: "STALE_HASH", source, detail: `${candidate} expected=${expected.toLowerCase()} actual=${current.reported}` });
+        }
+      }
+    }
   }
 
-  async function walk(source: string, value: unknown, commit: string | null): Promise<void> {
+  async function walk(source: string, value: unknown, commit: string | null, currentProjection = false): Promise<void> {
     if (Array.isArray(value)) {
-      for (const item of value) await walk(source, item, commit);
+      for (const item of value) await walk(source, item, commit, currentProjection);
       return;
     }
     if (!value || typeof value !== "object") return;
     const record = value as Record<string, unknown>;
     if (typeof record.path === "string") {
       await checkPath(source, record.path, commit);
-      if (typeof record.sha256 === "string") await checkHash(source, record.path, record.sha256, commit);
+      if (Object.hasOwn(record, "sha256")) await checkHash(source, record.path, record.sha256, commit);
     }
     for (const [key, expected] of Object.entries(record)) {
-      if (!key.endsWith("Sha256") || typeof expected !== "string") continue;
+      if (!key.endsWith("Sha256")) continue;
       const candidate = record[key.slice(0, -"Sha256".length)];
-      if (typeof candidate === "string") await checkHash(source, candidate, expected, commit);
+      if (typeof candidate === "string" && !isNonPinPair(source, key, candidate)) {
+        await checkHash(source, candidate, expected, commit);
+      }
     }
     for (const key of ["report", "inventory"] as const) {
       if (typeof record[key] === "string") await checkPath(source, record[key], commit);
     }
-    for (const key of ["artifactSha256", "sha256"] as const) {
+    for (const key of ["artifactSha256", "sha256", "sourceSha256"] as const) {
+      if (!Object.hasOwn(record, key)) continue;
       const hashes = record[key];
-      if (hashes && typeof hashes === "object" && !Array.isArray(hashes)) {
+      if (object(hashes)) {
         for (const [candidate, expected] of Object.entries(hashes as Record<string, unknown>)) {
-          if (typeof expected === "string") await checkHash(source, candidate, expected, commit);
+          await checkHash(source, candidate, expected, commit);
         }
+      } else if (key === "sourceSha256" && typeof record.file === "string") {
+        // This scalar shape is emitted by the deterministic authorization
+        // generator. Its exact --check projection must remain current; the
+        // exception applies only to that existing record, not new records.
+        await checkHash(source, record.file, hashes, commit, currentProjection);
+      } else if (Object.hasOwn(record, key) && (key !== "sha256" || typeof record.path !== "string")) {
+        issues.push({ kind: "INVALID_SOURCE_DECLARATION", source, detail: `${key} must be a path-to-SHA-256 map` });
       }
     }
-    for (const child of Object.values(record)) await walk(source, child, commit);
+    for (const [key, child] of Object.entries(record)) {
+      await walk(source, child, commit, source === apiAuthorizationPath && key === "supportingOwnershipProofs");
+    }
   }
 
   for (const file of files) {

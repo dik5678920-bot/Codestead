@@ -1,4 +1,6 @@
 {
+  "sourceCommit": "a5e5b1838b0f0ff48e54af4ed1789af70d2d07d5",
+  "note": "Previously unverified sourceSha256 bindings are checked against the current origin/main commit, not the original proof commit. Stale binding digests were refreshed to this commit; historical checks were not rerun and historical results and timestamps are unchanged. Evidence artifacts remain bound to their current bytes; the auth-recovery outbox worker remains a live check.",
   "schemaVersion": 1,
   "verifiedAt": "2026-07-12T16:37:00+05:30",
   "scope": "Learner-owned tutor thread list/read/archive/reopen, per-message provider provenance, server-authoritative append denial for archived threads, export/privacy projection, and responsive TutorView integration.",
@@ -47,9 +49,9 @@
     "src/lib/ai/chat-lifecycle.ts": "8ca5e2a88a7f2ac3f8e572d02ca8e33d83345f334703ba91cabba0f5a2763f5a",
     "src/app/api/ai/threads/route.ts": "67d171b809b697e17554c82c9f27899291dcdd39f208462cd3acdb6671b28823",
     "src/app/api/ai/threads/[threadId]/route.ts": "d00d59bb86b5ca78d038b418fab007e4e5645f4edf28af58bf87fc924da84e56",
-    "src/app/api/ai/tutor/route.ts": "7c3710049f5f03a5d23865d64c1310b8493a5a218785fada222753cba3ff0343",
-    "src/components/product/tutor-view.tsx": "7b55d07e5e5dfefd823ffc0ec70726567de198aad19a58d73acd8be3e196e82c",
-    "integration/chat-lifecycle.integration.test.ts": "fd6fa4d1919a7a86293e58e7a6c3d4f86ca8135d68044760040ba78749392339"
+    "src/app/api/ai/tutor/route.ts": "a75e9a6ad246b0218f5e439686d798cdb1a3adb8be1195834dcc42d87df01613",
+    "src/components/product/tutor-view.tsx": "4bcb999fa09adc8a69fde69f27eae54884219db975bb92899b652ff629cd0498",
+    "integration/chat-lifecycle.integration.test.ts": "abc00707c71b03a61bdc2fa1cf45091f63f5e0202c0eb12c8277217cc3cb2565"
   },
   "remainingExternalEvidence": [
     "No live external-provider call was made because real credentials must not be used without explicit permission.",

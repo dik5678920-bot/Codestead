@@ -69,12 +69,13 @@ describe("commit-anchored evidence", () => {
     expect(report.evidence.hashes).toBe(1);
   });
 
-  it("still checks unanchored pins against the working tree", async () => {
+  it("rejects unanchored source pins and still reports stale working-tree hashes", async () => {
     const { root } = await repository();
     await write(root, evidencePath, JSON.stringify({ artifacts: [{ path: sourcePath, sha256: sha256(original) }] }));
     const report = await verify(root);
     expect(report.issues).toEqual([
       expect.objectContaining({ kind: "STALE_HASH", source: evidencePath, detail: expect.stringContaining(sourcePath) }),
+      expect.objectContaining({ kind: "UNANCHORED_SOURCE_PIN", source: evidencePath, detail: expect.stringContaining(sourcePath) }),
     ]);
   });
 

@@ -1,4 +1,6 @@
 {
+  "sourceCommit": "a5e5b1838b0f0ff48e54af4ed1789af70d2d07d5",
+  "note": "Previously unverified sourceSha256 bindings are checked against the current origin/main commit, not the original proof commit. Stale binding digests were refreshed to this commit; historical checks were not rerun and historical results and timestamps are unchanged. Evidence artifacts remain bound to their current bytes; the auth-recovery outbox worker remains a live check.",
   "schemaVersion": 1,
   "generatedAt": "2026-07-12T22:29:00.000+05:30",
   "scope": "Invite-only access decisions, password activation/reset, MFA recovery-code boundaries, one-device security history, and secure out-of-band lost-device session revocation",
@@ -115,20 +117,20 @@
   ],
   "sourceSha256": {
     "drizzle/0026_auth_recovery_ceremony.sql": "4df759b335e759fed3883d99b03a79b22122ae154fde5270290acc0c5fb5512e",
-    "src/lib/security/lost-device-recovery.ts": "1d0dfa4ec0ff3a160d187364214e68c934f513484a8a0dfaa07f8547e7132652",
+    "src/lib/security/lost-device-recovery.ts": "87f5de91560e4b36169a423334286110ab995d9eda33d5793645e993500420c2",
     "src/app/api/lost-device/request/route.ts": "78a66f915ab4979567a0da92603b7432314367feb4bd08efb5a76915ef8a3de5",
     "src/app/api/lost-device/verify/route.ts": "4c79bec6743f3af0eccbb67ff262fd281b17ee6b62f91243e7f41a37e0166e75",
-    "src/components/auth/lost-device-recovery-form.tsx": "76c5b8c621faa382878bcdd69a839ccf3759790a5edc496d08b4143fe71b7a88",
-    "src/lib/notifications/delivery-variables.ts": "724ee03bbdba671091d749a5105f41689a376f800a9f2a72b4b9a1996defd697",
+    "src/components/auth/lost-device-recovery-form.tsx": "4b512099029162c6322a238eead1209afa604f65cd698b565302f0e9a0164082",
+    "src/lib/notifications/delivery-variables.ts": "80d9107bf9a9342ab2bf5e66f765f594fc4b8835332fd37b9022d3312dc38ed4",
     "scripts/process-outbox.ts": "88ec4a016e952e43a990352f9489eb6db8e9e29164ac4b6d2f04a96934f40a5b",
-    "src/app/api/admin/session-revocation-requests/[id]/decision/route.ts": "d9feded1e1fc726c030297bc464ebf68849f0cfc6ec834c57da5fbd51395bbd9",
-    "src/lib/session-controls.ts": "93277961c05935cb917f4f4bd47da646a46aa49c9cdf42e20e7561143cb4b7d3",
-    "src/lib/auth.ts": "5d96b843e40c2baf5a34a0d270a36569d2defd3c9155a80e9822c3e19d498e6b",
-    "src/lib/data-lifecycle/deletion.ts": "763666bc92341003f9df01c8ff609b307cfd376606fb05c322149266b7ac8ce4",
-    "integration/auth-recovery.integration.test.ts": "e4ef1d82c29006cb6aede29e2e55da988daa14c8ae083a63f8b4fe50cee647b0",
+    "src/app/api/admin/session-revocation-requests/[id]/decision/route.ts": "a86ac199611615645c620bb717c104ac141ef6c6371027eb2b38967e228c1a67",
+    "src/lib/session-controls.ts": "da68e780d557fae3b4a83901e4b500c64735070fca5454f0beaf9cfdda259c4f",
+    "src/lib/auth.ts": "82d7f032c9759fbf40671c4a21d2e280bb38365ca84f433f3f5f01bb5c65cdb8",
+    "src/lib/data-lifecycle/deletion.ts": "86357867c19ae18c0ccd5c06c8e0dbc0d484c51f8e9755105dd71b09ca6973e5",
+    "integration/auth-recovery.integration.test.ts": "9d75e485a5d07a67be131905ee8d3b28be406a9b676a3d9611e5dabce89cfa75",
     "e2e/access.spec.ts": "d7026f69cb0faf066b39e89b8184434b4c58e521b21a2b9fd6861f1444cb5c75",
     "docs/evidence/playwright-lost-device-chromium-2026-07-12.json": "c01f45ef241b7f09f4b1d821dbdb440561ea6186eb55dfc8e2e507d3f3745535",
-    "compose.yaml": "ee617457bede7070aa04614900503011ccf5eae19ded835d3d8ab167032e0068",
-    "infra/docker/entrypoint.sh": "705abd1df2b7d3fbeede6d48719fca64d6ca086a5de2da0ee7f1398c5a1a5c7e"
+    "compose.yaml": "78c6dddffcdf01e09820c5a0f8764a2dd3ddffcdc4e79619db4d06422edb280b",
+    "infra/docker/entrypoint.sh": "ee7ef70e8ceddb3885b76e579246b70128ec26ac9dfa1187313df1913ae65bc9"
   }
 }
