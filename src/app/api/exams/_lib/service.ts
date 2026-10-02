@@ -47,7 +47,7 @@ import {
   type RunnerAdmission,
 } from "@/lib/runner/admission";
 import {
-  configuredRunnerClient,
+  configuredCodeRunnerClient,
   RunnerClientError,
   RunnerIndeterminateError,
   runtimeByLanguage,
@@ -1648,7 +1648,7 @@ async function reconcileExamRunnerResult(
   );
 }
 
-async function executeExamCode(input: {
+export async function executeExamCode(input: {
   readonly userId: string;
   readonly attemptId: string;
   readonly sessionId: string;
@@ -1768,7 +1768,7 @@ async function executeExamCode(input: {
     requireFreshRunnerMutation(dispatchBoundary);
     immutableRemoteJobId = dispatchBoundary.remoteJobId ?? admission.remoteJobId;
     remoteJobId = immutableRemoteJobId;
-    const client = configuredRunnerClient();
+    const client = configuredCodeRunnerClient();
     let completed: RunnerJobResponse;
     if (immutableRemoteJobId !== null) {
       completed = await client.waitForJob(immutableRemoteJobId, request);

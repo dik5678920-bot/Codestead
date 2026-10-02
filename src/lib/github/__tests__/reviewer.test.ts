@@ -9,6 +9,33 @@ import {
 } from "../reviewer";
 
 describe("GitHub static reviewer", () => {
+  it("keeps project-review findings and scores identical for every runner provider without executing repository code", async () => {
+    const sha = "a".repeat(40);
+    const source = "// TODO: add tests\neval(input)\n";
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/repos/octo/repo")) return Response.json({ private: false, default_branch: "main" });
+      if (url.includes("/commits/")) return Response.json({ sha, commit: { tree: { sha: "b".repeat(40) } } });
+      if (url.includes("/git/trees/")) return Response.json({ truncated: false, tree: [{ path: "main.js", type: "blob", size: source.length, sha: "c".repeat(40) }] });
+      return Response.json({ content: Buffer.from(source).toString("base64"), encoding: "base64", size: source.length });
+    });
+    try {
+      const results = [];
+      for (const provider of ["", "legacy", "piston", "unknown"]) {
+        vi.stubEnv("CODE_RUNNER_PROVIDER", provider);
+        vi.stubEnv("PISTON_URL", "");
+        vi.stubEnv("RUNNER_BASE_URL", "");
+        results.push(await reviewPublicRepositoryAtCommit("https://github.com/octo/repo", sha, fetchMock as typeof fetch));
+      }
+      for (const result of results) {
+        expect(result).toEqual(results[0]);
+        expect(result.qualityAssessment?.score).toBeLessThan(100);
+        expect(result.provenance).toMatchObject({ repositoryExecution: "none", runnerTemplateId: null, aiUsed: false });
+      }
+      expect(fetchMock.mock.calls.every(([url]) => String(url).startsWith("https://api.github.com/"))).toBe(true);
+    } finally { vi.unstubAllEnvs(); }
+  });
+
   it("keeps the request timeout active while the response body is stalled", async () => {
     vi.useFakeTimers();
     let signal: AbortSignal | undefined;

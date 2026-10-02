@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   poolQuery: vi.fn(),
@@ -30,6 +30,8 @@ vi.mock("../admission", async (importOriginal) => ({
 import { buildPracticeRunnerRequest, practiceAdmissionRequestHash } from "../practice-dispatch";
 import { processPracticeRunnerRecoveryBatch } from "../practice-recovery";
 import type { RunnerAdmission } from "../admission";
+import { runtimeByLanguage } from "../client";
+import { languages, transport, type Outcome } from "../../../../scripts/lib/provider-parity-fixtures";
 
 const sourceCode = "print('durable')\n";
 const admission: RunnerAdmission = {
@@ -113,6 +115,7 @@ function runner(overrides: Record<string, unknown> = {}) {
 }
 
 describe("practice runner crash recovery", () => {
+  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals(); });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.poolQuery.mockImplementation(async (statement: string) => {
@@ -131,6 +134,71 @@ describe("practice runner crash recovery", () => {
     mocks.beginRunnerDispatch.mockResolvedValue({ replayed: false, remoteJobId: null });
     mocks.recordRunnerDispatch.mockResolvedValue({ replayed: false });
     mocks.settleRunnerJob.mockResolvedValue({ replayed: false });
+  });
+
+  for (const language of languages) {
+    it.each(["accepted", "compile_error", "runtime_error", "timeout", "memory_limit", "output_limit"] as const)(
+      `${language} %s recovery keeps the legacy verdict through the selected provider`, async (outcome: Outcome) => {
+        const runtime = runtimeByLanguage[language];
+        const sourceHash = createHash("sha256").update(sourceCode).digest("hex");
+        const requestHash = practiceAdmissionRequestHash({ userId: admission.userId, requestId: admission.requestId,
+          language, sourceHash, mode: "quick_run", runtimeVersion: runtime.version,
+          entrypoint: runtime.entrypoint, submissionType: "server_run" });
+        const request = buildPracticeRunnerRequest({ admission, language, runtimeVersion: runtime.version,
+          entrypoint: runtime.entrypoint, sourceCode, mode: "quick_run" });
+        const baseQuery = mocks.guardQuery.getMockImplementation()!;
+        mocks.guardQuery.mockImplementation(async (statement: string) => statement.includes("from runner_job j")
+          ? { rows: [{ ...row, language, request_hash: requestHash, dispatch_request: request }] }
+          : baseQuery(statement));
+        const observed = [];
+        for (const provider of ["legacy", "piston"]) {
+          const fetch = transport(provider, outcome);
+          const report = await processPracticeRunnerRecoveryBatch({ clock: () => new Date("2026-10-01T00:00:00Z") });
+          expect(report).toMatchObject({ reconciled: 1, indeterminate: 0 });
+          const settlement = mocks.settleRunnerJob.mock.calls.at(-1)![0];
+          observed.push({ status: settlement.status, verdict: settlement.result.status,
+            compile: settlement.result.compile.status, stdout: settlement.result.run?.stdout,
+            exitCode: settlement.result.run?.exitCode, totals: settlement.result.totals });
+          expect(fetch.mock.calls.every(([url]) => String(url).startsWith(`http://${provider === "legacy" ? "legacy" : "piston"}:`))).toBe(true);
+        }
+        expect(observed[1]).toEqual(observed[0]);
+        expect(observed[1]?.verdict).toBe(outcome === "accepted" ? "ACCEPTED" : outcome.toUpperCase());
+      },
+    );
+  }
+
+  it.each(["legacy", "piston"])("%s resumes the persisted remote job through the selected client", async (provider) => {
+    const remoteJobId = provider === "piston" ? "piston:known" : "legacy-known";
+    const baseQuery = mocks.guardQuery.getMockImplementation()!;
+    mocks.guardQuery.mockImplementation(async (statement: string) => statement.includes("from runner_job j")
+      ? { rows: [{ ...row, remote_job_id: remoteJobId }] } : baseQuery(statement));
+    mocks.beginRunnerDispatch.mockResolvedValue({ replayed: false, remoteJobId });
+    const fetch = transport(provider, "accepted", snapshot);
+    await expect(processPracticeRunnerRecoveryBatch()).resolves.toMatchObject({ reconciled: 1, indeterminate: 0 });
+    expect(mocks.recordRunnerDispatch).not.toHaveBeenCalled();
+    expect(mocks.settleRunnerJob).toHaveBeenCalledWith(expect.objectContaining({
+      remoteJobId, status: "succeeded", result: expect.objectContaining({ status: "ACCEPTED" }),
+    }));
+    expect(fetch.mock.calls.every(([url]) => String(url).startsWith(`http://${provider}:`))).toBe(true);
+    if (provider === "legacy") expect(fetch.mock.calls[0]?.[1]?.method).toBe("GET");
+  });
+
+  it.each(["legacy", "piston"])("%s transport outage keeps recovery indeterminate without fallback", async (provider) => {
+    transport(provider, "accepted");
+    const fetch = vi.fn().mockRejectedValue(new Error("offline"));
+    vi.stubGlobal("fetch", fetch);
+    await expect(processPracticeRunnerRecoveryBatch()).resolves.toMatchObject({ indeterminate: 1, reconciled: 0 });
+    expect(mocks.settleRunnerJob).not.toHaveBeenCalled();
+    expect(fetch.mock.calls.length).toBeGreaterThan(0);
+    expect(fetch.mock.calls.every(([url]) => String(url).startsWith(`http://${provider}:`))).toBe(true);
+  });
+
+  it.each(["piston", "unknown"])("%s recovery configuration failure never calls legacy", async (provider) => {
+    const fetch = transport(provider, "accepted");
+    vi.stubEnv("PISTON_URL", "");
+    await expect(processPracticeRunnerRecoveryBatch()).rejects.toThrow();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(mocks.settleRunnerJob).not.toHaveBeenCalled();
   });
 
   it("replays the exact persisted request id and releases the local admission on terminal truth", async () => {
