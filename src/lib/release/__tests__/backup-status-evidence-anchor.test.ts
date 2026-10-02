@@ -108,6 +108,7 @@ describe("backup status evidence anchor", () => {
     await write(evidencePath, JSON.stringify({ sourceHashes: [{ path: "vitest.integration.config.ts", sha256: "0".repeat(64) }] }));
     expect((await verify()).issues).toEqual([
       expect.objectContaining({ kind: "STALE_HASH", source: evidencePath, detail: expect.stringContaining("vitest.integration.config.ts") }),
+      expect.objectContaining({ kind: "UNANCHORED_SOURCE_PIN", source: evidencePath, detail: expect.stringContaining("vitest.integration.config.ts") }),
     ]);
   });
 

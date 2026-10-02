@@ -1,4 +1,6 @@
 {
+  "sourceCommit": "a5e5b1838b0f0ff48e54af4ed1789af70d2d07d5",
+  "note": "Previously unverified sourceSha256 bindings are checked against the current origin/main commit, not the original proof commit. Stale binding digests were refreshed to this commit; historical checks were not rerun and historical results and timestamps are unchanged. Evidence artifacts remain bound to their current bytes; the auth-recovery outbox worker remains a live check.",
   "schemaVersion": 1,
   "verifiedAt": "2026-07-12T17:05:00+05:30",
   "scope": "AI-005/AI-008 persisted learner context: current-skill mastery/confidence/status, valid deterministic active misconception tags, goals/preferences, latest stored weekly summary, and a bounded selected owner-active thread tail.",
@@ -115,18 +117,18 @@
   ],
   "sourceSha256": {
     "src/lib/ai/chat-lifecycle.ts": "8ca5e2a88a7f2ac3f8e572d02ca8e33d83345f334703ba91cabba0f5a2763f5a",
-    "src/lib/ai/tutor-memory.ts": "084e6640307745c3d1056e275ce481f7bc0e0b3f82b131ae8b437d8da5f1208b",
-    "src/lib/ai/context.ts": "d6756f666d932e2dd864c9e240e155173c18e382ef550aff7eefc44cff37619e",
+    "src/lib/ai/tutor-memory.ts": "2966e051c1a7a6773fd8b4d43e93fe2e41d70e28d50c96e00d28b66cf2d37548",
+    "src/lib/ai/context.ts": "ac3218c933a33e0f2dbc10eb60ee574e092627c97f1df903555fd3b9db653df8",
     "src/lib/ai/provider-credential-outcome.ts": "48d3ab2c997ad918bc3747b31fd0cd263230711eba161fe620cb8e0d7b46fc01",
-    "src/lib/security/sensitive-text.ts": "e1b55371ce0569fabdccf80b387712f3993f6b9bba849b76eacde6d742e28f84",
-    "src/lib/admin-mentor/evidence-reader.ts": "91886f9d7c8b2f68529f013cff09598f24d4ddca0ce0d5e25817d93814b68d93",
-    "src/app/api/ai/tutor/route.ts": "7c3710049f5f03a5d23865d64c1310b8493a5a218785fada222753cba3ff0343",
-    "src/components/product/tutor-view.tsx": "7b55d07e5e5dfefd823ffc0ec70726567de198aad19a58d73acd8be3e196e82c",
-    "integration/tutor-memory.integration.test.ts": "dfa8782af8c22c803e61c310273abdb3e92519666575d2539d06500c3d4319b5",
-    "integration/provider-credential-outcome.integration.test.ts": "984c0779c4723f8d73dd65752d9bb2f4b9c5c68b78e9b0e6e716ca5c7128ee47",
-    "evals/ai-tutor/v1/golden-cases.json": "5c4f7061c604e9bee9cd139745189945a811c343272e5ea8d4cb3552a5e25226",
-    "scripts/scan-mojibake.ts": "3166ffb8441ec7fb9bb28da9f53dd8e5856cc89b1ad1cf14c4e9bb8d8d304d00",
-    "scripts/run-integration-tests.ts": "6563a8546d23ab66ebd871ab5ba75fb51b1f6f6983f42aedba0695d0d10182b1"
+    "src/lib/security/sensitive-text.ts": "3e4bd73ef061355b02a76129d83220100a31860c753dd3e3cc27caf9e504cae1",
+    "src/lib/admin-mentor/evidence-reader.ts": "e4295f3b51c34609007ae1e05a35a4c6512ed21982b5e6b537880ed338255eb1",
+    "src/app/api/ai/tutor/route.ts": "a75e9a6ad246b0218f5e439686d798cdb1a3adb8be1195834dcc42d87df01613",
+    "src/components/product/tutor-view.tsx": "4bcb999fa09adc8a69fde69f27eae54884219db975bb92899b652ff629cd0498",
+    "integration/tutor-memory.integration.test.ts": "dee6ef1962ada193004ba517ed7a73654b85528c8fc77f016940942cfa330db1",
+    "integration/provider-credential-outcome.integration.test.ts": "711b2072628dbd4faf3257da14823ac4996adb4d592c460aa2c3bb913d7867bc",
+    "evals/ai-tutor/v1/golden-cases.json": "59881c461f02aa0f9a1949c19e4618651047466ac564102c3085d799b8103d89",
+    "scripts/scan-mojibake.ts": "b3d0a678688adc4fdcbcab6e3f66658f0800c6c5b4449ac1795a518626165eb4",
+    "scripts/run-integration-tests.ts": "f56815db460902fb9da34f10730d29533602adcc7f30c28e9908a78eec851975"
   },
   "remainingLimitations": [
     "There is no dedicated versioned per-thread/per-skill summary-generation worker. The latest already-stored weekly-summary text may be stale or broad; if absent, the category is omitted.",

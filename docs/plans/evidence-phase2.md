@@ -1,6 +1,15 @@
 # Evidence Phase 2: stop cross-pin churn
 
-Status: **proposal, plan only, nothing implemented**. Phase 1 (#65) removed `generatedAt` and other volatile fields from the deterministic generators. Phase 2 deals with the other source of churn: hashes of *mutable* files inside *historical* evidence records.
+Status: **PRs 1–4 merged (#93, #97, #102, #103, #106); PR 5 guard prepared for owner review**. Phase 1 (#65) removed `generatedAt` and other volatile fields from the deterministic generators. Phase 2 deals with the other source of churn: hashes of *mutable* files inside *historical* evidence records.
+
+## PR 5 guard policy
+
+- Every declared pin uses the repository root-file/prefix allowlist. Unknown, absolute, remote, and traversal paths fail closed, including paths whose hashes happen to match. `evals/` is recognized for the existing tutor golden-case pin.
+- Supported pins include `{ path, sha256 }`, named path/`Sha256` pairs, `artifactSha256`, `sha256`, and `sourceSha256` maps, and scalar `{ file, sourceSha256 }` projections. Malformed declared digests/maps also fail.
+- Repository pins outside `docs/evidence/` require `sourceCommit`. Artifact pins retain all existing checks; anchored artifacts must additionally match their current bytes.
+- Two existing currency contracts stay current: the exact auth-recovery record's outbox worker and scalar ownership-proof rows in the deterministic API authorization matrix. Neither exception applies to new records, to arbitrary map pins in those records, or to unknown paths. The authorization generator's byte-exact `--check` remains unchanged.
+- Timestamp and remote-report named metadata are distinguished explicitly; the backup record's absolute local-log metadata remains metadata. Arbitrary unrecognized named pins are never silently ignored. Unhashed route/file references are not source pins.
+- Enabling source maps exposes stale bindings in auth-recovery, chat-lifecycle, provider-operation-idempotency, and tutor-structured-memory. The proposed one-time conversion anchors them at `a5e5b1838b0f0ff48e54af4ed1789af70d2d07d5`, refreshes 33 stale binding digests, and preserves historical results/timestamps with an explicit note that proof was not rerun. Evidence hashes require owner approval before commit.
 
 ## Problem
 

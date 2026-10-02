@@ -1,4 +1,6 @@
 {
+  "sourceCommit": "a5e5b1838b0f0ff48e54af4ed1789af70d2d07d5",
+  "note": "Previously unverified sourceSha256 bindings are checked against the current origin/main commit, not the original proof commit. Stale binding digests were refreshed to this commit; historical checks were not rerun and historical results and timestamps are unchanged. Evidence artifacts remain bound to their current bytes; the auth-recovery outbox worker remains a live check.",
   "generatedAt": "2026-07-12T15:24:00.000Z",
   "scope": "Durable provider-call idempotency for authenticated tutor POST and administrator credential test/replace. Credential reveal is deliberately excluded and remains a fresh-MFA, reason, audit, and learner-notification ceremony on every access.",
   "implementation": {
@@ -79,15 +81,15 @@
   "sourceSha256": {
     "drizzle/0025_legal_christian_walker.sql": "be39966a7486c5758bfc420b524007fd3f0d2a97b2c73dd6f203021122859f9f",
     "drizzle/meta/0025_snapshot.json": "920876441ef996f879bb4ebd7d412afed81d5c67e8db4692c0c828fa1b17ee1c",
-    "src/lib/db/schema.ts": "e724a8ce0e84438e9559353728d43bfd9811f83355631fd53559ee52387f633e",
-    "src/lib/ai/provider-operation-idempotency.ts": "7a581b7670bda3a48b985e8a1ccfe2f9eff4dc18c861399c914663b135c48535",
-    "src/app/api/ai/tutor/route.ts": "7c3710049f5f03a5d23865d64c1310b8493a5a218785fada222753cba3ff0343",
-    "src/app/api/admin/credentials/[id]/route.ts": "7f3c29ae270dc14acf998abd561cb48888ffcdf4888e08bebb9afa92f629fb6e",
+    "src/lib/db/schema.ts": "3a8ff39ee033be76170a126769e04f40d1b01dbb573f0ef35cc7638af1a681e4",
+    "src/lib/ai/provider-operation-idempotency.ts": "06d2e17e1d3cb76b93e4ba736760763c5b5d94decff3f4a29cd535add88aefc5",
+    "src/app/api/ai/tutor/route.ts": "a75e9a6ad246b0218f5e439686d798cdb1a3adb8be1195834dcc42d87df01613",
+    "src/app/api/admin/credentials/[id]/route.ts": "48e562aea014022afd83c9eb44db3281d743cd8fc2db474646ab3fa2ef1af30e",
     "src/app/api/admin/credentials/[id]/reveal/route.ts": "bdd9890fdbec9484d4b87b20c99d4a2e938005af1b2a3b40465fe46e1ad2e1b4",
-    "src/components/product/tutor-view.tsx": "7b55d07e5e5dfefd823ffc0ec70726567de198aad19a58d73acd8be3e196e82c",
-    "src/components/admin/admin-credential-manager.tsx": "de9358afbaf33eef065d38b11b1c5147e29ce03101b7f8d3559cd4cb5f457a23",
-    "src/lib/data-lifecycle/retention.ts": "d1d83c81cf878e6187366bfc8099ee74ae979f4dc34403443b174649bbff71d2",
-    "integration/provider-operation-idempotency.integration.test.ts": "32fe1071243b9f1a1137a44a9dfb9bd5e605ee9635b190e086871a593382b7ad",
-    "src/lib/ai/__tests__/provider-operation-idempotency.test.ts": "ea7ef5c850cb0d59c3a68dd6443b01a230699303de8726c1f7cf8e9b9e538eed"
+    "src/components/product/tutor-view.tsx": "4bcb999fa09adc8a69fde69f27eae54884219db975bb92899b652ff629cd0498",
+    "src/components/admin/admin-credential-manager.tsx": "1c85c2d7b46df16aaebfaada562421900fe6358ba82a41727b91043054165f96",
+    "src/lib/data-lifecycle/retention.ts": "cfc2168ab19e90ad6baf88612febc312709a68b2825b2f06dbbfa913312124ae",
+    "integration/provider-operation-idempotency.integration.test.ts": "c58e4507cb07184e91d5540f580d7f244ce69a93a6aeb9d8513230c6d35fca89",
+    "src/lib/ai/__tests__/provider-operation-idempotency.test.ts": "9eaa74f4ef32b14413424645156546766b5a074e81a050315c766410521d1602"
   }
 }
