@@ -36,6 +36,15 @@ jobs:
           node --test infra/piston/prepare.test.mjs > inputs.log 2>&1 || { cat inputs.log; exit 1; }
           node infra/piston/prepare.mjs > downloads.log 2>&1 || { cat downloads.log; exit 1; }
           rm inputs.log downloads.log
+      # Match the NUC: the containerd image store keeps the manifest digest as
+      # RepoDigests and lets the docker driver export the rewrite-timestamp tarball.
+      - name: Use the containerd image store
+        run: |
+          { sudo cat /etc/docker/daemon.json 2>/dev/null || echo '{}'; } \
+            | jq '.features["containerd-snapshotter"] = true' > daemon.json
+          sudo install -m 0644 daemon.json /etc/docker/daemon.json && rm daemon.json
+          sudo systemctl restart docker
+          docker info --format '{{json .DriverStatus}}' | grep -F io.containerd.snapshotter.v1
       - name: Build reproducibly without network access
         run: |
           node infra/piston/build.mjs codestead-piston:ci > build.log 2>&1 || { tail -n 120 build.log; exit 1; }

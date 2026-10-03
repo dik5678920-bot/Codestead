@@ -99,6 +99,7 @@ test("CI rejects any build whose digest differs from the reviewed handoff", asyn
   const workflow = await readFile(new URL("../../.github/workflows/piston-image.yml", import.meta.url), "utf8");
   assert.match(workflow, /node infra\/piston\/build\.mjs codestead-piston:ci/);
   assert.match(workflow, /node infra\/piston\/verify-digest\.mjs/);
+  assert.match(workflow, /\.features\["containerd-snapshotter"\] = true/, "CI must build in the containerd store like the NUC");
 });
 
 test("every build-context COPY fixes file modes so Windows and Linux contexts build the same image", async () => {

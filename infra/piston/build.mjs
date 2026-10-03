@@ -32,6 +32,11 @@ export function buildArgs({ epoch, tag, archive, metadataFile, context }) {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const tag = process.argv[2];
   if (!tag || process.argv.length !== 3) throw new Error("Usage: node infra/piston/build.mjs <tag>");
+  const driverStatus = execFileSync("docker", ["info", "--format", "{{json .DriverStatus}}"], { encoding: "utf8" });
+  if (!driverStatus.includes("io.containerd.snapshotter.v1")) {
+    throw new Error("Docker must use the containerd image store (docs/runbooks/piston-kata.md step 1): "
+      + "the classic store cannot export the reproducible tarball or keep the manifest digest.");
+  }
   const lock = JSON.parse(await readFile(path.join(root, "image-inputs.lock.json"), "utf8"));
   const work = await mkdtemp(path.join(os.tmpdir(), "codestead-piston-build-"));
   try {
