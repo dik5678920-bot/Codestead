@@ -6,6 +6,8 @@ repo_root="${REPO_ROOT:-/opt/learncoding}"
 [[ -f "$repo_root/compose.yaml" ]] || { echo "repository not found at $repo_root" >&2; exit 1; }
 "$repo_root/infra/ops/validate-production-load-host-runtime.sh"
 
+install -d -o root -g root -m 0755 /etc/sysusers.d
+
 for definition in "$repo_root"/infra/sysusers.d/*; do
   install -o root -g root -m 0644 "$definition" "/etc/sysusers.d/$(basename -- "$definition")"
 done

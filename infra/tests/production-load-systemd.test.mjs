@@ -245,6 +245,9 @@ test("host runtime validator pins the fixed Node floor and reviewed tsx package"
 test("installer publishes identities and directories but enables only journal recovery", () => {
   const source = read(paths.installer);
   assert.match(source, /validate-production-load-host-runtime\.sh/);
+  const directoryCreation = source.indexOf("install -d -o root -g root -m 0755 /etc/sysusers.d");
+  assert.ok(directoryCreation >= 0, "installer must create the optional host sysusers.d directory");
+  assert.ok(directoryCreation < source.indexOf('for definition in "$repo_root"/infra/sysusers.d/*; do'), "create sysusers.d before publishing definitions");
   assert.match(source, /infra\/sysusers\.d\/\*/);
   assert.match(source, /\/etc\/sysusers\.d\/\$\(basename -- "\$definition"\)/);
   assert.match(source, /systemd-sysusers \/etc\/sysusers\.d\/learncoding-production-load\.conf/);

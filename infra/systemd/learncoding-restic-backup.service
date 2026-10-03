@@ -1,6 +1,6 @@
 [Unit]
 Description=LearnCoding nightly restic backup to Cloudflare R2
-Documentation=/opt/learncoding/docs/runbooks/backups-r2.md
+Documentation=file:/opt/learncoding/docs/runbooks/backups-r2.md
 After=learncoding-compose.service network-online.target
 Wants=learncoding-compose.service network-online.target
 RequiresMountsFor=/srv/learncoding

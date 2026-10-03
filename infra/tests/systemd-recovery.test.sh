@@ -22,7 +22,7 @@ postgres_socket_tmpfiles="$repo_root/infra/tmpfiles.d/learncoding-postgres.conf"
 firewall_service="$repo_root/infra/systemd/learncoding-runner-firewall.service"
 installer="$repo_root/infra/ops/install-systemd.sh"
 installer_shebang='#!/usr/bin/env bash'
-installer_reviewed_sha256='9966762fd9c6d2184d0d88d52a58eb3289211295aae0cc5292c0d524c532e727'
+installer_reviewed_sha256='7d19b4da4520955fd34f57a1dda59d8c85be64c7e6dcb7bb1c39af7f9cba2861'
 package_json="$repo_root/package.json"
 failures=()
 
@@ -961,7 +961,7 @@ case "$command_name" in
     ;;
   install)
     if [[ "$#" == 8 && "$1" == -d && "$2" == -o && "$3" == root && "$4" == -g &&
-      "$5" == root && "$6" == -m && "$7" == 0755 && "$8" == /etc/learncoding ]]; then
+      "$5" == root && "$6" == -m && "$7" == 0755 && ( "$8" == /etc/learncoding || "$8" == /etc/sysusers.d ) ]]; then
       :
     else
       [[ "$#" == 8 && "$1" == -o && "$2" == root && "$3" == -g && "$4" == root && "$5" == -m ]] || exit 64
@@ -969,7 +969,16 @@ case "$command_name" in
       artifact_source_is_exact "$7" "$kind" || exit 97
       case "$kind:$6" in
         systemd:0644) destination=/etc/systemd/system ;;
-        sysusers:0644) destination=/etc/sysusers.d ;;
+        sysusers:0644)
+          # Model a host where /etc/sysusers.d is initially absent. A copy
+          # cannot succeed until the exact root-owned directory was created.
+          directory_created=false
+          while IFS= read -r event; do
+            if [[ "$event" == 'install -d -o root -g root -m 0755 /etc/sysusers.d' ]]; then directory_created=true; fi
+          done <"$INSTALLER_EVENTS"
+          [[ "$directory_created" == true ]] || exit 98
+          destination=/etc/sysusers.d
+          ;;
         tmpfiles:0644) destination=/etc/tmpfiles.d ;;
         runtime:0444) destination=/etc/learncoding ;;
         *) exit 97 ;;
@@ -1332,7 +1341,7 @@ set -e
 if (( installer_status != 0 )); then
   fail "Systemd installer did not execute inside the strict fake root: $(<"$parser_work/installer.stderr")"
 else
-  expected_installer_events=('runtime-validator')
+  expected_installer_events=('runtime-validator' 'install -d -o root -g root -m 0755 /etc/sysusers.d')
   for definition in "$installer_root"/infra/sysusers.d/*; do
     printf -v basename_event 'basename -- %q' "$definition"
     expected_installer_events+=("$basename_event")
