@@ -160,4 +160,17 @@ if [ "${NODE_ENV:-}" = "production" ]; then
   fi
 fi
 
+# Docker daemon restart policies bypass Compose dependency ordering. Keep
+# workers in their existing startup health grace until their own DB role can
+# connect; migrations remain release-only operations.
+if [ "${NODE_ENV:-}" = production ] && [ -n "${WORKER_HEALTH_ID:-}" ]; then
+  node --import tsx /app/scripts/lib/worker-database-startup.ts &
+  worker_database_startup_pid=$!
+  trap 'kill -TERM "$worker_database_startup_pid" 2>/dev/null || :; exit 143' TERM
+  trap 'kill -INT "$worker_database_startup_pid" 2>/dev/null || :; exit 130' INT
+  wait "$worker_database_startup_pid"
+  trap - TERM INT
+  unset worker_database_startup_pid
+fi
+
 exec "$@"

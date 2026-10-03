@@ -26,6 +26,17 @@ function composeService(compose: string, name: string, nextName: string | undefi
 }
 
 describe("production worker heartbeat wiring", () => {
+  it("gates worker startup on the database even when Docker bypasses Compose ordering", () => {
+    const entrypoint = source("infra/docker/entrypoint.sh");
+    expect(entrypoint).toContain('node --import tsx /app/scripts/lib/worker-database-startup.ts');
+    expect(entrypoint).toContain('[ -n "${WORKER_HEALTH_ID:-}" ]');
+    const compose = source("compose.yaml");
+    for (const [name] of WORKERS) {
+      const block = compose.slice(compose.indexOf(`  ${name}:`)).split(/\n  [a-z][a-z0-9-]*:/)[0]!;
+      expect(block).toMatch(/depends_on:\n      postgres:\n        condition: service_healthy/);
+      expect(block).not.toMatch(/depends_on:[\s\S]*?\bmigrate:/);
+    }
+  });
   it.each(WORKERS)("advances %s health only from its processing loop", (worker, path) => {
     const workerSource = source(path);
     expect(workerSource).toContain("createWorkerHealthReporter");
