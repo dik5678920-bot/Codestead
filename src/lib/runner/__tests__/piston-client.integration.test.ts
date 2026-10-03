@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { isTrustedRunnerJob, runtimeByLanguage, type RunnerLanguage, type RunnerRequest } from "../client";
-import { PistonRunnerClient } from "../piston-client";
+import { PISTON_RUNTIMES, PistonRunnerClient } from "../piston-client";
 import { PRACTICE_LIMITS } from "../practice-dispatch";
 
 // Opt-in: runs against a real Piston (e.g. the infra/piston image) only when
@@ -63,7 +63,8 @@ function request(language: RunnerLanguage, source: string, mode: RunnerRequest["
 }
 
 describe.skipIf(!url)("Piston client against a real Piston", () => {
-  const client = new PistonRunnerClient(url ?? "http://unused", "codestead-piston:integration");
+  const image = process.env.PISTON_TEST_IMAGE ?? "codestead-piston:integration";
+  const client = new PistonRunnerClient(url ?? "http://unused", image);
   const languages = Object.keys(programs) as RunnerLanguage[];
 
   it("is available with every required runtime installed", async () => {
@@ -76,18 +77,67 @@ describe.skipIf(!url)("Piston client against a real Piston", () => {
       ["compileError", "COMPILE_ERROR"],
       ["runtimeError", "RUNTIME_ERROR"],
       ["loop", "TIMEOUT"],
-      ["memory", "MEMORY_LIMIT"],
+      // Match the legacy JVM's bounded heap: allocation failure is exit 1,
+      // not an isolate cgroup kill (137). Keep the wrapper's legacy JVM caps.
+      ["memory", language === "java" ? "RUNTIME_ERROR" : "MEMORY_LIMIT"],
     ] as const;
     for (const [program, status] of expectations) {
       const runnerRequest = request(language, programs[language][program]);
       const job = await client.submit(runnerRequest, `it-${language}-${program}`);
       expect({ program, status: job.result?.status }).toEqual({ program, status });
       expect(isTrustedRunnerJob(job, runnerRequest)).toBe(true);
+      expect(job.result?.runtimeVersion).toBe(PISTON_RUNTIMES[language].label);
+      expect(job.result?.imageDigest).toBe(image);
       if (program === "hello") expect(job.result?.run?.stdout).toBe("x\nhello\n");
       if (program === "runtimeError") expect(job.result?.run?.exitCode).toBe(3);
       if (program === "compileError") expect(job.result?.run).toBeUndefined();
     }
   }, 120_000);
+
+  it.each([
+    ["c", "#include <stdio.h>\nint main(void){constexpr int answer=42;printf(\"%d\\n\",answer);}\n"],
+    ["cpp", "#include <concepts>\n#include <iostream>\ntemplate<std::integral T> T answer(T n){return n;}\nint main(){std::cout<<answer(42)<<'\\n';}\n"],
+    ["java", "public class Main{record Answer(int n){} public static void main(String[] args){Object a=new Answer(42);if(a instanceof Answer(int n))System.out.println(n);}}\n"],
+    ["python", "from string.templatelib import Template\nanswer=42\nvalue=t'{answer}'\nprint(value.interpolations[0].value)\n"],
+    ["javascript", "console.log([...new Set([42]).union(new Set([42]))][0]);\n"],
+  ] as const)("%s supports the intended modern language features", async (language, source) => {
+    const job = await client.submit(request(language, source), `it-modern-${language}`);
+    expect(job.result?.status).toBe("ACCEPTED");
+    expect(job.result?.run?.stdout).toBe("42\n");
+  }, 30_000);
+
+  it.each([
+    ["c", "#include <stdio.h>\n#include \"answer.h\"\nint main(void){printf(\"%d\\n\",answer());}\n", "answer.h", "static int answer(void){return 42;}\n"],
+    ["cpp", "#include <iostream>\n#include \"answer.hpp\"\nint main(){std::cout<<answer()<<'\\n';}\n", "answer.hpp", "inline int answer(){return 42;}\n"],
+    ["java", "public class Main{public static void main(String[] args){System.out.println(Answer.value());}}\n", "Answer.java", "class Answer{static int value(){return 42;}}\n"],
+  ] as const)("%s compiles multiple files and ignores non-source resources like legacy", async (language, source, helper, content) => {
+    const original = request(language, source);
+    const job = await client.submit({ ...original, sourceFiles: [...original.sourceFiles,
+      { path: helper, content }, { path: "notes.txt", content: "not source code" }] }, `it-files-${language}`);
+    expect(job.result?.status).toBe("ACCEPTED");
+    expect(job.result?.run?.stdout).toBe("42\n");
+  }, 30_000);
+
+  it("keeps learner execution unprivileged, without capabilities, networking or writable toolchains", async () => {
+    const source = [
+      "import os, socket",
+      "assert os.getuid() >= 60000",
+      "caps=[line for line in open('/proc/self/status') if line.startswith('CapEff:')][0].split()[1]",
+      "assert int(caps,16)==0",
+      "for name in ['/usr/local/node/bin/node','/usr/local/jdk/bin/java','/usr/local/python/bin/python3']:",
+      "  try: open(name,'ab')",
+      "  except OSError: pass",
+      "  else: raise AssertionError('toolchain writable')",
+      "s=socket.socket(); s.settimeout(0.2)",
+      "try: s.connect(('1.1.1.1',443))",
+      "except OSError: pass",
+      "else: raise AssertionError('network reachable')",
+      "print('contained')",
+    ].join("\n");
+    const job = await client.submit(request("python", source), "it-isolation");
+    expect(job.result?.status).toBe("ACCEPTED");
+    expect(job.result?.run?.stdout).toBe("contained\n");
+  }, 30_000);
 
   it.each(languages)("%s: COMPILE and TEST modes", async (language) => {
     const compileOnly = await client.submit(request(language, programs[language].hello, "COMPILE"), "it-compile");

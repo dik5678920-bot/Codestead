@@ -21,14 +21,14 @@ import {
  * fabricated result and never a fallback to the legacy runner.
  */
 
-// Newest packages in Piston's official index; our own builds replace these
-// (plan PR5) so versions match the lessons.
+// Must match infra/piston/image-inputs.lock.json and the built API's inventory.
+// Labels record exact tool identity; published exam pins migrate separately.
 export const PISTON_RUNTIMES: Record<RunnerLanguage, { language: string; version: string; label: string }> = {
-  c: { language: "c", version: "10.2.0", label: "C11 / GCC 10.2.0 (Piston)" },
-  cpp: { language: "c++", version: "10.2.0", label: "C++17 / G++ 10.2.0 (Piston)" },
-  java: { language: "java", version: "15.0.2", label: "Java 15.0.2 (Piston)" },
-  python: { language: "python", version: "3.12.0", label: "Python 3.12.0 (Piston)" },
-  javascript: { language: "javascript", version: "20.11.1", label: "Node.js 20.11.1 (Piston)" },
+  c: { language: "c", version: "14.2.0", label: "C23 / GCC 14.2.0 (Piston)" },
+  cpp: { language: "c++", version: "14.2.0", label: "C++20 / G++ 14.2.0 (Piston)" },
+  java: { language: "java", version: "21.0.12", label: "Java 21.0.12.1+1 / Temurin (Piston)" },
+  python: { language: "python", version: "3.14.8", label: "Python 3.14.8 (Piston)" },
+  javascript: { language: "javascript", version: "22.23.3", label: "Node.js 22.23.3 (Piston)" },
 };
 
 // Must match PISTON_RUN_TIMEOUT / PISTON_COMPILE_TIMEOUT in compose.yaml:
@@ -41,8 +41,9 @@ const DEFAULT_MEMORY_MB = 128;
 const TRUNCATION_MARKER = "\n<output truncated>";
 
 // Piston's interpreters have no separate compile stage. The legacy harness runs
-// py_compile / node --check / javac before running, so a syntax error is a
-// COMPILE_ERROR there; these checkers give the same split. Each runs as the
+// py_compile / node --check before running, so a syntax error is a
+// COMPILE_ERROR there; these checkers give the same split. Java now has a real
+// compile stage in our image and does not use an interpreter checker. Each runs as the
 // entry file with the learner's file next to it, and never runs learner code.
 const CHECKERS: Partial<Record<RunnerLanguage, { name: string; content: (entry: string) => string }>> = {
   python: {
@@ -69,19 +70,6 @@ const CHECKERS: Partial<Record<RunnerLanguage, { name: string; content: (entry: 
       "} catch (error) {",
       "  process.stderr.write(String(error && error.stack ? error.stack : error));",
       "  process.exit(1);",
-      "}",
-      "",
-    ].join("\n"),
-  },
-  java: {
-    name: "__codestead_check.java",
-    content: (entry) => [
-      "public class CodesteadCheck {",
-      "  public static void main(String[] args) {",
-      "    javax.tools.JavaCompiler compiler = javax.tools.ToolProvider.getSystemJavaCompiler();",
-      `    int status = compiler.run(null, null, null, "-d", "/tmp/__codestead_check", ${JSON.stringify(entry)});`,
-      "    System.exit(status == 0 ? 0 : 1);",
-      "  }",
       "}",
       "",
     ].join("\n"),
@@ -267,9 +255,10 @@ export class PistonRunnerClient {
     if (checker) {
       compileStage = (await call([{ name: checker.name, content: checker.content(entry.path) }, ...learnerFiles], "")).run;
     } else {
-      // Piston compiles C/C++ on every call, so RUN mode uses this call's run stage.
+      // Piston compiles C/C++/Java on every call; RUN reuses this call's run stage.
       const first = await call(learnerFiles, request.mode === "RUN" ? request.stdin ?? "" : "", request.mode === "RUN" ? runTimeoutMs : 1);
-      compileStage = first.compile ?? { stdout: "", stderr: "", code: 0, signal: null, status: null, wallTimeMs: 0 };
+      if (!first.compile) throw new RunnerClientError("PISTON_RESPONSE_UNTRUSTED", true, 502);
+      compileStage = first.compile;
       if (request.mode === "RUN" && classify(compileStage) === "OK") compiledRun = first.run;
     }
     const compileClass = classify(compileStage);

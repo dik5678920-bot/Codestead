@@ -1,35 +1,63 @@
-# Piston with its language packages baked in at build time, so the container
-# never needs network access. Runs only under the Kata Containers runtime (see
-# docs/runbooks/piston-kata.md and docs/plans/piston-runner.md).
-FROM alpine:3.22@sha256:3e9b4b680bfc9fb5269227cffbd6d42be39fbf7c0b908123913864aa4447e764 AS packages
-RUN apk add --no-cache curl
-WORKDIR /pkgs
-# language version sha256 (from the Piston package index, reviewed 2026-10-01)
-RUN set -eu; \
-    while read -r language version sha; do \
-      file="$language-$version.pkg.tar.gz"; \
-      curl -fsSL -o "$file" "https://github.com/engineer-man/piston/releases/download/pkgs/$file"; \
-      echo "$sha  $file" | sha256sum -c -; \
-      mkdir -p "out/$language/$version"; \
-      tar -xzf "$file" -C "out/$language/$version"; \
-    done <<'EOF'
-gcc 10.2.0 a3ffa0672b992ee772217c64080671f5a4ee1250fea19ac2c8d5205a5682bdb3
-java 15.0.2 f695d4ae1a8c783a9bcdd31f23795a980d938e50260254cf6a95560622c092f7
-node 20.11.1 69e009f54ca8118418c994945d9852f025ea212519ea3bf85188c2133b388243
-python 3.12.0 abc40b3231fc7e713799da2cd79844545c72b3904a4d2ffcc28c4d133ed21d0b
-EOF
+# All archives are fetched and SHA-256 checked by prepare.mjs before this offline build.
+# amd64 is the reviewed target; the base pins the multi-platform manifest.
+FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a AS build
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+ENV DEBIAN_FRONTEND=noninteractive PATH=/usr/local/node/bin:$PATH
+COPY .downloads/ /downloads/
+COPY downloads.sha256 /downloads.sha256
+RUN cd /downloads && sha256sum -c /downloads.sha256 \
+    && awk '$2 ~ /^debs\// { print "/downloads/" $2 }' /downloads.sha256 \
+       | xargs -r apt-get --yes --no-install-recommends install \
+    && mkdir -p /usr/local/node /usr/local/jdk /usr/local/python /build/piston /build/isolate \
+    && tar -xJf /downloads/toolchains/node.tar.xz -C /usr/local/node --strip-components=1 \
+    && tar -xzf /downloads/toolchains/java.tar.gz -C /usr/local/jdk --strip-components=1 \
+    && tar -xzf /downloads/toolchains/python.tar.gz -C /usr/local/python --strip-components=1 \
+    && tar -xzf /downloads/sources/piston.tar.gz -C /build/piston --strip-components=1 \
+    && tar -xzf /downloads/sources/isolate.tar.gz -C /build/isolate --strip-components=1 \
+    && ln -s /usr/bin/gcc-14 /usr/local/bin/gcc \
+    && ln -s /usr/bin/g++-14 /usr/local/bin/g++ \
+    && ln -s /usr/local/node/bin/node /usr/local/bin/node \
+    && ln -s /usr/local/python/bin/python3 /usr/local/bin/python3
+WORKDIR /build/isolate
+RUN make -j2 CC=gcc-14 install
+WORKDIR /piston_api
+COPY api-package.json package.json
+COPY api-package-lock.json package-lock.json
+RUN npm ci --offline --ignore-scripts --omit=dev --no-audit --no-fund \
+    && npm rebuild waitpid --offline --nodedir=/usr/local/node \
+    && cp -a /build/piston/api/src ./src
+COPY install-packages.mjs /build/install-packages.mjs
+RUN node /build/install-packages.mjs
+COPY build-cds.sh /build/build-cds.sh
+RUN bash /build/build-cds.sh \
+    && test "$(gcc-14 -dumpfullversion)" = 14.2.0 \
+    && test "$(/usr/local/python/bin/python3 -I -c 'import platform; print(platform.python_version())')" = 3.14.8 \
+    && test "$(node --version)" = v22.23.3 \
+    && /usr/local/jdk/bin/java -XshowSettings:properties -version 2>&1 | grep -F 'java.version = 21.0.12.1'
 
-FROM ghcr.io/engineer-man/piston@sha256:2f66b7456189c4d713aa986d98eccd0b6ee16d26c7ec5f21b30e942756fd127a
-COPY --from=packages --chown=1001:1001 /pkgs/out/ /piston/packages/
-# Reproduce what Piston's own package installer writes after extraction:
-# the cached environment (.env) and the installed marker (.ppman-installed).
-RUN set -eu; \
-    for dir in /piston/packages/*/*/; do \
-      env -i bash -c "cd '$dir' && source environment && env" \
-        | grep -vE '^(PWD|OLDPWD|_|SHLVL)=' > "$dir.env"; \
-      echo 0 > "$dir.ppman-installed"; \
-      chown 1001:1001 "$dir.env" "$dir.ppman-installed"; \
-    done
+FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a
+ENV PATH=/usr/local/bin:/usr/bin:/bin PISTON_LOG_LEVEL=ERROR
+COPY --from=build /usr/ /usr/
+COPY --from=build /lib/ /lib/
+COPY --from=build /etc/ /etc/
+COPY --from=build /var/lib/dpkg/ /var/lib/dpkg/
+COPY --from=build /piston_api/ /piston_api/
+COPY --from=build /piston/packages/ /piston/packages/
+COPY --from=build /usr/local/etc/isolate /usr/local/etc/isolate
 COPY --chmod=0555 entrypoint.sh /usr/local/bin/codestead-piston-entrypoint
+COPY image-inputs.lock.json /usr/local/share/codestead-piston/image-inputs.lock.json
+COPY build-inputs.sha256 /usr/local/share/codestead-piston/build-inputs.sha256
+COPY Dockerfile entrypoint.sh build-cds.sh install-packages.mjs api-package.json api-package-lock.json image-inputs.lock.json downloads.sha256 .dockerignore /tmp/build-inputs/
+RUN cd /tmp/build-inputs && sha256sum -c /usr/local/share/codestead-piston/build-inputs.sha256 \
+    && rm -rf /tmp/build-inputs
+RUN rm -rf /usr/local/node/lib/node_modules /usr/local/node/include /usr/local/python/lib/python3.14/ensurepip \
+    /usr/local/python/lib/python3.14/site-packages/pip* /usr/share/man \
+    && rm -f /usr/local/node/bin/npm /usr/local/node/bin/npx /usr/local/node/bin/corepack \
+    /usr/local/python/bin/pip* \
+    && mkdir -p /piston/jobs /run/isolate/locks
+LABEL org.opencontainers.image.title="Codestead Piston" \
+    org.opencontainers.image.source="https://github.com/thebrownhuman/Codestead" \
+    io.codestead.piston.toolchains="gcc-14.2.0,temurin-21.0.12.1,python-3.14.8,node-22.23.3"
+EXPOSE 2000
 ENTRYPOINT ["/usr/local/bin/codestead-piston-entrypoint"]
 CMD []
