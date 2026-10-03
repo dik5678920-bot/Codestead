@@ -1,0 +1,12 @@
+[Unit]
+Description=Run LearnCoding restic backup to Cloudflare R2 nightly
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 UTC
+RandomizedDelaySec=15m
+Persistent=true
+AccuracySec=1m
+Unit=learncoding-restic-backup.service
+
+[Install]
+WantedBy=timers.target
