@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { APIError } from "better-auth/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -29,6 +30,13 @@ const validBody = {
 };
 
 describe("forced password change endpoint", () => {
+  it("returns a friendly breached-password error without clearing auth cookies", async () => {
+    mocks.complete.mockRejectedValueOnce(new APIError("BAD_REQUEST", { code: "PASSWORD_COMPROMISED" }));
+    const response = await POST(request(validBody));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "PASSWORD_COMPROMISED", error: expect.stringContaining("data breach") });
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requireAuth.mockResolvedValue({

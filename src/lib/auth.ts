@@ -48,6 +48,7 @@ import {
   wantsSessionTakeover,
 } from "@/lib/security/session-takeover";
 import { PERSISTENT_SESSION_LIFETIME } from "@/lib/security/session-lifetime";
+import { breachedPasswordPlugin } from "@/lib/security/breached-passwords";
 
 /** Account behind a password-verified sign-in that is waiting for its second factor. */
 async function pendingTwoFactorUserId(ctx: GenericEndpointContext) {
@@ -371,6 +372,7 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    breachedPasswordPlugin(),
     twoFactor({
       issuer: process.env.APP_NAME ?? "Codestead",
       allowPasswordless: true,

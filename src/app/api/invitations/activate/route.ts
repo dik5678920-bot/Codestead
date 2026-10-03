@@ -8,6 +8,7 @@ import {
 } from "@/lib/security/invitation-store";
 import { rateLimitIp, withRateLimit } from "@/lib/security/rate-limit";
 import { runAuthorizedActivation } from "@/lib/security/activation-context";
+import { BREACHED_PASSWORD_MESSAGE, isBreachedPasswordError, requireUnbreachedPassword } from "@/lib/security/breached-passwords";
 
 const activationSchema = z.object({
   token: z.string().min(32).max(256),
@@ -31,6 +32,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "This invitation is invalid or expired." }, { status: 404 });
           }
 
+          // Check before consuming the single-use invitation so a learner can
+          // retry a rejected password with the same invitation.
+          try {
+            await requireUnbreachedPassword(parsed.data.password);
+          } catch (error) {
+            if (!isBreachedPasswordError(error)) throw error;
+            return NextResponse.json({ code: "PASSWORD_COMPROMISED", error: BREACHED_PASSWORD_MESSAGE }, { status: 400 });
+          }
           const claimed = await consumeInvitationByToken({
             rawToken: parsed.data.token,
             expectedEmail: record.email,
@@ -58,7 +67,10 @@ export async function POST(request: NextRequest) {
               }),
             );
             return NextResponse.json({ ok: true }, { status: 201 });
-          } catch {
+          } catch (error) {
+            if (isBreachedPasswordError(error)) {
+              return NextResponse.json({ code: "PASSWORD_COMPROMISED", error: `${BREACHED_PASSWORD_MESSAGE} Request a fresh invitation to try again.` }, { status: 400 });
+            }
             return NextResponse.json(
               { error: "Account activation could not be completed. Request a fresh invitation if this continues." },
               { status: 409 },

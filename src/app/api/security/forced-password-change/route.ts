@@ -4,6 +4,7 @@ import { z } from "zod";
 import { requireAuth } from "@/lib/http/authz";
 import { completeForcedPasswordChange } from "@/lib/security/forced-password-change";
 import { withRateLimit } from "@/lib/security/rate-limit";
+import { BREACHED_PASSWORD_MESSAGE, isBreachedPasswordError } from "@/lib/security/breached-passwords";
 
 const bodySchema = z.object({
   currentPassword: z.string().min(12).max(128),
@@ -45,7 +46,12 @@ export async function POST(request: NextRequest) {
           });
         }
         return response;
-      } catch {
+      } catch (error) {
+        if (isBreachedPasswordError(error)) {
+          return NextResponse.json({ code: "PASSWORD_COMPROMISED", error: BREACHED_PASSWORD_MESSAGE }, {
+            status: 400, headers: { "Cache-Control": "private, no-store" },
+          });
+        }
         return failure(503);
       }
     },

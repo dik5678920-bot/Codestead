@@ -9,6 +9,9 @@ const manifest = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"
 };
 
 describe("Better Auth security configuration", () => {
+  it("enables the fail-open HIBP plugin", () => {
+    expect(authSource).toContain("breachedPasswordPlugin(),");
+  });
   it("pins the audited Better Auth release exactly", () => {
     expect(manifest.dependencies["better-auth"]).toBe("1.7.6");
   });
