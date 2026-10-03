@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -6,6 +8,7 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool, type PoolClient } from "pg";
+import { RateLimiterPostgres, RateLimiterRes } from "rate-limiter-flexible";
 
 import {
   verifyAppliedMigrationLedger,
@@ -635,6 +638,40 @@ export async function readValidatedIntegrationMigrationJournal(
   });
 }
 
+async function proveRateLimitMigration(client: PoolClient): Promise<void> {
+  try {
+    await client.query("BEGIN");
+    // Roll back the entire probe so the already-migrated disposable catalog is restored.
+    await client.query("DROP TABLE public.api_rate_limit");
+    await client.query("SET LOCAL search_path = public");
+    await client.query(`CREATE TABLE api_rate_limit_window (
+      scope text NOT NULL, key_hash text NOT NULL, window_start timestamptz NOT NULL,
+      request_count integer NOT NULL, expires_at timestamptz NOT NULL,
+      PRIMARY KEY (scope, key_hash, window_start)
+    ); CREATE INDEX api_rate_limit_expiry_idx ON api_rate_limit_window (expires_at)`);
+    const start = Math.floor(Date.now() / 60_000) * 60_000;
+    const expiry = start + 120_000;
+    await client.query(`INSERT INTO api_rate_limit_window VALUES ($1, $2, $3, $4, $5)`,
+      ["monitoring_envelope_user", "a".repeat(64), new Date(start), 30, new Date(expiry)]);
+    await client.query(await readFile(new URL("../../drizzle/0071_rate_limiter_flexible.sql", import.meta.url), "utf8"));
+    const key = `monitoring_envelope_user:${"a".repeat(64)}:${start}`;
+    assert.deepEqual((await client.query("SELECT * FROM api_rate_limit")).rows, [
+      { key, points: 30, expire: String(expiry) },
+    ]);
+    assert.deepEqual((await client.query("SELECT to_regclass('public.api_rate_limit_window') AS old")).rows, [{ old: null }]);
+    const limiter = new RateLimiterPostgres({
+      storeClient: client, storeType: "client", schemaName: "public",
+      tableName: "api_rate_limit", tableCreated: true, clearExpiredByTimeout: false,
+      keyPrefix: "", points: 30, duration: 60,
+    });
+    await assert.rejects(limiter.consume(key), error => error instanceof RateLimiterRes);
+    assert.deepEqual((await client.query("SELECT points, expire FROM api_rate_limit")).rows, [{ points: 31, expire: String(expiry) }]);
+    await assert.rejects(client.query("INSERT INTO api_rate_limit VALUES ('access_request_email:raw@example.com:0', 1, 1)"), { code: "23514" });
+  } finally {
+    await client.query("ROLLBACK");
+  }
+}
+
 export async function runValidatedIntegrationMigrations(
   input: ValidatedIntegrationMigrationsInput,
 ): Promise<number> {
@@ -659,6 +696,9 @@ export async function runValidatedIntegrationMigrations(
       // Replay the 0070 legacy-row proof only when that migration is present.
       if (reviewedMigrations.some((migration) => migration.folderMillis === 1_790_851_350_433)) {
         await proveCredentialPreferenceMigration(client);
+      }
+      if (reviewedMigrations.some((migration) => migration.folderMillis === 1_791_034_812_537)) {
+        await proveRateLimitMigration(client);
       }
       return verifyExactAppliedMigrationJournal(
         client,
