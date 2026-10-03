@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "revision": "piston-pr4b-v1",
+  "sourceCommit": "27015b8116a21191d0a4f820e8364de635e0519d",
+  "handoff": "infra/piston/pr4b-runtime-handoff.json",
+  "imageReference": "codestead-piston@sha256:da7c26b38e7112eb1073696e65c2dfec9449d9d84ea4b4355d49a212246fe46a",
+  "legacyPins": {
+    "c": { "versions": ["C23 / GCC 14.2.0"], "imageDigest": "sha256:d7c380a5503525ee45c36dc7fc8d68552ab0de218ff7cdc0fb974f4b718f67ad" },
+    "cpp": { "versions": ["C++20 / G++ 14.2.0"], "imageDigest": "sha256:a2e77836bf601f9940e267957521b78c0997d0eef21c12c49c888eb665dbe7dc" },
+    "java": { "versions": ["Java 21", "Java SE 21"], "imageDigest": "sha256:3b68fbdc7a2ab29e3d6b7268fab497622f1afcf4bec3ce71df40754136d7beb9" },
+    "python": { "versions": ["Python 3.14"], "imageDigest": "sha256:88f730d23862355b931c7784f8b98e794de49807828785bfef08de70dc6b27cb" },
+    "javascript": { "versions": ["Node.js 22"], "imageDigest": "sha256:4a33b5b91221378dfd948fa3ea4a108ac8c1ebdf17bd795d3306e6b57171b194" }
+  },
+  "scope": "Reviewed runtime-only pin revision for new formal exam forms from independently reviewed pointer-selected publications. Stored artifacts, attempts and grading evidence remain immutable. Retake and mastery-recheck lineages retain their source pins."
+}
