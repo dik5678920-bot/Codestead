@@ -14,8 +14,18 @@ function serverOptions(runtime: "nodejs" | "edge") {
 
 let enabled = false;
 
-/** Error monitoring is initialized only when SENTRY_DSN is configured. */
+/** Validate startup configuration before optionally initializing monitoring. */
 export async function register() {
+  if (process.env.NODE_ENV === "production" && !process.env.APP_URL?.trim()) {
+    const error = new Error("APP_URL is required in production. Set it to the public HTTPS origin before starting the server.");
+    if (process.env.NEXT_RUNTIME !== "edge") {
+      // Next can catch a rejected prepare hook without terminating its listener.
+      // Startup configuration failure must stop the Node process itself.
+      console.error(error.message);
+      process.exit(1);
+    }
+    throw error;
+  }
   const runtime = process.env.NEXT_RUNTIME === "edge" ? "edge" : "nodejs";
   const options = serverOptions(runtime);
   if (!options) return;
