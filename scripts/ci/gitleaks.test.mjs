@@ -14,7 +14,29 @@ const scanScript = join(root, "scripts/ci/scan-gitleaks.sh");
 const fixturePath = "services/runner/src/__tests__/fixtures.ts";
 // Construct synthetic values at runtime; no credential-shaped test token in Git.
 const fixtureSecret = ["test", "secret", "that", "is", "at", "least", "32", "bytes", "long"].join("-");
-const freshCanary = () => randomBytes(24).toString("hex");
+function freshCanary(t) {
+  const directory = workspace(t);
+  const report = join(directory, "finding.json");
+  const files = ["canary-api.ts", "canary-shared.ts"];
+  // Entropy and stopword filters can reject random values. Prove that this
+  // fresh value hits the real rule in both contexts before testing bypasses.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const canary = randomBytes(24).toString("base64url");
+    write(directory, files[0], `api_key = "${canary}";\n`);
+    write(directory, files[1], `sharedSecret = "${canary}";\n`);
+    rmSync(report, { force: true });
+    const result = scan(directory, "dir", ["--report-format=json", `--report-path=${report}`]);
+    assert.ok(result.status === 0 || result.status === 1, "canary pre-check scanner failed");
+    if (result.status === 1) {
+      const findings = JSON.parse(readFileSync(report, "utf8"));
+      if (files.every((file) => findings.some((finding) =>
+        finding.RuleID === "generic-api-key" && finding.File.endsWith(file)))) {
+        return canary;
+      }
+    }
+  }
+  assert.fail("could not generate a detectable generic-api-key canary");
+}
 
 function workspace(t) {
   const directory = mkdtempSync(join(tmpdir(), "gitleaks-test-"));
@@ -58,7 +80,7 @@ test("fixture exception requires both the exact path and exact value", (t) => {
   const directory = workspace(t);
   write(directory, fixturePath, `sharedSecret = "${fixtureSecret}";\n`);
   assert.equal(scan(directory).status, 0, "known fixture should be allowed");
-  write(directory, fixturePath, `sharedSecret = "${freshCanary()}";\n`);
+  write(directory, fixturePath, `sharedSecret = "${freshCanary(t)}";\n`);
   assert.equal(scan(directory).status, 1, "new secret in fixture path must fail");
   write(directory, fixturePath, "// fixture removed\n");
   write(directory, "other.test.ts", `sharedSecret = "${fixtureSecret}";\n`);
@@ -67,7 +89,7 @@ test("fixture exception requires both the exact path and exact value", (t) => {
 
 test("inline suppressions cannot hide canaries and reports are redacted", (t) => {
   const directory = workspace(t);
-  const canary = freshCanary();
+  const canary = freshCanary(t);
   write(directory, "unexpected.ts", `api_key = "${canary}"; // gitleaks:allow\n`);
   const report = join(directory, "finding.json");
   const result = scan(directory, "dir", ["--verbose", "--report-format=json", `--report-path=${report}`]);
@@ -83,7 +105,7 @@ test("PR commit range catches a canary removed before the final tree", (t) => {
   init(directory);
   write(directory, "README.md", "clean fixture\n");
   const base = commit(directory);
-  write(directory, "unexpected.ts", `api_key = "${freshCanary()}";\n`);
+  write(directory, "unexpected.ts", `api_key = "${freshCanary(t)}";\n`);
   commit(directory);
   write(directory, "unexpected.ts", "// removed\n");
   const head = commit(directory);
@@ -96,7 +118,7 @@ test("CI bootstrap audits old history; subsequent PRs only scan their range", {
 }, (t) => {
   const directory = workspace(t);
   init(directory);
-  write(directory, "old.ts", `api_key = "${freshCanary()}";\n`);
+  write(directory, "old.ts", `api_key = "${freshCanary(t)}";\n`);
   commit(directory);
   write(directory, "old.ts", "// removed\n");
   const base = commit(directory);
