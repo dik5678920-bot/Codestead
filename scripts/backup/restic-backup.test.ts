@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { describe, expect, it } from "vitest";
 
 // Runs the hermetic shell suite for the restic -> R2 backup scripts so it is
 // part of the unit gate. The suite stubs docker and needs GNU coreutils, flock
