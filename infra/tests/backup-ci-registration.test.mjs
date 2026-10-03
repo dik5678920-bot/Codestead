@@ -952,8 +952,8 @@ const applicationSetupRuns = new Set([
   reviewedDockerEngineRun,
 ]);
 const unitShardRun =
-  "npx vitest run --coverage --maxWorkers=2 --shard=${{ matrix.shard }}/6 --reporter=blob --reporter=default --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0 --coverage.thresholds.statements=0";
-const unitCoverageMergeRun = "npx vitest run --merge-reports --coverage";
+  "npx vitest run --coverage --maxWorkers=2 --shard=${{ matrix.shard }}/6 --reporter=blob --reporter=default --outputFile.blob=.vitest-reports/blob-${{ matrix.shard }}-6.json --coverage.thresholds.lines=0 --coverage.thresholds.functions=0 --coverage.thresholds.branches=0 --coverage.thresholds.statements=0";
+const unitCoverageMergeRun = "npx vitest run --merge-reports=.vitest-reports --coverage";
 const retiredApplicationRuns = new Map([
   ["npm run test:coverage", [unitShardRun, unitCoverageMergeRun]],
 ]);
