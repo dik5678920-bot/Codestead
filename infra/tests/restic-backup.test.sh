@@ -319,7 +319,7 @@ for unit in backup freshness restore-test; do
   require_exact "$service" 'User=root'
   require_exact "$service" 'Type=oneshot'
   require_exact "$service" 'UMask=0077'
-  require_exact "$service" 'Documentation=/opt/learncoding/docs/runbooks/backups-r2.md'
+  require_exact "$service" 'Documentation=file:/opt/learncoding/docs/runbooks/backups-r2.md'
   require_exact "$timer" 'Persistent=true'
   require_exact "$timer" "Unit=learncoding-restic-$unit.service"
   if grep -q 'mnt/learncoding-backups' "$service"; then
