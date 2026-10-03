@@ -1,5 +1,7 @@
 # Backup and restore runbook
 
+> **Active off-site backups now use restic to Cloudflare R2; see [backups-r2.md](backups-r2.md).** The age, local-drive and Google Drive pipeline below stays parked until a dedicated backup drive exists.
+
 The design uses PostgreSQL custom-format dumps plus curriculum, non-secret deployment configuration, and application data. A stream is encrypted with `age`, then the ciphertext receives a SHA-256 checksum. Plaintext staging is mode 0700 and removed after each run. The backup drive and Google Drive receive encrypted archives only. Capacity monitoring warns at 70% utilization and becomes critical at 85%, leaving recovery headroom before the filesystem is exhausted.
 
 Secret files, Cloudflare credentials, OAuth tokens, rclone configuration, the `age` private identity, and email/mailbox export formats are excluded. The database dump can contain application-encrypted credential ciphertext; the application master key is deliberately separate and never backed up here.
