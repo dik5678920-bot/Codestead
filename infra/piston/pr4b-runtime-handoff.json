@@ -96,7 +96,7 @@
     "kernel": "6.6.87.2-microsoft-standard-WSL2",
     "isolation": "isolate inside disposable Docker Desktop/CI VM; production Kata unchanged"
   },
-  "availability": "Reproducible build: node infra/piston/build.mjs at this commit yields exactly this manifest on CI, Docker Desktop and the NUC (verify-digest.mjs enforces it); no registry publication",
-  "publicationRequirement": "New exam forms pin these exact labels and this manifest digest; the deployed PISTON_IMAGE must be this digest; immutable legacy-pinned attempts must not be rewritten",
+  "availability": "Reference build tested on Docker Desktop; build.mjs is reproducible per builder (CI builds twice and requires identical digests) but digests differ across BuildKit versions, so this digest is a record, not a pin",
+  "publicationRequirement": "New exam forms pin these exact labels and the digest of the deployed, digest-pinned PISTON_IMAGE (derived at runtime, fail closed); immutable legacy-pinned attempts must not be rewritten",
   "baseCommit": "23215e49047a9aa8efc08e2a033244d7df18cfd3"
 }

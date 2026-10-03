@@ -106,14 +106,15 @@ network and reads `PISTON_URL=http://piston:2000` from `compose.yaml`.
    cd /opt/learncoding
    node infra/piston/prepare.mjs
    node infra/piston/build.mjs codestead-piston:$(git rev-parse --short HEAD)
-   node infra/piston/verify-digest.mjs
    docker image inspect --format '{{json .RepoDigests}}' codestead-piston:$(git -C /opt/learncoding rev-parse --short HEAD)
    ```
 
-   The build is reproducible. `verify-digest.mjs` must print the digest from
-   `infra/piston/pr4b-runtime-handoff.json`, the same one CI built; stop if it
-   fails. The last command must print that same `codestead-piston@sha256:<64 hex>`
-   entry, which is the only `PISTON_IMAGE` that exam publication accepts.
+   The second command must print one `codestead-piston@sha256:<64 hex>` entry.
+   New exam forms pin whatever digest `PISTON_IMAGE` names, so set it to exactly
+   this value. Publication fails closed if `PISTON_IMAGE` is unset or not
+   digest-pinned. Rebuilding with a different Docker/BuildKit version can change
+   the digest. Existing Piston-pinned attempts then reject the new image, so
+   rebuild only between exam windows.
 
 3. Edit `/etc/learncoding/compose.env`: set `PISTON_IMAGE` to that exact
    `codestead-piston@sha256:<64 hex>` value, add the token (`COMPOSE_PROFILES=piston`,

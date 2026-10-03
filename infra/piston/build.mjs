@@ -1,7 +1,7 @@
-// Reproducible offline build of the Codestead Piston image. Every builder (CI,
-// a disposable VM, the NUC) runs this one command, so the same commit yields the
-// same manifest digest. Run prepare.mjs first.
-//   node infra/piston/build.mjs <tag>
+// Reproducible offline build of the Codestead Piston image. CI, disposable VMs
+// and the NUC all run this one command; the same builder (BuildKit version) gets
+// the same manifest digest for the same commit. Run prepare.mjs first.
+//   node infra/piston/build.mjs [--no-cache] <tag>
 import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import os from "node:os";
@@ -22,16 +22,18 @@ export function sourceDateEpoch(lock) {
 // rewrite-timestamp clamps every layer file mtime to SOURCE_DATE_EPOCH. It
 // cannot be combined with unpacking straight into the image store, so the image
 // is exported as a tarball and then loaded (loading keeps the manifest digest).
-export function buildArgs({ epoch, tag, archive, metadataFile, context }) {
-  return ["buildx", "build", "--network=none", "--platform", "linux/amd64", "--provenance=false",
+export function buildArgs({ epoch, tag, archive, metadataFile, context, noCache = false }) {
+  return ["buildx", "build", ...(noCache ? ["--no-cache"] : []), "--network=none", "--platform", "linux/amd64", "--provenance=false",
     "--build-arg", `SOURCE_DATE_EPOCH=${epoch}`,
     "--output", `type=docker,name=${tag},dest=${archive},rewrite-timestamp=true`,
     "--metadata-file", metadataFile, context];
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const tag = process.argv[2];
-  if (!tag || process.argv.length !== 3) throw new Error("Usage: node infra/piston/build.mjs <tag>");
+  const args = process.argv.slice(2);
+  const noCache = args[0] === "--no-cache";
+  const tag = args[noCache ? 1 : 0];
+  if (!tag || args.length !== (noCache ? 2 : 1)) throw new Error("Usage: node infra/piston/build.mjs [--no-cache] <tag>");
   const driverStatus = execFileSync("docker", ["info", "--format", "{{json .DriverStatus}}"], { encoding: "utf8" });
   if (!driverStatus.includes("io.containerd.snapshotter.v1")) {
     throw new Error("Docker must use the containerd image store (docs/runbooks/piston-kata.md step 1): "
@@ -42,7 +44,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   try {
     const archive = path.join(work, "image.tar");
     execFileSync("docker", buildArgs({ epoch: sourceDateEpoch(lock), tag, archive,
-      metadataFile: path.join(root, "build-metadata.json"), context: root }), { stdio: "inherit" });
+      metadataFile: path.join(root, "build-metadata.json"), context: root, noCache }), { stdio: "inherit" });
     execFileSync("docker", ["load", "--input", archive], { stdio: ["ignore", "ignore", "inherit"] });
   } finally {
     await rm(work, { recursive: true, force: true });

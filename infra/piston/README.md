@@ -20,17 +20,19 @@ npm ci
 node --test infra/piston/prepare.test.mjs
 node infra/piston/prepare.mjs
 node infra/piston/build.mjs codestead-piston:pr5
-node infra/piston/verify-digest.mjs
 node infra/piston/test-image.mjs codestead-piston:pr5
 ```
 
 The build is reproducible. `build.mjs` sets `SOURCE_DATE_EPOCH` to the locked
 Debian snapshot time (`sourceDateEpoch` in the lock) and rewrites every layer
 timestamp to it. It also builds AppCDS as a static dump of a sorted class list.
-Building the same commit twice, or on CI and on the NUC, gives the same manifest
-digest. `verify-digest.mjs` fails unless that digest equals the one in
-`pr4b-runtime-handoff.json`. Build from a Linux checkout: on a Windows checkout,
-CRLF line endings change the build-input hashes and therefore the digest.
+The same builder gets the same manifest digest for the same commit. CI builds
+twice (the second with `--no-cache`), and `verify-digest.mjs` fails unless both
+digests match. Different BuildKit versions (Docker Desktop, the CI runner, the
+NUC) can still produce different digests. Exam forms therefore pin the digest of
+the deployed, digest-pinned `PISTON_IMAGE`, derived at runtime, and never a
+committed digest. A Windows checkout with CRLF line endings also changes the
+digest.
 
 The fetcher fails on missing or incorrect SHA-256 values. The Dockerfile checks
 the same archive hashes again, installs only local `.deb` files and runs npm
@@ -62,12 +64,11 @@ the app adapter inventory and live API inventory are tested against these pins.
 The smoke command writes ignored `image-result.json`: actual image manifest and
 config digests, runtime labels, API inventory, build-input hashes and test result.
 CI uploads that record plus BuildKit metadata; it does not publish an image.
-`pr4b-runtime-handoff.json` records the reviewed reproducible build. Any rebuild
-of this commit must produce exactly its digest, and CI enforces this. If an input
-changes, rebuild, rerun the live tests, and update the handoff and the
-publication pins together.
+`pr4b-runtime-handoff.json` records the reference build's live-test result,
+runtime labels and build-input hashes. Its digest is a record, not a pin. If an
+input changes, rebuild, rerun the live tests and update the handoff.
 
 Legacy-pinned exam snapshots still fail closed on Piston. PR4b needs reviewed
 publication/tooling changes and new forms pinned to these exact runtime labels
-and the verified image digest. Existing attempt snapshots stay immutable.
+and the deployed image's digest (`PISTON_IMAGE`). Existing attempt snapshots stay immutable.
 No exam pin, evidence record, scoring rule or validator is weakened here.

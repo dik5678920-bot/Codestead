@@ -45,12 +45,14 @@ jobs:
           sudo install -m 0644 daemon.json /etc/docker/daemon.json && rm daemon.json
           sudo systemctl restart docker
           docker info --format '{{json .DriverStatus}}' | grep -F io.containerd.snapshotter.v1
-      - name: Build reproducibly without network access
+      - name: Build twice without network access
         run: |
           node infra/piston/build.mjs codestead-piston:ci > build.log 2>&1 || { tail -n 120 build.log; exit 1; }
+          mv infra/piston/build-metadata.json first-build-metadata.json
+          node infra/piston/build.mjs --no-cache codestead-piston:ci > build.log 2>&1 || { tail -n 120 build.log; exit 1; }
           rm build.log
-      - name: Require the reviewed reproducible digest
-        run: node infra/piston/verify-digest.mjs
+      - name: Require identical digests from both builds
+        run: node infra/piston/verify-digest.mjs first-build-metadata.json infra/piston/build-metadata.json
       - name: Test actual image and record its manifest
         run: |
           node infra/piston/test-image.mjs codestead-piston:ci > smoke.log 2>&1 || { cat smoke.log; exit 1; }

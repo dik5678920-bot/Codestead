@@ -87,19 +87,25 @@ test("AppCDS uses a deterministic static dump, never a dynamic archive", async (
   assert.match(script, /LC_ALL=C sort -u/);
 });
 
-test("CI rejects any build whose digest differs from the reviewed handoff", async () => {
-  const { verifyDigest } = await import("./verify-digest.mjs");
-  const handoff = JSON.parse(await readFile(new URL("./pr4b-runtime-handoff.json", import.meta.url)));
-  const manifest = handoff.imageReference.split("@")[1];
-  const ok = { "containerimage.digest": manifest, "containerimage.config.digest": handoff.imageConfigDigest };
-  assert.equal(verifyDigest(ok, handoff), manifest);
-  assert.throws(() => verifyDigest({ ...ok, "containerimage.digest": `sha256:${"0".repeat(64)}` }, handoff), /not reproducible/);
-  assert.throws(() => verifyDigest({ ...ok, "containerimage.config.digest": `sha256:${"0".repeat(64)}` }, handoff), /not reproducible/);
-  assert.throws(() => verifyDigest({}, handoff), /not reproducible/);
+test("CI builds twice and rejects differing digests; the exam pin is never a committed digest", async () => {
+  const { verifyReproducible } = await import("./verify-digest.mjs");
+  const digest = (c) => `sha256:${c.repeat(64)}`;
+  const ok = { "containerimage.digest": digest("a"), "containerimage.config.digest": digest("b") };
+  assert.equal(verifyReproducible(ok, { ...ok }), digest("a"));
+  assert.throws(() => verifyReproducible(ok, { ...ok, "containerimage.digest": digest("c") }), /not reproducible/);
+  assert.throws(() => verifyReproducible(ok, { ...ok, "containerimage.config.digest": digest("c") }), /not reproducible/);
+  assert.throws(() => verifyReproducible({}, {}), /not reproducible/);
   const workflow = await readFile(new URL("../../.github/workflows/piston-image.yml", import.meta.url), "utf8");
-  assert.match(workflow, /node infra\/piston\/build\.mjs codestead-piston:ci/);
-  assert.match(workflow, /node infra\/piston\/verify-digest\.mjs/);
-  assert.match(workflow, /\.features\["containerd-snapshotter"\] = true/, "CI must build in the containerd store like the NUC");
+  assert.ok(workflow.includes("node infra/piston/build.mjs codestead-piston:ci "));
+  assert.ok(workflow.includes("node infra/piston/build.mjs --no-cache codestead-piston:ci "));
+  assert.ok(workflow.includes("node infra/piston/verify-digest.mjs first-build-metadata.json infra/piston/build-metadata.json"));
+  assert.ok(workflow.includes('.features["containerd-snapshotter"] = true'), "CI must build in the containerd store like the NUC");
+  const { buildArgs } = await import("./build.mjs");
+  assert.equal(buildArgs({ epoch: 1, tag: "t", archive: "a", metadataFile: "m", context: "c", noCache: true })[2], "--no-cache");
+  const shipped = JSON.parse(await readFile(new URL("../../src/lib/exams/piston-runtime-pins.json", import.meta.url)));
+  assert.equal(JSON.stringify(shipped).includes("imageReference"), false);
+  const pins = JSON.parse(await readFile(new URL("./pr4b-publication-pins.json", import.meta.url)));
+  assert.equal(pins.imageReference, undefined);
 });
 
 test("every build-context COPY fixes file modes so Windows and Linux contexts build the same image", async () => {

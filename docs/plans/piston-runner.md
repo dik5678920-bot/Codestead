@@ -281,9 +281,9 @@ latest-migration pins remain current.
 | Python | Python 3.14 | Python 3.14.8 (Piston) |
 | JavaScript | Node.js 22 | Node.js 22.23.3 (Piston) |
 
-Every new Piston pin uses manifest
-`sha256:5964ef2fa585c6e5f4dfbb458eed88ca86912805b352f6a19884f286a7533c63`, the reproducible build of
-`infra/piston/build.mjs` (any builder at that commit gets the same digest).
+Every new Piston pin uses the manifest digest of the deployed, digest-pinned
+`PISTON_IMAGE`, derived at runtime and failing closed. The `build.mjs` build is
+reproducible per builder but not across BuildKit versions.
 The existing legacy manifest digests are recorded verbatim in the reviewed revision.
 This PR does not publish the image, deploy to the NUC or switch the production flag.
 Before rollout, verify the deployed image manifest and labels against the PR5 handoff,
