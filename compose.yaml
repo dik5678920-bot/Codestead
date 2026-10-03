@@ -306,6 +306,7 @@ services:
       CREDENTIAL_MASTER_KEY_FILE: /run/secrets/credential_master_key
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET_FILE: /run/secrets/google_client_secret
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
       RUNNER_BASE_URL: http://runner-egress-gateway:4100
       RUNNER_SHARED_SECRET_FILE: /run/secrets/runner_shared_secret
@@ -688,6 +689,7 @@ services:
       DATABASE_URL_FILE: /run/secrets/database_url
       PROJECT_REVIEW_CORRECTION_POLL_SECONDS: ${PROJECT_REVIEW_CORRECTION_POLL_SECONDS:-10}
       PROJECT_REVIEW_CORRECTION_BATCH_SIZE: ${PROJECT_REVIEW_CORRECTION_BATCH_SIZE:-2}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       SENTRY_DSN: ${SENTRY_DSN:-}
       SENTRY_RELEASE: ${SENTRY_RELEASE:-}
