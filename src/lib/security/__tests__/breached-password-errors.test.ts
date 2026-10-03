@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { runInNewContext } from "node:vm";
+import { createHash } from "node:crypto";
 import { APIError } from "better-auth/api";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -32,6 +33,13 @@ function foreignError(fields: Record<string, unknown>) {
 }
 
 function setup() {
+  // The plugin still uses Better Auth's checker; custom routes use native
+  // fetch. Exercise the same foreign exceptions at each actual I/O boundary.
+  vi.stubGlobal("fetch", vi.fn(async () => {
+    await mocks.check("synthetic-password");
+    const suffix = createHash("sha1").update("synthetic-password").digest("hex").slice(5);
+    return new Response(`${suffix}:0\r\n`);
+  }));
   const originalHash = vi.fn(async () => "stored-hash");
   const ctx = { password: { hash: originalHash } } as unknown as Parameters<ReturnType<typeof breachedPasswordPlugin>["init"]>[0];
   const hash = breachedPasswordPlugin().init(ctx).context.password.hash;
@@ -39,7 +47,7 @@ function setup() {
   return { hash, originalHash, log };
 }
 
-afterEach(() => { vi.restoreAllMocks(); mocks.check.mockReset(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); mocks.check.mockReset(); });
 
 describe("password errors across realms and server bundles", () => {
   it("recognizes a foreign breached-password error", () => {
@@ -77,13 +85,18 @@ describe("password errors across realms and server bundles", () => {
       { name: "APIError", status: "500" },
       { name: "APIError", statusCode: 403, status: 500 },
       { name: "APIError", statusCode: Number.NaN, status: 500 },
-    ])("rethrows other foreign errors unchanged without logging: %j", async (fields) => {
+    ])(flow === "plugin" ? "rethrows other foreign errors unchanged without logging: %j" : "fails open on foreign fetch failures with sanitized logging: %j", async (fields) => {
       const { hash, originalHash, log } = setup();
       const error = foreignError(fields);
       mocks.check.mockRejectedValue(error);
-      await expect(run(hash)).rejects.toBe(error);
+      if (flow === "plugin") {
+        await expect(run(hash)).rejects.toBe(error);
+        expect(log).not.toHaveBeenCalled();
+      } else {
+        await expect(run(hash)).resolves.toBeUndefined();
+        expect(log.mock.calls).toEqual([["HIBP password check unavailable; proceeding without breach screening."]]);
+      }
       expect(originalHash).not.toHaveBeenCalled();
-      expect(log).not.toHaveBeenCalled();
     });
 
     it("does not log successful screening", async () => {
