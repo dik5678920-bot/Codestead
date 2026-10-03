@@ -45,7 +45,7 @@
     }
   },
   "environment": {
-    "packageLockHash": "sha256:2d258e05b63270b854bfcdf02ecec0b8d59c70530dd04441b5404087d5a21294",
+    "packageLockHash": "sha256:a275b414ea889042181eefa8336f9dcda2a499ec1caa8b6400b92a6e3aac5394",
     "node": {
       "tag": "learncoding/runtime-javascript:local",
       "manifestDigest": "sha256:4a33b5b91221378dfd948fa3ea4a108ac8c1ebdf17bd795d3306e6b57171b194",
@@ -4236,7 +4236,7 @@
       "status": "passed",
       "sourceHash": "sha256:a66a108f582d77d6142037decf31614c7033cb11b059bd4e84def103615acbc7",
       "consoleErrors": [
-        "%o\n\n%s\n\n%s\n Error: demo\n    at Risky (<anonymous>:21743:21)\n    at Object.react_stack_bottom_frame (<anonymous>:19767:22)\n    at renderWithHooks (<anonymous>:6912:26)\n    at updateFunctionComponent (<anonymous>:8733:24)\n    at beginWork (<anonymous>:9783:22)\n    at runWithFiberInDEV (<anonymous>:2255:74)\n    at performUnitOfWork (<anonymous>:13819:100)\n    at workLoopSync (<anonymous>:13682:45)\n    at renderRootSync (<anonymous>:13666:15)\n    at performWorkOnRoot (<anonymous>:13085:39) The above error occurred in the <Risky> component. React will try to recreate this component tree from scratch using the error boundary you provided, Boundary."
+        "%o\n\n%s\n\n%s\n Error: demo\n    at Risky (<anonymous>:23855:21)\n    at Object.react_stack_bottom_frame (<anonymous>:21553:22)\n    at renderWithHooks (<anonymous>:7212:26)\n    at updateFunctionComponent (<anonymous>:9057:24)\n    at beginWork (<anonymous>:10137:22)\n    at runWithFiberInDEV (<anonymous>:2427:74)\n    at performUnitOfWork (<anonymous>:14892:100)\n    at workLoopSync (<anonymous>:14755:45)\n    at renderRootSync (<anonymous>:14739:15)\n    at performWorkOnRoot (<anonymous>:14155:39) The above error occurred in the <Risky> component. React will try to recreate this component tree from scratch using the error boundary you provided, Boundary."
       ]
     },
     {

@@ -10,7 +10,7 @@ const manifest = JSON.parse(readFileSync(path.join(process.cwd(), "package.json"
 
 describe("Better Auth security configuration", () => {
   it("pins the audited Better Auth release exactly", () => {
-    expect(manifest.dependencies["better-auth"]).toBe("1.6.23");
+    expect(manifest.dependencies["better-auth"]).toBe("1.7.6");
   });
 
   it("disables implicit account linking even for a trusted OAuth provider", () => {

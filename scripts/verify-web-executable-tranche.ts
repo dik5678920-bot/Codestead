@@ -7,7 +7,7 @@ import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 
-import { build } from "esbuild";
+import { build } from "esbuild-authoring";
 import { chromium, type Browser, type Page } from "playwright";
 
 import {
@@ -529,7 +529,7 @@ async function main(): Promise<void> {
       ? Promise.resolve<RuntimeInspection | null>(null)
       : readFile(path.join(root, "services", "runner", "dist", "runtime-inspection.json"), "utf8").then((value) => JSON.parse(value) as RuntimeInspection),
     readFile(require.resolve("playwright/package.json"), "utf8").then((value) => JSON.parse(value) as { version: string }),
-    readFile(require.resolve("esbuild/package.json"), "utf8").then((value) => JSON.parse(value) as { version: string }),
+    readFile(require.resolve("esbuild-authoring/package.json"), "utf8").then((value) => JSON.parse(value) as { version: string }),
     packageMetadata("react-router", "react-router"),
     packageMetadata("@testing-library/react", "@testing-library/react"),
     packageMetadata("@testing-library/user-event", "@testing-library/user-event"),

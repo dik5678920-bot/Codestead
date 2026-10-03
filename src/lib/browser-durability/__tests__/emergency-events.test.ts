@@ -390,7 +390,7 @@ describe("emergency exam event bridge", () => {
     const originalGetItem = window.localStorage.getItem.bind(window.localStorage);
     let reads = 0;
     const storage = new Proxy(window.localStorage, {
-      get(targetStorage, property, receiver) {
+      get(targetStorage, property) {
         if (property === "getItem") {
           return (storageKey: string) => {
             const value = originalGetItem(storageKey);
@@ -402,7 +402,7 @@ describe("emergency exam event bridge", () => {
             return value;
           };
         }
-        const value = Reflect.get(targetStorage, property, receiver) as unknown;
+        const value = Reflect.get(targetStorage, property, targetStorage) as unknown;
         return typeof value === "function" ? value.bind(targetStorage) : value;
       },
     });

@@ -387,12 +387,12 @@ export function OnboardingWizard() {
     setError(null);
     const password = String(new FormData(event.currentTarget).get("password") ?? "");
     try {
-      const result = await authClient.twoFactor.enable(password ? { password } : {});
+      const result = await authClient.twoFactor.enable(password ? { password, method: "totp" } : { method: "totp" });
       if (result.error) {
         setError(result.error.message ?? "Could not begin authenticator setup.");
         return;
       }
-      if (!result.data || typeof result.data.totpURI !== "string" ||
+      if (!result.data || result.data.method !== "totp" || typeof result.data.totpURI !== "string" ||
           !Array.isArray(result.data.backupCodes ?? [])) {
         throw new Error("Malformed authenticator response");
       }
