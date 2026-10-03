@@ -72,6 +72,7 @@
     "test:e2e": "playwright test",
     "test:browser:auth": "tsx scripts/verify-authenticated-learn-runtime.ts",
     "test:load:smoke": "tsx scripts/load-projection-smoke.ts",
+    "test:load:k6": "k6 run --no-usage-report load/smoke.js",
     "test:load:production": "tsx scripts/load-smoke.ts",
     "production-load:ci-registration": "node infra/tests/production-load-ci-registration.test.mjs",
     "production-load:test-control:bundle": "node infra/tests/production-load-test-control-bundle.test.mjs",
