@@ -1,3 +1,4 @@
+// @vitest-environment node
 import { NextRequest } from "next/server";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -50,10 +51,96 @@ vi.mock("@/lib/storage/quota-store", () => ({
 }));
 
 import { GET, POST } from "../route";
+import { MAX_UPLOAD_BYTES } from "@/lib/storage/policy";
+
+function streamedRequest(chunks: Uint8Array[], contentLength?: string) {
+  let reads = 0;
+  const cancel = vi.fn();
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const chunk = chunks[reads++];
+      if (chunk) controller.enqueue(chunk);
+      else controller.close();
+    },
+    cancel,
+  }, { highWaterMark: 0 });
+  const request = new NextRequest("http://localhost/api/files", {
+    method: "POST", body, duplex: "half",
+    headers: {
+      "Content-Type": "multipart/form-data; boundary=test-boundary",
+      "Idempotency-Key": "a1000000-0000-4000-8000-000000000001",
+      ...(contentLength === undefined ? {} : { "Content-Length": contentLength }),
+    },
+  } as ConstructorParameters<typeof NextRequest>[1]);
+  return { request, cancel, reads: () => reads };
+}
+
+const multipartStart = Buffer.from('--test-boundary\r\nContent-Disposition: form-data; name="file"; filename="main.py"\r\nContent-Type: text/plain\r\n\r\n');
+const multipartEnd = Buffer.from("\r\n--test-boundary--\r\n");
 
 const originalUploadsEnabled = process.env.UPLOADS_ENABLED;
 
 describe("learner file API integrity metadata boundary", () => {
+  it("rejects an oversized Content-Length before reading any body bytes", async () => {
+    const input = streamedRequest([multipartStart], String(MAX_UPLOAD_BYTES + 1024 * 1024));
+    const response = await POST(input.request);
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "Files must be between 1 byte and 50 MB." });
+    expect(input.reads()).toBe(0);
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, "1"])("stops a streaming oversized file with Content-Length %s", async (length) => {
+    const input = streamedRequest([
+      multipartStart, Buffer.alloc(MAX_UPLOAD_BYTES, 97), Buffer.from("x"), multipartEnd,
+    ], length);
+    const response = await POST(input.request);
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: "Files must be between 1 byte and 50 MB." });
+    expect(input.reads()).toBe(3);
+    expect(input.cancel).toHaveBeenCalled();
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+  });
+
+  it("accepts exactly 50 MiB, with multipart framing split across chunks", async () => {
+    const input = streamedRequest([
+      multipartStart.subarray(0, 7), multipartStart.subarray(7),
+      Buffer.alloc(MAX_UPLOAD_BYTES, 97), multipartEnd,
+    ], String(multipartStart.length + MAX_UPLOAD_BYTES + multipartEnd.length));
+    expect((await POST(input.request)).status).toBe(201);
+    const bytes = mocks.createUpload.mock.calls[0][0].bytes as Buffer;
+    expect(bytes.length).toBe(MAX_UPLOAD_BYTES);
+    expect(bytes[0]).toBe(97);
+    expect(bytes.at(-1)).toBe(97);
+    expect(input.cancel).not.toHaveBeenCalled();
+  });
+
+  it("bounds ignored multipart content before reading the rest of the body", async () => {
+    const input = streamedRequest([
+      Buffer.from('--test-boundary\r\nContent-Disposition: form-data; name="ignored"\r\n\r\n'),
+      Buffer.alloc(MAX_UPLOAD_BYTES + 64 * 1024 + 1, 97), multipartEnd,
+    ]);
+    expect((await POST(input.request)).status).toBe(413);
+    expect(input.reads()).toBe(2);
+    expect(input.cancel).toHaveBeenCalled();
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+  });
+
+  it("keeps the empty-file 413 and missing-file 400 responses", async () => {
+    const empty = streamedRequest([multipartStart, multipartEnd]);
+    expect((await POST(empty.request)).status).toBe(413);
+    const missing = streamedRequest([Buffer.from('--test-boundary\r\nContent-Disposition: form-data; name="other"\r\n\r\nhello'), multipartEnd]);
+    const response = await POST(missing.request);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Choose a file." });
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+  });
+
+  it("does not finalize a truncated multipart upload", async () => {
+    const input = streamedRequest([multipartStart, Buffer.from("hello")]);
+    await expect(POST(input.request)).rejects.toThrow();
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+  });
   beforeEach(async () => {
     process.env.UPLOADS_ENABLED = "true";
     vi.clearAllMocks();
@@ -112,10 +199,10 @@ describe("learner file API integrity metadata boundary", () => {
   it("keeps the digest in the server reservation while omitting it from the upload response", async () => {
     const form = new FormData();
     form.set("file", new File(["hello"], "main.py", { type: "text/plain" }));
-    const request = {
-      headers: new Headers({ "Idempotency-Key": "a1000000-0000-4000-8000-000000000001" }),
-      formData: async () => form,
-    } as unknown as NextRequest;
+    const request = new NextRequest("http://localhost/api/files", {
+      method: "POST", body: form,
+      headers: { "Idempotency-Key": "a1000000-0000-4000-8000-000000000001" },
+    });
     const response = await POST(request);
     expect(response.status).toBe(201);
     expect(mocks.createUpload).toHaveBeenCalledWith(expect.objectContaining({
@@ -158,10 +245,10 @@ describe("learner file API integrity metadata boundary", () => {
     mocks.createUpload.mockRejectedValueOnce(new errors.conflict());
     const form = new FormData();
     form.set("file", new File(["changed"], "main.py", { type: "text/plain" }));
-    const response = await POST({
-      headers: new Headers({ "Idempotency-Key": "a1000000-0000-4000-8000-000000000001" }),
-      formData: async () => form,
-    } as unknown as NextRequest);
+    const response = await POST(new NextRequest("http://localhost/api/files", {
+      method: "POST", body: form,
+      headers: { "Idempotency-Key": "a1000000-0000-4000-8000-000000000001" },
+    }));
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: "IDEMPOTENCY_MISMATCH" });
   });
@@ -170,10 +257,10 @@ describe("learner file API integrity metadata boundary", () => {
     mocks.createUpload.mockRejectedValueOnce(new errors.tombstoned());
     const form = new FormData();
     form.set("file", new File(["hello"], "main.py", { type: "text/plain" }));
-    const response = await POST({
-      headers: new Headers({ "Idempotency-Key": "a1000000-0000-4000-8000-000000000001" }),
-      formData: async () => form,
-    } as unknown as NextRequest);
+    const response = await POST(new NextRequest("http://localhost/api/files", {
+      method: "POST", body: form,
+      headers: { "Idempotency-Key": "a1000000-0000-4000-8000-000000000001" },
+    }));
     expect(response.status).toBe(410);
     expect(await response.json()).toEqual({
       code: "UPLOAD_IDEMPOTENCY_TOMBSTONED",

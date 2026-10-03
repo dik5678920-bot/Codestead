@@ -1513,7 +1513,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "0e13b4ed8f00bd71933e85fa54d7efca30bc5ad9950262ede92e7cf0327a247d"
+      "operationSourceSha256": "ceb06eb5fd428d678be533fc3f3838eb9e8cf86013b9aa2a4a38dfc0b3133d13"
     },
     {
       "operation": "POST /api/games/check",

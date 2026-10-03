@@ -7,7 +7,6 @@ import { requireAuth } from "@/lib/http/authz";
 import { withRateLimit } from "@/lib/security/rate-limit";
 import {
   DEFAULT_STORAGE_QUOTA_BYTES,
-  MAX_UPLOAD_BYTES,
   validateUpload,
 } from "@/lib/storage/policy";
 import { objectStorageRoot } from "@/lib/storage/object-root";
@@ -15,6 +14,7 @@ import { StorageQuotaExceededError } from "@/lib/storage/quota-store";
 import { uploadsEnabled } from "@/lib/storage/upload-feature";
 import { NodeDurableObjectStore } from "@/lib/storage/durable-object-store";
 import { PostgresUploadReceiptRepository } from "@/lib/storage/upload-repository";
+import { readUpload, UploadTooLargeError } from "@/lib/storage/read-upload";
 import {
   createDurableUpload,
   UploadCommitAmbiguousError,
@@ -93,17 +93,18 @@ export async function POST(request: NextRequest) {
           { status: 400, headers: { "Cache-Control": "private, no-store" } },
         );
       }
-      const form = await request.formData();
-      const upload = form.get("file");
-      if (!(upload instanceof File)) {
-        return NextResponse.json({ error: "Choose a file." }, { status: 400 });
-      }
-      // Reject oversized bodies before materializing a second in-memory copy.
-      if (!Number.isSafeInteger(upload.size) || upload.size <= 0 || upload.size > MAX_UPLOAD_BYTES) {
+      let upload;
+      try {
+        upload = await readUpload(request);
+      } catch (error) {
+        if (!(error instanceof UploadTooLargeError)) throw error;
         return NextResponse.json({ error: "Files must be between 1 byte and 50 MB." }, { status: 413 });
       }
-      const bytes = Buffer.from(await upload.arrayBuffer());
-      const validation = validateUpload({ name: upload.name, size: upload.size, bytes });
+      if (!upload) {
+        return NextResponse.json({ error: "Choose a file." }, { status: 400 });
+      }
+      const bytes = upload.bytes;
+      const validation = validateUpload({ name: upload.name, size: bytes.length, bytes });
       if (!validation.ok) {
         bytes.fill(0);
         return NextResponse.json({ error: validation.error }, { status: validation.status });
