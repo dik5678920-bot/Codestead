@@ -3,6 +3,7 @@
   "platform": "linux/amd64",
   "baseImage": "debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee5b77cc54cd1b20a",
   "debianSnapshot": "20261001T000000Z",
+  "sourceDateEpoch": 1790812800,
   "pistonCommit": "de2b365ac759670a3a0d13ea208a0869a92c7e64",
   "isolateCommit": "af6db68042c3aa0ded80787fbb78bc0846ea2114",
   "toolchains": {

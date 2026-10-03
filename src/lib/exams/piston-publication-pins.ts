@@ -10,25 +10,29 @@ import type { ExamFormSnapshot, ExamItem } from "./contracts";
 const { handoff, publicationPins } = runtimePins;
 
 export const PISTON_EXAM_PIN_REVISION = "piston-pr4b-v1";
-export const PISTON_EXAM_IMAGE_DIGEST = handoff.imageReference.split("@")[1]!;
+
+/** The Piston manifest digest new forms pin: the deployed, digest-pinned
+ * PISTON_IMAGE. Builds are reproducible per builder but not across BuildKit
+ * versions, so the pin follows the image actually running. Fails closed when
+ * PISTON_IMAGE is unset, a tag, or malformed.
+ */
+export function pistonExamImageDigest(): string {
+  return pinnedPistonImageDigest(process.env.PISTON_IMAGE ?? "");
+}
 
 export function publishedExamPinRevision(): typeof PISTON_EXAM_PIN_REVISION | undefined {
   const provider = process.env.CODE_RUNNER_PROVIDER || "legacy";
   if (provider === "legacy") return undefined;
   if (provider !== "piston") throw new Error("Unknown code runner provider.");
   validateHandoff();
-  if (!process.env.PISTON_URL || !process.env.PISTON_IMAGE
-    || pinnedPistonImageDigest(process.env.PISTON_IMAGE) !== PISTON_EXAM_IMAGE_DIGEST) {
-    throw new Error("Piston exam publication requires the reviewed image manifest and configured endpoint.");
-  }
+  if (!process.env.PISTON_URL) throw new Error("Piston exam publication requires the configured endpoint.");
+  pistonExamImageDigest();
   return PISTON_EXAM_PIN_REVISION;
 }
 
 function validateHandoff() {
   if (publicationPins.schemaVersion !== 1 || publicationPins.revision !== PISTON_EXAM_PIN_REVISION
-    || publicationPins.imageReference !== handoff.imageReference
-    || handoff.schemaVersion !== 1 || !handoff.validation.passed || handoff.validation.liveTests !== 20
-    || !/^sha256:[a-f0-9]{64}$/.test(PISTON_EXAM_IMAGE_DIGEST)) {
+    || handoff.schemaVersion !== 1 || !handoff.validation.passed || handoff.validation.liveTests !== 20) {
     throw new Error("Unverified Piston publication runtime handoff.");
   }
   for (const language of Object.keys(PISTON_RUNTIMES) as RunnerLanguage[]) {
@@ -45,8 +49,15 @@ function legacyPin(language: RunnerLanguage, runtime: NonNullable<ExamItem["runt
   return record.imageDigest === runtime.imageDigest && record.versions.includes(runtime.version);
 }
 
+/** A Piston pin for the currently deployed image (new forms). */
 function pistonPin(language: RunnerLanguage, runtime: NonNullable<ExamItem["runtime"]>) {
-  return runtime.version === handoff.runtimeLabels[language].label && runtime.imageDigest === PISTON_EXAM_IMAGE_DIGEST;
+  return runtime.version === handoff.runtimeLabels[language].label && runtime.imageDigest === pistonExamImageDigest();
+}
+
+/** A Piston pin stored on an earlier form, possibly from a previously deployed
+ * image. Only ever retained verbatim, never adopted for a new form. */
+function storedPistonPin(language: RunnerLanguage, runtime: NonNullable<ExamItem["runtime"]>) {
+  return runtime.version === handoff.runtimeLabels[language].label && /^sha256:[a-f0-9]{64}$/.test(runtime.imageDigest ?? "");
 }
 
 /** Apply the reviewed, runtime-only publication revision BEFORE storing a new form.
@@ -55,6 +66,7 @@ function pistonPin(language: RunnerLanguage, runtime: NonNullable<ExamItem["runt
  */
 export function pinPublishedExamItemsToPiston(items: readonly ExamItem[]): readonly ExamItem[] {
   validateHandoff();
+  const imageDigest = pistonExamImageDigest();
   return items.map((item) => {
     if (item.kind !== "code") return item;
     if (!item.runtime || !item.language || !(item.language in PISTON_RUNTIMES)
@@ -63,7 +75,7 @@ export function pinPublishedExamItemsToPiston(items: readonly ExamItem[]): reado
     if (!legacyPin(language, item.runtime) && !pistonPin(language, item.runtime)) {
       throw new Error("Published code item is outside the reviewed runtime pin migration.");
     }
-    return { ...item, runtime: { version: handoff.runtimeLabels[language].label, imageDigest: PISTON_EXAM_IMAGE_DIGEST } };
+    return { ...item, runtime: { version: handoff.runtimeLabels[language].label, imageDigest } };
   });
 }
 
@@ -79,7 +91,7 @@ export function retainEquivalentExamRuntimePins(source: ExamFormSnapshot, candid
       || !item.language || item.language !== prior.language || !(item.language in PISTON_RUNTIMES)) return item;
     const language = item.language as RunnerLanguage;
     if ((legacyPin(language, prior.runtime) && pistonPin(language, item.runtime))
-      || (pistonPin(language, prior.runtime) && legacyPin(language, item.runtime))) {
+      || (storedPistonPin(language, prior.runtime) && legacyPin(language, item.runtime))) {
       return { ...item, runtime: { ...prior.runtime } };
     }
     return item;

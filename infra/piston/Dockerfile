@@ -4,7 +4,7 @@ FROM debian:trixie-slim@sha256:a99cfc517144bc59b1978475ec53b46ecabec7e43635402ee
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ENV DEBIAN_FRONTEND=noninteractive PATH=/usr/local/node/bin:$PATH
 COPY .downloads/ /downloads/
-COPY downloads.sha256 /downloads.sha256
+COPY --chmod=0444 downloads.sha256 /downloads.sha256
 RUN cd /downloads && sha256sum -c /downloads.sha256 \
     && awk '$2 ~ /^debs\// { print "/downloads/" $2 }' /downloads.sha256 \
        | xargs -r apt-get --yes --no-install-recommends install \
@@ -21,14 +21,14 @@ RUN cd /downloads && sha256sum -c /downloads.sha256 \
 WORKDIR /build/isolate
 RUN make -j2 CC=gcc-14 install
 WORKDIR /piston_api
-COPY api-package.json package.json
-COPY api-package-lock.json package-lock.json
+COPY --chmod=0444 api-package.json package.json
+COPY --chmod=0444 api-package-lock.json package-lock.json
 RUN npm ci --offline --ignore-scripts --omit=dev --no-audit --no-fund \
     && npm rebuild waitpid --offline --nodedir=/usr/local/node \
     && cp -a /build/piston/api/src ./src
-COPY install-packages.mjs /build/install-packages.mjs
+COPY --chmod=0444 install-packages.mjs /build/install-packages.mjs
 RUN node /build/install-packages.mjs
-COPY build-cds.sh /build/build-cds.sh
+COPY --chmod=0444 build-cds.sh /build/build-cds.sh
 RUN bash /build/build-cds.sh \
     && test "$(gcc-14 -dumpfullversion)" = 14.2.0 \
     && test "$(/usr/local/python/bin/python3 -I -c 'import platform; print(platform.python_version())')" = 3.14.8 \
@@ -43,11 +43,10 @@ COPY --from=build /etc/ /etc/
 COPY --from=build /var/lib/dpkg/ /var/lib/dpkg/
 COPY --from=build /piston_api/ /piston_api/
 COPY --from=build /piston/packages/ /piston/packages/
-COPY --from=build /usr/local/etc/isolate /usr/local/etc/isolate
 COPY --chmod=0555 entrypoint.sh /usr/local/bin/codestead-piston-entrypoint
-COPY image-inputs.lock.json /usr/local/share/codestead-piston/image-inputs.lock.json
-COPY build-inputs.sha256 /usr/local/share/codestead-piston/build-inputs.sha256
-COPY Dockerfile entrypoint.sh build-cds.sh install-packages.mjs api-package.json api-package-lock.json image-inputs.lock.json downloads.sha256 .dockerignore /tmp/build-inputs/
+COPY --chmod=0444 image-inputs.lock.json /usr/local/share/codestead-piston/image-inputs.lock.json
+COPY --chmod=0444 build-inputs.sha256 /usr/local/share/codestead-piston/build-inputs.sha256
+COPY --chmod=0444 Dockerfile entrypoint.sh build-cds.sh install-packages.mjs api-package.json api-package-lock.json image-inputs.lock.json downloads.sha256 .dockerignore /tmp/build-inputs/
 RUN cd /tmp/build-inputs && sha256sum -c /usr/local/share/codestead-piston/build-inputs.sha256 \
     && rm -rf /tmp/build-inputs
 RUN rm -rf /usr/local/node/lib/node_modules /usr/local/node/include /usr/local/python/lib/python3.14/ensurepip \

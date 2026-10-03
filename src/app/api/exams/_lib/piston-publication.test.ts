@@ -9,7 +9,7 @@ vi.mock("@/lib/runner/admission", async (original) => ({
 }));
 
 import { ContentRepository, type AssessmentBank, type CourseManifest, type CourseModule } from "@/lib/content";
-import { PISTON_EXAM_IMAGE_DIGEST, PISTON_EXAM_PIN_REVISION, publishedExamPinRevision, retainEquivalentExamRuntimePins } from "@/lib/exams/piston-publication-pins";
+import { PISTON_EXAM_PIN_REVISION, pistonExamImageDigest, publishedExamPinRevision, retainEquivalentExamRuntimePins } from "@/lib/exams/piston-publication-pins";
 import type { ExamFormSnapshot } from "@/lib/exams/contracts";
 import { runtimeByLanguage, type RunnerLanguage } from "@/lib/runner/client";
 import { PISTON_RUNTIMES } from "@/lib/runner/piston-client";
@@ -18,6 +18,9 @@ import legacyPins from "../../../../../scripts/curriculum-runtime-pins.json";
 import { languages, outcomes, score, tests, transport, verdict } from "../../../../../scripts/lib/provider-parity-fixtures";
 import { buildEquivalentExamForm, verifyEquivalentFormParity } from "./blueprint";
 import { executeExamCode } from "./service";
+
+// Any digest-pinned deployment: the pin follows the running PISTON_IMAGE.
+const DEPLOYED = `sha256:${"d".repeat(64)}`;
 
 let course: CourseManifest;
 let courseModule: CourseModule;
@@ -31,6 +34,7 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("PISTON_IMAGE", `codestead-piston@${DEPLOYED}`);
   mocks.admit.mockResolvedValue({ submissionId: "submission", runnerJobId: "job", userId: "learner",
     requestId: "request", requestHash: "a".repeat(64), submissionType: "exam_final_test", status: "queued",
     remoteJobId: null, result: null, runtimeImageDigest: "pending", queuedAt: new Date(), duplicate: false });
@@ -77,20 +81,20 @@ describe("reviewed published exam pin migration", () => {
       const legacyRuntime = source.items[0]!.kind === "code" ? source.items[0]!.runtime : undefined;
       if (!legacyRuntime || legacyRuntime.engine !== "isolated-runner" || !legacyRuntime.imageDigest) throw new Error("Missing fixture pin");
       const fetch = transport(provider, "accepted", undefined,
-        provider === "piston" ? PISTON_EXAM_IMAGE_DIGEST : legacyRuntime.imageDigest);
+        provider === "piston" ? DEPLOYED : legacyRuntime.imageDigest);
       if (provider === "legacy") {
         // Today's production needs no Piston endpoint/image to admit or grade exams.
         vi.stubEnv("PISTON_URL", "");
         vi.stubEnv("PISTON_IMAGE", "");
       } else {
-        vi.stubEnv("PISTON_IMAGE", `codestead-piston@${PISTON_EXAM_IMAGE_DIGEST}`);
+        vi.stubEnv("PISTON_IMAGE", `codestead-piston@${DEPLOYED}`);
       }
       const snapshot = buildEquivalentExamForm({ course, module: courseModule,
         catalogVersion: "published:reviewed-version", assessmentBanks: [source],
         runtimePinRevision: publishedExamPinRevision() });
       expect(snapshot.items[0]!.runtime).toEqual(provider === "legacy"
         ? { version: legacyRuntime.version, imageDigest: legacyRuntime.imageDigest }
-        : { version: PISTON_RUNTIMES[language].label, imageDigest: PISTON_EXAM_IMAGE_DIGEST });
+        : { version: PISTON_RUNTIMES[language].label, imageDigest: DEPLOYED });
       const result = await execute(snapshot);
       expect(result.status).toBe("ACCEPTED");
       expect(score(result, language).officialScorePercent).toBe(100);
@@ -105,14 +109,14 @@ describe("reviewed published exam pin migration", () => {
       const legacy = form(source);
       const legacyBefore = JSON.stringify(legacy);
       const piston = form(source, true);
-      expect(piston.items[0]!.runtime).toEqual({ version: PISTON_RUNTIMES[language].label, imageDigest: PISTON_EXAM_IMAGE_DIGEST });
+      expect(piston.items[0]!.runtime).toEqual({ version: PISTON_RUNTIMES[language].label, imageDigest: DEPLOYED });
       expect(piston.items[0]!.gradingEvidence).toEqual(legacy.items[0]!.gradingEvidence);
       expect(JSON.stringify(source)).toBe(sourceBefore);
 
       transport("legacy", outcome, undefined, legacy.items[0]!.runtime!.imageDigest);
       const original = await execute(legacy);
-      const pistonFetch = transport("piston", outcome, undefined, PISTON_EXAM_IMAGE_DIGEST);
-      vi.stubEnv("PISTON_IMAGE", `codestead-piston@${PISTON_EXAM_IMAGE_DIGEST}`);
+      const pistonFetch = transport("piston", outcome, undefined, DEPLOYED);
+      vi.stubEnv("PISTON_IMAGE", `codestead-piston@${DEPLOYED}`);
       const migrated = await execute(piston);
       expect(verdict(migrated)).toEqual(verdict(original));
       expect(score(migrated, language)).toEqual(score(original, language));
@@ -152,21 +156,47 @@ describe("reviewed published exam pin migration", () => {
       assessmentBanks: [source], runtimePinRevision: PISTON_EXAM_PIN_REVISION })).toThrow("reviewed publication");
   });
 
-  it("requires explicit Piston rollout and the handoff manifest before new forms can use the revision", () => {
+  it("requires explicit Piston rollout and a digest-pinned deployed image before new forms can use the revision", () => {
     vi.stubEnv("CODE_RUNNER_PROVIDER", "legacy");
+    vi.stubEnv("PISTON_IMAGE", "");
     expect(publishedExamPinRevision()).toBeUndefined();
     vi.stubEnv("CODE_RUNNER_PROVIDER", "piston");
     vi.stubEnv("PISTON_URL", "http://piston:2000");
-    vi.stubEnv("PISTON_IMAGE", `codestead-piston@${PISTON_EXAM_IMAGE_DIGEST}`);
-    expect(publishedExamPinRevision()).toBe(PISTON_EXAM_PIN_REVISION);
-    vi.stubEnv("PISTON_IMAGE", `codestead-piston@sha256:${"f".repeat(64)}`);
-    expect(() => publishedExamPinRevision()).toThrow("reviewed image manifest");
+    for (const image of ["", "codestead-piston:latest", "codestead-piston@sha256:short"]) {
+      vi.stubEnv("PISTON_IMAGE", image);
+      expect(() => publishedExamPinRevision()).toThrow("pinned image manifest");
+      expect(() => pistonExamImageDigest()).toThrow("pinned image manifest");
+    }
+    for (const digest of [DEPLOYED, `sha256:${"e".repeat(64)}`]) {
+      vi.stubEnv("PISTON_IMAGE", `codestead-piston@${digest}`);
+      expect(publishedExamPinRevision()).toBe(PISTON_EXAM_PIN_REVISION);
+      expect(pistonExamImageDigest()).toBe(digest);
+    }
+    vi.stubEnv("PISTON_URL", "");
+    expect(() => publishedExamPinRevision()).toThrow("configured endpoint");
     vi.stubEnv("CODE_RUNNER_PROVIDER", "unknown");
     expect(() => publishedExamPinRevision()).toThrow("Unknown");
   });
 
+  it("pins new forms to whichever image is deployed and fails closed without one", () => {
+    const source = reviewedBank("python");
+    const other = `sha256:${"e".repeat(64)}`;
+    vi.stubEnv("PISTON_IMAGE", `codestead-piston@${other}`);
+    expect(form(source, true).items[0]!.runtime!.imageDigest).toBe(other);
+    vi.stubEnv("PISTON_IMAGE", "");
+    expect(() => form(source, true)).toThrow("pinned image manifest");
+  });
+
+  it("keeps a stored Piston pin from an earlier deployment when a retake is built on legacy", () => {
+    const source = reviewedBank("python");
+    const piston = form(source, true);
+    vi.stubEnv("PISTON_IMAGE", `codestead-piston@sha256:${"e".repeat(64)}`);
+    const retained = retainEquivalentExamRuntimePins(piston, form(source));
+    expect(retained.items[0]!.runtime).toEqual(piston.items[0]!.runtime);
+  });
+
   it("rejects malformed image references and unknown pinned Piston labels without a provider switch", () => {
-    for (const image of ["codestead-piston:latest", `codestead@extra@${PISTON_EXAM_IMAGE_DIGEST}`, "sha256:short"]) {
+    for (const image of ["codestead-piston:latest", `codestead@extra@${DEPLOYED}`, "sha256:short"]) {
       expect(() => pinnedPistonImageDigest(image)).toThrow("pinned image manifest");
     }
     expect(() => configuredExamRunnerClient({ language: "python", expectedRuntimeVersion: "Python unknown (Piston)" }))

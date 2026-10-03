@@ -1,9 +1,8 @@
 {
   "schemaVersion": 1,
   "revision": "piston-pr4b-v1",
-  "sourceCommit": "27015b8116a21191d0a4f820e8364de635e0519d",
+  "sourceCommit": "23215e49047a9aa8efc08e2a033244d7df18cfd3",
   "handoff": "infra/piston/pr4b-runtime-handoff.json",
-  "imageReference": "codestead-piston@sha256:da7c26b38e7112eb1073696e65c2dfec9449d9d84ea4b4355d49a212246fe46a",
   "legacyPins": {
     "c": { "versions": ["C23 / GCC 14.2.0"], "imageDigest": "sha256:d7c380a5503525ee45c36dc7fc8d68552ab0de218ff7cdc0fb974f4b718f67ad" },
     "cpp": { "versions": ["C++20 / G++ 14.2.0"], "imageDigest": "sha256:a2e77836bf601f9940e267957521b78c0997d0eef21c12c49c888eb665dbe7dc" },

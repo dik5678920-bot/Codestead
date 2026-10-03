@@ -8,7 +8,6 @@ describe("shipped Piston exam runtime pins", () => {
   it("matches every runtime handoff field consumed by the app and workers", () => {
     expect(runtimePins.handoff).toEqual({
       schemaVersion: handoff.schemaVersion,
-      imageReference: handoff.imageReference,
       runtimeLabels: handoff.runtimeLabels,
       validation: {
         passed: handoff.validation.passed,
@@ -21,7 +20,6 @@ describe("shipped Piston exam runtime pins", () => {
     expect(runtimePins.publicationPins).toEqual({
       schemaVersion: publicationPins.schemaVersion,
       revision: publicationPins.revision,
-      imageReference: publicationPins.imageReference,
       legacyPins: publicationPins.legacyPins,
     });
   });

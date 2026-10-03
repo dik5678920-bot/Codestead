@@ -66,3 +66,61 @@ test("PR4b handoff matches the committed build and validation inputs", async () 
   assert.equal(handoff.validation.passed, true);
   assert.equal(handoff.validation.liveTests, 20);
 });
+
+test("the build is pinned to a reproducible epoch, timestamp rewrite and offline network", async () => {
+  const { buildArgs, sourceDateEpoch } = await import("./build.mjs");
+  const lock = JSON.parse(await readFile(new URL("./image-inputs.lock.json", import.meta.url)));
+  assert.equal(sourceDateEpoch(lock), Date.UTC(2026, 9, 1) / 1000);
+  assert.throws(() => sourceDateEpoch({ ...lock, sourceDateEpoch: lock.sourceDateEpoch + 1 }), /snapshot/);
+  assert.throws(() => sourceDateEpoch({ ...lock, sourceDateEpoch: undefined }), /snapshot/);
+  const args = buildArgs({ epoch: 1790812800, tag: "t", archive: "/tmp/i.tar", metadataFile: "m.json", context: "ctx" });
+  assert.ok(args.includes("--network=none") && args.includes("--provenance=false"));
+  assert.ok(args.includes("SOURCE_DATE_EPOCH=1790812800"));
+  assert.ok(args.includes("type=docker,name=t,dest=/tmp/i.tar,rewrite-timestamp=true"));
+  assert.ok(!args.includes("--load"), "--load unpacks and conflicts with rewrite-timestamp");
+});
+
+test("AppCDS uses a deterministic static dump, never a dynamic archive", async () => {
+  const script = await readFile(new URL("./build-cds.sh", import.meta.url), "utf8");
+  assert.ok(!script.includes("ArchiveClassesAtExit"));
+  assert.match(script, /-Xshare:dump -XX:SharedClassListFile=/);
+  assert.match(script, /LC_ALL=C sort -u/);
+});
+
+test("CI builds twice and rejects differing digests; the exam pin is never a committed digest", async () => {
+  const { verifyReproducible } = await import("./verify-digest.mjs");
+  const digest = (c) => `sha256:${c.repeat(64)}`;
+  const ok = { "containerimage.digest": digest("a"), "containerimage.config.digest": digest("b") };
+  assert.equal(verifyReproducible(ok, { ...ok }), digest("a"));
+  assert.throws(() => verifyReproducible(ok, { ...ok, "containerimage.digest": digest("c") }), /not reproducible/);
+  assert.throws(() => verifyReproducible(ok, { ...ok, "containerimage.config.digest": digest("c") }), /not reproducible/);
+  assert.throws(() => verifyReproducible({}, {}), /not reproducible/);
+  const workflow = await readFile(new URL("../../.github/workflows/piston-image.yml", import.meta.url), "utf8");
+  assert.ok(workflow.includes("node infra/piston/build.mjs codestead-piston:ci "));
+  assert.ok(workflow.includes("node infra/piston/build.mjs --no-cache codestead-piston:ci "));
+  assert.ok(workflow.includes("node infra/piston/verify-digest.mjs first-build-metadata.json infra/piston/build-metadata.json"));
+  assert.ok(workflow.includes('.features["containerd-snapshotter"] = true'), "CI must build in the containerd store like the NUC");
+  const { buildArgs } = await import("./build.mjs");
+  assert.equal(buildArgs({ epoch: 1, tag: "t", archive: "a", metadataFile: "m", context: "c", noCache: true })[2], "--no-cache");
+  const shipped = JSON.parse(await readFile(new URL("../../src/lib/exams/piston-runtime-pins.json", import.meta.url)));
+  assert.equal(JSON.stringify(shipped).includes("imageReference"), false);
+  const pins = JSON.parse(await readFile(new URL("./pr4b-publication-pins.json", import.meta.url)));
+  assert.equal(pins.imageReference, undefined);
+});
+
+test("every build-context COPY fixes file modes so Windows and Linux contexts build the same image", async () => {
+  const dockerfile = await readFile(new URL("./Dockerfile", import.meta.url), "utf8");
+  const copies = dockerfile.split("\n").filter((line) => line.startsWith("COPY ") && !line.startsWith("COPY --from="));
+  for (const line of copies) {
+    if (line.startsWith("COPY .downloads/ ")) continue; // build stage only; archives are re-checked by sha256
+    assert.match(line, /^COPY --chmod=0[45]{3} /, line);
+  }
+});
+
+test("no COPY re-adds a path already copied from the build stage (its diff layer is not reproducible)", async () => {
+  const dockerfile = await readFile(new URL("./Dockerfile", import.meta.url), "utf8");
+  const sources = [...dockerfile.matchAll(/^COPY --from=build (\S+) /gm)].map((match) => match[1].replace(/\/$/, ""));
+  for (const source of sources) {
+    assert.ok(!sources.some((other) => other !== source && source.startsWith(`${other}/`)), source);
+  }
+});

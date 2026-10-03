@@ -1,7 +1,6 @@
 {
   "handoff": {
     "schemaVersion": 1,
-    "imageReference": "codestead-piston@sha256:da7c26b38e7112eb1073696e65c2dfec9449d9d84ea4b4355d49a212246fe46a",
     "runtimeLabels": {
       "c": {
         "language": "c",
@@ -37,7 +36,6 @@
   "publicationPins": {
     "schemaVersion": 1,
     "revision": "piston-pr4b-v1",
-    "imageReference": "codestead-piston@sha256:da7c26b38e7112eb1073696e65c2dfec9449d9d84ea4b4355d49a212246fe46a",
     "legacyPins": {
       "c": {
         "versions": [
