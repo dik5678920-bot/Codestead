@@ -1494,6 +1494,18 @@ expect(
 
 expect(/_FILE/.test(entrypoint) && /exec "\$@"/.test(entrypoint), "entrypoint must load file secrets then exec");
 expect(
+  /if \[ "\$\{NODE_ENV:-\}" = production \] && \[ -n "\$\{WORKER_HEALTH_ID:-\}" \]; then\n  node --import tsx \/app\/scripts\/lib\/worker-database-startup\.ts &/u.test(entrypoint) &&
+    entrypoint.indexOf("worker-database-startup.ts") < entrypoint.indexOf('exec "$@"') &&
+    /COPY --chown=node:node scripts\/lib\/worker-database-startup\.ts \.\/scripts\/lib\/worker-database-startup\.ts/u.test(dockerfile),
+  "worker images must wait for initial database readiness before exec, including daemon restart",
+);
+read("scripts/lib/worker-database-startup.ts");
+for (const worker of ["mail-worker", "reward-worker", "regrade-worker", "exam-finalization-worker", "practice-runner-recovery-worker", "project-review-correction-worker", "scan-worker", "file-erasure-worker"]) {
+  const block = composeService(worker);
+  expect(/depends_on:\n      postgres:\n        condition: service_healthy/u.test(block), `${worker} must retain the PostgreSQL health dependency`);
+  expect(!/depends_on:[\s\S]*?\bmigrate:/u.test(block), `${worker} must not invoke profile-scoped migrations on reboot`);
+}
+expect(
   /for variable in[\s\S]*?BOOTSTRAP_ADMIN_PASSWORD[\s\S]*?do/.test(entrypoint),
   "entrypoint must support BOOTSTRAP_ADMIN_PASSWORD_FILE",
 );
