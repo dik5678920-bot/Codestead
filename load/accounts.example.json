@@ -1,0 +1,5 @@
+{
+  "login": { "email": "load-login@example.test", "password": "REPLACE_LOCALLY", "totpSecret": "REPLACE_WITH_BASE32_SECRET" },
+  "lesson": { "email": "load-lesson@example.test", "password": "REPLACE_LOCALLY", "totpSecret": "REPLACE_WITH_BASE32_SECRET" },
+  "code_run": { "email": "load-runner@example.test", "password": "REPLACE_LOCALLY", "totpSecret": "REPLACE_WITH_BASE32_SECRET" }
+}
