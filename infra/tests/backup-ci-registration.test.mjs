@@ -956,15 +956,9 @@ const unitShardRun =
 const unitCoverageMergeRun = "npx vitest run --merge-reports=.vitest-reports --coverage";
 // Exact PR-only additions; all historical executable projections stay strict.
 const gitleaksProjection = [
-  "      - run: bash scripts/ci/install-gitleaks.sh",
-  "        if: github.event_name == 'pull_request'",
-  "      - run: node --test scripts/ci/gitleaks.test.mjs",
-  "        if: github.event_name == 'pull_request'",
-  "      - run: bash scripts/ci/scan-gitleaks.sh",
-  "        if: github.event_name == 'pull_request'",
-  "        env:",
-  "          GITLEAKS_BASE_SHA: ${{ github.event.pull_request.base.sha }}",
-  "          GITLEAKS_HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+  '      - run: if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then bash scripts/ci/install-gitleaks.sh; fi',
+  '      - run: if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then node --test scripts/ci/gitleaks.test.mjs; fi',
+  '      - run: if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then GITLEAKS_BASE_SHA="$(node -p \'require(process.env.GITHUB_EVENT_PATH).pull_request.base.sha\')" GITLEAKS_HEAD_SHA="$(node -p \'require(process.env.GITHUB_EVENT_PATH).pull_request.head.sha\')" bash scripts/ci/scan-gitleaks.sh; fi',
 ];
 const retiredApplicationRuns = new Map([
   ["npm run test:coverage", [unitShardRun, unitCoverageMergeRun]],
@@ -3384,9 +3378,9 @@ function verifyRegistration(document) {
   validateWorkflow(normalized);
   for (const [label, needle, replacement] of [
     ["missing Gitleaks installer", gitleaksProjection[0], "      - run: echo bypass"],
-    ["disabled Gitleaks scan", gitleaksProjection[4], "      - run: true"],
-    ["Gitleaks continue-on-error", gitleaksProjection[4], `${gitleaksProjection[4]}\n        continue-on-error: true`],
-    ["Gitleaks SHA substitution", gitleaksProjection[7], "          GITLEAKS_BASE_SHA: HEAD"],
+    ["disabled Gitleaks scan", gitleaksProjection[2], "      - run: true"],
+    ["Gitleaks continue-on-error", gitleaksProjection[2], `${gitleaksProjection[2]}\n        continue-on-error: true`],
+    ["Gitleaks SHA substitution", gitleaksProjection[2], gitleaksProjection[2].replace(/GITLEAKS_BASE_SHA="[^\n]*?" /, "GITLEAKS_BASE_SHA=HEAD ")],
     ["unexpected quick step", gitleaksProjection[0], `${gitleaksProjection[0]}\n      - run: echo unexpected`],
   ]) {
     expectRejected(label, replaceExactly(normalized, needle, replacement));

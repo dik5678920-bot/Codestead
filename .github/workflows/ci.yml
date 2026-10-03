@@ -137,15 +137,11 @@ jobs:
       # ships no system node); a symlink to the runner-writable toolcache would fail
       # the recovery checker's fixed-binary containment contract.
       - run: sudo install -o root -g root -m 0755 "$(command -v node)" /usr/bin/node
-      - run: bash scripts/ci/install-gitleaks.sh
-        if: github.event_name == 'pull_request'
-      - run: node --test scripts/ci/gitleaks.test.mjs
-        if: github.event_name == 'pull_request'
-      - run: bash scripts/ci/scan-gitleaks.sh
-        if: github.event_name == 'pull_request'
-        env:
-          GITLEAKS_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITLEAKS_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      # Keep these plain run steps for the application cross-guard contract.
+      # PR gating and immutable SHA inputs stay inside the shell commands.
+      - run: if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then bash scripts/ci/install-gitleaks.sh; fi
+      - run: if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then node --test scripts/ci/gitleaks.test.mjs; fi
+      - run: if [[ "$GITHUB_EVENT_NAME" == pull_request ]]; then GITLEAKS_BASE_SHA="$(node -p 'require(process.env.GITHUB_EVENT_PATH).pull_request.base.sha')" GITLEAKS_HEAD_SHA="$(node -p 'require(process.env.GITHUB_EVENT_PATH).pull_request.head.sha')" bash scripts/ci/scan-gitleaks.sh; fi
       - run: npm ci
       - run: node infra/tests/backup-ci-registration.test.mjs
       - run: npm run test:github-runner-context:registration
