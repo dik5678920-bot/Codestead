@@ -3,6 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const requireAuth = vi.fn();
 vi.mock("@/lib/http/authz", () => ({ requireAuth }));
+vi.mock("@/lib/security/rate-limit", () => ({
+  rateLimitIp: () => "192.0.2.1",
+  withRateLimit: (_checks: unknown, handler: () => Promise<Response>) => handler(),
+}));
 
 const { GET, POST } = await import("../route");
 

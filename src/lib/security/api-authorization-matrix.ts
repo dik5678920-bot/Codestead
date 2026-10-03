@@ -57,7 +57,7 @@ const NO_USER_OBJECT_OPERATIONS = new Map<string, Readonly<{ ownershipProof: str
   }],
   ["POST /api/monitoring/envelope", {
     ownershipProof: "authenticated browser error-event tunnel to the server-held DSN",
-    anchor: "rewriteEnvelope(await request.text(), target)",
+    anchor: "rewriteEnvelope(body, target)",
   }],
 ]);
 

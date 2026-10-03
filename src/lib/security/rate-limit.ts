@@ -68,7 +68,9 @@ export type RateLimitPolicyName =
   | "runner_recovery_admin"
   | "session_takeover_user"
   | "session_takeover_ip"
-  | "session_takeover_email";
+  | "session_takeover_email"
+  | "monitoring_envelope_user"
+  | "monitoring_envelope_ip";
 
 export type RateLimitPolicy = Readonly<{
   name: RateLimitPolicyName;
@@ -139,6 +141,8 @@ const DEFAULT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
   session_takeover_user: policy("session_takeover_user", 5, 15 * 60),
   session_takeover_ip: policy("session_takeover_ip", 20, 15 * 60),
   session_takeover_email: policy("session_takeover_email", 5, 15 * 60),
+  monitoring_envelope_user: policy("monitoring_envelope_user", 30, 60),
+  monitoring_envelope_ip: policy("monitoring_envelope_ip", 30, 60),
 };
 
 function policy(
