@@ -27,6 +27,8 @@ export interface DeterministicEvidenceOptions<T> {
   readonly trustedDirectory: "exclusive-writer";
   readonly allowArgument?: (argument: string) => boolean;
   readonly allowOutputOverride?: boolean;
+  /** Preserve the exact candidate on a byte mismatch; the check still fails. */
+  readonly onMismatch?: (candidate: string) => Promise<void>;
 }
 
 interface TargetIdentity {
@@ -192,6 +194,7 @@ export async function verifyOrApplyDeterministicEvidence<T>(
     }
     const expected = serialized(options.buildEvidence());
     if (before !== expected) {
+      await options.onMismatch?.(expected);
       throw new Error(`Stale evidence artifact ${target}; regenerate it with ${options.applyCommand}.`);
     }
     const afterRead = await regularFileIdentity(target);

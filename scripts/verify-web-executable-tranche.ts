@@ -821,6 +821,12 @@ async function main(): Promise<void> {
       ? "npm run web:executable:structure:apply"
       : "npm run web:executable:evidence:apply",
     allowArgument: (argument) => argument === "--structure-only",
+    onMismatch: structureOnly ? undefined : async (candidate) => {
+      const artifacts = path.join(root, "test-artifacts", "web-executable-candidates");
+      mkdirSync(artifacts, { recursive: true });
+      const directory = mkdtempSync(path.join(artifacts, "candidate-"));
+      writeFileSync(path.join(directory, reportName), candidate, { flag: "wx", mode: 0o600 });
+    },
   });
   console.log(
     `Web executable verification: ${declared.length} skills, ${browserItems.length} browser, ` +
