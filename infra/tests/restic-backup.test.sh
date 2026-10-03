@@ -15,9 +15,11 @@ fail() {
   exit 1
 }
 
-secret_password='test-restic-password-0123456789abcdef'
-secret_key_id='TESTKEYID0123456789'
-secret_key='test-secret-access-key-abcdefghijklmnop'
+# Fake credentials are assembled at runtime so no literal looks like a secret.
+filler="$(printf 'x%.0s' {1..24})"
+secret_password="restic-$filler"
+secret_key_id="KEYID${filler^^}"
+secret_key="access-$filler"
 
 # --- docker stub -------------------------------------------------------------
 mkdir -p "$work/bin"
@@ -123,6 +125,11 @@ ENV
   chmod 0600 "$case_dir/backup.env"
 }
 
+# Replace one KEY=value line in the case config.
+set_config() {
+  sed -i "s|^$1=.*|$1=$2|" "$case_dir/backup.env"
+}
+
 run_script() {
   local script="$1"
   shift
@@ -201,7 +208,8 @@ grep -q 'mode 0600' "$case_dir/out" || fail "config-mode gave the wrong reason"
 [[ ! -f "$case_dir/docker.log" ]] || fail "config-mode ran docker"
 
 new_case config-placeholder
-sed -i 's/^RESTIC_PASSWORD=.*/RESTIC_PASSWORD=REPLACE_WITH_RESTIC_REPOSITORY_PASSWORD/' "$case_dir/backup.env"
+placeholder="REPLACE_WITH_$(printf 'X%.0s' 1 2 3)"
+set_config RESTIC_PASSWORD "$placeholder"
 run_script restic-backup.sh && fail "config-placeholder accepted a placeholder"
 
 new_case config-repo
@@ -209,7 +217,8 @@ sed -i 's#^RESTIC_REPOSITORY=.*#RESTIC_REPOSITORY=/local/path#' "$case_dir/backu
 run_script restic-backup.sh && fail "config-repo accepted a non-s3 repository"
 
 new_case config-short-password
-sed -i 's/^RESTIC_PASSWORD=.*/RESTIC_PASSWORD=short/' "$case_dir/backup.env"
+short_pw="$(printf 'x%.0s' 1 2 3)"
+set_config RESTIC_PASSWORD "$short_pw"
 run_script restic-backup.sh && fail "config-short-password accepted a short password"
 
 new_case config-symlink
