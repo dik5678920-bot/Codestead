@@ -1,0 +1,276 @@
+# Preserve every built-in detector. Exceptions require rule AND exact path AND content.
+# No directory/commit exclusions, rule disabling, blanket test exemption or baseline.
+# Hex escapes spell exact synthetic literals without adding credential-looking strings.
+title = "Codestead reviewed fixture exceptions"
+
+[extend]
+useDefault = true
+
+# Historical temporary registration fixture: two named migration SHA-256 entries, not Sumo credentials.
+[[allowlists]]
+description = "Historical temporary registration fixture: two named migration SHA-256 entries, not Sumo credentials."
+targetRules = ["sumologic-access-token"]
+condition = "AND"
+paths = ['''^\.tmp-backup-status-registration\.mjs$''']
+regexTarget = "line"
+regexes = [
+  '''^\s*\["0008_abandoned_sumo\.sql", "[a-f0-9]{64}"\],$''',
+  '''^\s*\["0015_classy_sumo\.sql", "[a-f0-9]{64}"\],$''',
+]
+
+# Provider-settings verification evidence: named source-file SHA-256 digests.
+[[allowlists]]
+description = "Provider-settings verification evidence: named source-file SHA-256 digests."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/evidence/ai-provider-settings-2026-10-01\.json$''']
+regexTarget = "line"
+regexes = [
+  '''^\s*"src/components/product/__tests__/settings-credentials\.test\.tsx": "[a-f0-9]{64}",$''',
+  '''^\s*"src/lib/ai/__tests__/credential-validation\.test\.ts": "[a-f0-9]{64}",$''',
+  '''^\s*"src/lib/ai/credential-preference\.ts": "[a-f0-9]{64}",$''',
+  '''^\s*"src/lib/ai/credential-status\.ts": "[a-f0-9]{64}",$''',
+  '''^\s*"src/lib/ai/credential-validation\.ts": "[a-f0-9]{64}",$''',
+]
+
+# Provider-settings CI verification evidence: named source-file SHA-256 digests.
+[[allowlists]]
+description = "Provider-settings CI verification evidence: named source-file SHA-256 digests."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/evidence/ai-provider-settings-ci-followup-2026-10-01\.json$''']
+regexTarget = "line"
+regexes = [
+  '''^\s*"e2e/access\.spec\.ts": "[a-f0-9]{64}",$''',
+  '''^\s*"src/lib/security/privileged-access\.ts": "[a-f0-9]{64}",$''',
+]
+
+# Auth-recovery verification evidence: named source-file SHA-256 digests.
+[[allowlists]]
+description = "Auth-recovery verification evidence: named source-file SHA-256 digests."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/evidence/auth-recovery-verification-2026-07-12\.json$''']
+regexTarget = "line"
+regexes = [
+  '''^\s*"e2e/access\.spec\.ts": "[a-f0-9]{64}",$''',
+  '''^\s*"src/lib/auth\.ts": "[a-f0-9]{64}",$''',
+]
+
+# Provider-operation test evidence: credential-manager source hashes.
+[[allowlists]]
+description = "Provider-operation test evidence: credential-manager source hashes."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/evidence/provider-operation-idempotency-verification-2026-07-12\.json$''']
+regexTarget = "line"
+regexes = [
+  '''^\s*"src/components/admin/admin-credential-manager\.tsx": "[a-f0-9]{64}",$''',
+]
+
+# Tutor verification evidence: provider-credential-outcome source hash.
+[[allowlists]]
+description = "Tutor verification evidence: provider-credential-outcome source hash."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^docs/evidence/tutor-structured-memory-verification-2026-07-12\.json$''']
+regexTarget = "line"
+regexes = [
+  '''^\s*"src/lib/ai/provider-credential-outcome\.ts": "[a-f0-9]{64}",$''',
+]
+
+# Runtime-handoff test evidence: the two API manifest source hashes.
+[[allowlists]]
+description = "Runtime-handoff test evidence: the two API manifest source hashes."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^infra/piston/pr4b-runtime-handoff\.json$''']
+regexTarget = "line"
+regexes = [
+  '''^\s*"api-package-lock\.json": "[a-f0-9]{64}",$''',
+  '''^\s*"api-package\.json": "[a-f0-9]{64}",$''',
+]
+
+# Fixed backup run UUID used by the Compose argument contract fixture.
+[[allowlists]]
+description = "Fixed backup run UUID used by the Compose argument contract fixture."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^infra/tests/backup-config\.test\.sh$''']
+regexTarget = "secret"
+regexes = [
+  '''^8b4f9fbe-d45a-4e4d-9c90-dfef3c8fce31$''',
+]
+
+# Two fixed backup compatibility-run UUIDs in the replay integration fixture.
+[[allowlists]]
+description = "Two fixed backup compatibility-run UUIDs in the replay integration fixture."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^infra/tests/mail-durable-replay-0067\.impl\.mjs$''']
+regexTarget = "secret"
+regexes = [
+  '''^57c7d8d7-7cf4-46d0-aecd-720102180fd7$''',
+  '''^8b4f9fbe-d45a-4e4d-9c90-dfef3c8fce31$''',
+]
+
+# Fake tunnel fixture secret: base64 of the repeated ASCII sequence 0123456789abcdef.
+[[allowlists]]
+description = "Fake tunnel fixture secret: base64 of the repeated ASCII sequence 0123456789abcdef."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^infra/tests/runtime-config\.test\.sh$''']
+regexTarget = "secret"
+regexes = [
+  '''^\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x61\x62\x63\x64\x65\x66\x30\x31\x32\x33\x34\x35\x36\x37\x38\x39\x61\x62\x63\x64\x65\x66$''',
+  '''^\x4d\x44\x45\x79\x4d\x7a\x51\x31\x4e\x6a\x63\x34\x4f\x57\x46\x69\x59\x32\x52\x6c\x5a\x6a\x41\x78\x4d\x6a\x4d\x30\x4e\x54\x59\x33\x4f\x44\x6c\x68\x59\x6d\x4e\x6b\x5a\x57\x59\x3d$''',
+]
+
+# Named concurrency fixture idempotency key, not an authentication credential.
+[[allowlists]]
+description = "Named concurrency fixture idempotency key, not an authentication credential."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^integration/practice-learning\.integration\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^practice-concurrency-0001$''',
+]
+
+# Three malformed UUID run-key fixtures (case, UUID version, variant).
+[[allowlists]]
+description = "Three malformed UUID run-key fixtures (case, UUID version, variant)."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^scripts/backup/enqueue-backup-status\.test\.mjs$''']
+regexTarget = "secret"
+regexes = [
+  '''^8B4F9FBE-D45A-4E4D-9C90-DFEF3C8FCE31$''',
+  '''^8b4f9fbe-d45a-1e4d-9c90-dfef3c8fce31$''',
+  '''^8b4f9fbe-d45a-4e4d-7c90-dfef3c8fce31$''',
+]
+
+# Historical restore smoke fixture: a fixed claim UUID with owner full-schema-restore-smoke.
+[[allowlists]]
+description = "Historical restore smoke fixture: a fixed claim UUID with owner full-schema-restore-smoke."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^scripts/lib/full-schema-restore-database\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^4f0b2860-a1d3-4f72-ae98-b2f591750001$''',
+]
+
+# Encoded TOKEN_CANARY used to assert that worker diagnostics redact transport tokens.
+[[allowlists]]
+description = "Encoded TOKEN_CANARY used to assert that worker diagnostics redact transport tokens."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^scripts/process-outbox\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^\x5a\x58\x6c\x4b\x61\x6d\x4a\x48\x52\x6e\x42\x69\x56\x57\x78\x72\x53\x57\x70\x76\x61\x56\x6b\x79\x4f\x57\x68\x68\x56\x7a\x42\x30\x59\x7a\x4a\x57\x61\x6d\x4e\x74\x56\x6a\x42\x4a\x61\x58\x64\x70\x59\x7a\x4a\x4f\x64\x6d\x4e\x48\x56\x57\x6c\x50\x61\x55\x70\x30\x57\x56\x64\x73\x63\x30\x6c\x75\x4d\x41$''',
+  '''^\x65\x79\x4a\x6a\x62\x47\x46\x70\x62\x55\x6c\x6b\x49\x6a\x6f\x69\x59\x32\x39\x68\x61\x57\x30\x74\x63\x32\x56\x6a\x63\x6d\x56\x30\x49\x69\x77\x69\x63\x32\x4e\x76\x63\x47\x55\x69\x4f\x69\x4a\x74\x59\x57\x6c\x73\x49\x6e\x30$''',
+]
+
+# Explicit test-secret fixture for runner HMAC authentication.
+[[allowlists]]
+description = "Explicit test-secret fixture for runner HMAC authentication."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^services/runner/src/__tests__/fixtures\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^test-secret-that-is-at-least-32-bytes-long$''',
+]
+
+# Same runner HMAC test-secret and three fixed idempotency-key fixtures.
+[[allowlists]]
+description = "Same runner HMAC test-secret and three fixed idempotency-key fixtures."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^services/runner/src/__tests__/http-service\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^idempotency-key-0001$''',
+  '''^idempotency-key-0002$''',
+  '''^idempotency-key-0003$''',
+  '''^test-secret-that-is-at-least-32-bytes-long$''',
+]
+
+# Synthetic alternating letter/digit prefixless credential used in leakage tests.
+[[allowlists]]
+description = "Synthetic alternating letter/digit prefixless credential used in leakage tests."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^src/app/api/ai/tutor/__tests__/route-coverage\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^\x51\x37\x77\x39\x45\x72\x32\x54\x79\x34\x55\x69\x36\x4f\x70\x38\x41\x73\x30\x44\x66\x33\x47\x68$''',
+]
+
+# Explicit deletion-test-secret fixture used for tombstone HMAC.
+[[allowlists]]
+description = "Explicit deletion-test-secret fixture used for tombstone HMAC."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^src/lib/data-lifecycle/__tests__/deletion-runtime\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^deletion-test-secret-that-is-at-least-32-bytes$''',
+]
+
+# Historical outbox test tombstone key: the same deletion-test-secret fixture.
+[[allowlists]]
+description = "Historical outbox test tombstone key: the same deletion-test-secret fixture."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^src/lib/notifications/__tests__/postgres-outbox-store\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^deletion-test-secret-that-is-at-least-32-bytes$''',
+]
+
+# Historical deterministic correlation identifier for operation UUID 2222..., not a provider access token.
+[[allowlists]]
+description = "Historical deterministic correlation identifier for operation UUID 2222..., not a provider access token."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^src/lib/notifications/__tests__/provider-correlation\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^\x6f\x6b\x64\x2d\x61\x4d\x58\x43\x48\x50\x75\x53\x31\x70\x67\x6e\x6a\x64\x59\x66\x6a\x47\x31\x37\x43\x55\x35\x6e\x66\x77\x2d\x36\x73\x74\x51\x45\x32\x33\x65\x6e\x62\x38\x51$''',
+]
+
+# Synthetic sequential sk-live value used solely in diagnostic redaction assertions.
+[[allowlists]]
+description = "Synthetic sequential sk-live value used solely in diagnostic redaction assertions."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^src/lib/observability/__tests__/error-monitoring\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^\x73\x6b\x2d\x6c\x69\x76\x65\x2d\x31\x32\x33\x34\x35\x36\x37\x38\x39\x61\x62\x63\x64\x65\x66$''',
+]
+
+# Labelled custom credential canary for boundary tests.
+[[allowlists]]
+description = "Labelled custom credential canary for boundary tests."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^src/lib/portfolio/__tests__/credential-boundary\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^\x66\x72\x6f\x73\x74\x65\x64\x4d\x6f\x6f\x6e\x52\x69\x76\x65\x72\x37$''',
+]
+
+# Same synthetic prefixless credential used by exact-credential leakage tests.
+[[allowlists]]
+description = "Same synthetic prefixless credential used by exact-credential leakage tests."
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^src/lib/security/__tests__/sensitive-text\.test\.ts$''']
+regexTarget = "secret"
+regexes = [
+  '''^\x51\x37\x77\x39\x45\x72\x32\x54\x79\x34\x55\x69\x36\x4f\x70\x38\x41\x73\x30\x44\x66\x33\x47\x68$''',
+]
