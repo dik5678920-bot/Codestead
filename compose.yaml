@@ -754,7 +754,7 @@ services:
     tmpfs:
       - /run/clamav:rw,noexec,nosuid,nodev,size=16m,uid=100,gid=101
       - /var/log/clamav:rw,noexec,nosuid,nodev,size=32m,uid=100,gid=101
-      - /tmp:rw,noexec,nosuid,nodev,size=64m
+      - /tmp:rw,noexec,nosuid,nodev,size=256m
     healthcheck:
       test: ["CMD", "clamdscan", "--ping", "1", "--wait", "5"]
       interval: 30s

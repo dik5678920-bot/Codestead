@@ -65,14 +65,27 @@ describe("ClamAV response handling", () => {
     );
   });
 
-  async function fakeClamd(reply: string) {
+  it.each([
+    "INSTREAM size limit exceeded. ERROR\0",
+    "INSTREAM size limit exceeded.\0",
+    "stream: INSTREAM size limit exceeded. ERROR\0",
+  ])("makes the stream size limit permanent: %j", (reply) => {
+    expect(() => parseClamdResponse(reply)).toThrowError(expect.objectContaining({
+      code: "scanner_size_limit", retryable: false,
+    }));
+  });
+
+  async function fakeClamd(reply: string, streamMaxLength = Infinity) {
     let receivedResolve!: (value: Buffer) => void;
     const received = new Promise<Buffer>((resolve) => { receivedResolve = resolve; });
     const server = net.createServer((socket) => {
       let pending = Buffer.alloc(0);
       const payload: Buffer[] = [];
       let commandRead = false;
+      let remaining = streamMaxLength;
+      let rejected = false;
       socket.on("data", (value: Buffer) => {
+        if (rejected) return;
         pending = Buffer.concat([pending, value]);
         if (!commandRead) {
           if (pending.byteLength < 10) return;
@@ -82,6 +95,11 @@ describe("ClamAV response handling", () => {
         }
         while (pending.byteLength >= 4) {
           const length = pending.readUInt32BE(0);
+          if (length > remaining) {
+            rejected = true;
+            socket.end("INSTREAM size limit exceeded. ERROR\0");
+            return;
+          }
           if (length === 0) {
             pending = pending.subarray(4);
             receivedResolve(Buffer.concat(payload));
@@ -89,6 +107,7 @@ describe("ClamAV response handling", () => {
             return;
           }
           if (pending.byteLength < 4 + length) return;
+          remaining -= length;
           payload.push(pending.subarray(4, 4 + length));
           pending = pending.subarray(4 + length);
         }
@@ -103,6 +122,21 @@ describe("ClamAV response handling", () => {
       close: () => new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve())),
     };
   }
+
+  it("rejects an upload above StreamMaxLength on the first scan attempt", async () => {
+    // A deliberately small daemon limit exercises a valid upload exceeding
+    // StreamMaxLength without allocating the production daemon's full limit.
+    const { root, lease } = await fixture("a".repeat(512 * 1024));
+    const server = await fakeClamd("stream: OK", 128 * 1024);
+    const repository = { claimBatch: vi.fn(async () => [lease]), complete: vi.fn(), fail: vi.fn(async () => true) };
+    try {
+      const scanner = new ClamdClient({ host: "127.0.0.1", port: server.port, timeoutMs: 2_000 });
+      const summary = await processScanBatch({ repository, root, scanner });
+      expect(repository.fail).toHaveBeenCalledExactlyOnceWith(lease, expect.objectContaining({ code: "scanner_size_limit", terminal: true }));
+      expect(repository.complete).not.toHaveBeenCalled();
+      expect(summary).toMatchObject({ claimed: 1, failedClosed: 1, retrying: 0 });
+    } finally { await server.close(); }
+  });
 
   it("frames INSTREAM chunks and handles a clean clamd round trip", async () => {
     const server = await fakeClamd("stream: OK");

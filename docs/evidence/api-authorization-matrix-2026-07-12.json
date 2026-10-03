@@ -1500,7 +1500,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "4ce837d13d0f04ee4361bfcffd61f3f290e59fff67f4ed4d2c9ad4f5061ab302"
+      "operationSourceSha256": "d7961155124137c931b79b34e478e83e7d104fe84a9c49349977a20adb9427dc"
     },
     {
       "operation": "POST /api/files",

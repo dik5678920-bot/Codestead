@@ -732,6 +732,11 @@ expect(
   !/source: \$\{LEARN_DATA_ROOT:-\/srv\/learncoding\}\/app-data\s+target: \/var\/lib\/learncoding(?:\s|$)/u.test(scanWorkerService),
   "scan worker must not mount the parent app-data directory",
 );
+expect(
+  /- \/tmp:rw,noexec,nosuid,nodev,size=256m(?:\n|$)/u.test(composeService("clamav")) &&
+    /mem_limit: 4g/u.test(composeService("clamav")),
+  "ClamAV must retain hardened 256 MiB scan scratch within its 4 GiB memory cap",
+);
 const fileErasureWorkerService = composeService("file-erasure-worker");
 expect(
   /target: worker/.test(fileErasureWorkerService) &&

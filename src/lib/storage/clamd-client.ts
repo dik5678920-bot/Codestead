@@ -14,6 +14,9 @@ const DEFAULT_CHUNK_BYTES = 64 * 1024;
 
 export function parseClamdResponse(response: string): ScanVerdict {
   const normalized = response.replace(/\0+$/g, "").trim();
+  if (/^(?:stream:\s+)?INSTREAM size limit exceeded\.?(?:\s+ERROR)?$/i.test(normalized)) {
+    throw new UploadScanError("scanner_size_limit", false);
+  }
   if (/^stream:\s+OK$/i.test(normalized)) return "clean";
   if (/^stream:\s+.+\s+FOUND$/i.test(normalized)) return "infected";
   throw new UploadScanError("scanner_protocol", true);

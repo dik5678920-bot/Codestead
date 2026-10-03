@@ -38,6 +38,13 @@ describe("learner project file library", () => {
     expect(screen.getByText(/Executables and archives are rejected/i)).toBeInTheDocument();
   });
 
+  it("explains a permanent scanner size rejection without enabling download", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ ...populated, files: [{ ...populated.files[0], scanStatus: "scanner_error", scanFailureReason: "This file exceeds the safety scanner's size limit. Upload a smaller file." }] })));
+    render(<FileLibrary />);
+    expect(await screen.findByText("This file exceeds the safety scanner's size limit. Upload a smaller file.")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /Download/i })).not.toBeInTheDocument();
+  });
+
   it("uploads with FormData, refreshes usage, and requires explicit delete confirmation", async () => {
     const calls: Array<{ url: string; method: string; body?: BodyInit | null; headers?: HeadersInit }> = [];
     let getCount = 0;

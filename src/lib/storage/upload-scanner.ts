@@ -13,6 +13,7 @@ export type ScanErrorCode =
   | "file_changed"
   | "scanner_unavailable"
   | "scanner_protocol"
+  | "scanner_size_limit"
   | "scan_internal";
 
 export class UploadScanError extends Error {

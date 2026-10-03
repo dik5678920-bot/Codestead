@@ -240,7 +240,6 @@ export function AppShell({
   // open elsewhere, tracking navigation between the two.
   useEffect(() => {
     if (hasStoredSidebarPreferenceRef.current) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSidebarHidden(isLessonPath(pathname));
   }, [pathname]);
 

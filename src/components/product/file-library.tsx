@@ -13,6 +13,7 @@ type StoredFile = {
   readonly mediaType: string;
   readonly sizeBytes: number;
   readonly scanStatus: string;
+  readonly scanFailureReason?: string;
   readonly createdAt: string;
 };
 
@@ -168,7 +169,7 @@ export function FileLibrary() {
         <ul className={styles.fileList}>
           {library.files.map((file) => (
             <li key={file.id}>
-              <span><strong>{file.name}</strong><small>{formatBytes(file.sizeBytes)} · {file.scanStatus.replaceAll("_", " ")}</small></span>
+              <span><strong>{file.name}</strong><small>{formatBytes(file.sizeBytes)} · {file.scanStatus.replaceAll("_", " ")}</small>{file.scanFailureReason ? <small>{file.scanFailureReason}</small> : null}</span>
               <span className={styles.fileActions}>
                 {file.scanStatus === "safe" ? (
                   <a className="button button-ghost" download href={`/api/files/${encodeURIComponent(file.id)}`}><Download size={14} /> Download</a>
