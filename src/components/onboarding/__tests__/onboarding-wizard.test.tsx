@@ -198,6 +198,7 @@ describe("resumable disclosed onboarding", () => {
     const calls: Array<{ url: string; body?: Record<string, unknown> }> = [];
     mocks.enableMfa.mockResolvedValue({
       data: {
+        method: "totp",
         totpURI: "otpauth://totp/Codestead:learner?secret=TESTSECRET",
         backupCodes: ["backup-one", "backup-two"],
       },
@@ -225,7 +226,7 @@ describe("resumable disclosed onboarding", () => {
     expect(await screen.findByRole("heading", { name: "Protect your progress." })).toBeInTheDocument();
     await user.type(screen.getByLabelText(/Current password/i), "current-password");
     await user.click(screen.getByRole("button", { name: /Set up authenticator/i }));
-    expect(mocks.enableMfa).toHaveBeenCalledWith({ password: "current-password" });
+    expect(mocks.enableMfa).toHaveBeenCalledWith({ password: "current-password", method: "totp" });
     expect(await screen.findByAltText("Authenticator setup QR code")).toBeInTheDocument();
     expect(screen.getByText(/backup-one/)).toBeInTheDocument();
     await user.type(screen.getByLabelText("Verification code"), "123456");
@@ -466,6 +467,27 @@ describe("resumable disclosed onboarding", () => {
     expect(screen.getByRole("button", { name: /Save and secure account/i })).toBeEnabled();
   });
 
+  it.each(["otp", undefined])("rejects an unexpected authenticator method %s", async (method) => {
+    mocks.enableMfa.mockResolvedValueOnce({
+      data: { method, totpURI: "otpauth://totp/Codestead:learner?secret=TESTSECRET", backupCodes: [] },
+      error: null,
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => json({
+      ...emptyStatus,
+      requirements: { profileComplete: true, mfaEnabled: false, mfaFresh: false, aiKeyActive: false },
+    })));
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+
+    await screen.findByRole("heading", { name: "Protect your progress." });
+    await user.click(screen.getByRole("button", { name: /Set up authenticator/i }));
+
+    expect(mocks.enableMfa).toHaveBeenCalledWith({ method: "totp" });
+    expect(await screen.findByRole("alert")).toHaveTextContent(/could not begin authenticator setup.*try again/i);
+    expect(screen.queryByLabelText("Verification code")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Set up authenticator/i })).toBeEnabled();
+  });
+
   it("releases authenticator actions after rejected and malformed operations", async () => {
     mocks.enableMfa.mockRejectedValueOnce(new TypeError("transport rejected"));
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
@@ -490,7 +512,7 @@ describe("resumable disclosed onboarding", () => {
     expect(screen.getByRole("button", { name: /Set up authenticator/i })).toBeEnabled();
 
     mocks.enableMfa.mockResolvedValueOnce({
-      data: { totpURI: "otpauth://totp/Codestead:learner?secret=TESTSECRET", backupCodes: [] },
+      data: { method: "totp", totpURI: "otpauth://totp/Codestead:learner?secret=TESTSECRET", backupCodes: [] },
       error: null,
     });
     await user.click(screen.getByRole("button", { name: /Set up authenticator/i }));

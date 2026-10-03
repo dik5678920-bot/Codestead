@@ -230,7 +230,7 @@ afterAll(async () => {
   ]);
 });
 
-describe.sequential("disposable integration reset authority", () => {
+describe("disposable integration reset authority", { concurrent: false }, () => {
   it("clears public application data without changing the migration ledger", async () => {
     const journalBefore = await migrationJournalCount();
     expect(journalBefore).toBeGreaterThan(0);

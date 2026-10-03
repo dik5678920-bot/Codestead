@@ -47,9 +47,12 @@ describe("self-hosted Monaco editor", () => {
 
   it("configures the loader for same-origin assets before initialization", async () => {
     mocks.init.mockResolvedValue({});
-    render(<Harness />);
+    vi.resetModules();
+    const { default: FreshEditor } = await import("../self-hosted-monaco-editor");
+    render(<FreshEditor value={"print('ready')\n"} />);
 
     expect(mocks.config).toHaveBeenCalledWith({ paths: { vs: "/monaco/vs" } });
+    expect(mocks.config.mock.invocationCallOrder[0]).toBeLessThan(mocks.init.mock.invocationCallOrder[0]);
     expect(await screen.findByRole("textbox", { name: "Rich practice editor" })).toHaveValue("print('ready')\n");
   });
 
