@@ -60,7 +60,7 @@ import {
   assessmentCorrectionImpact,
   account,
   accountDeletionTombstone,
-  apiRateLimitWindow,
+  apiRateLimit,
   auditEvent,
   authSessionHistory,
   attempt,
@@ -108,7 +108,7 @@ import {
   openCredential,
   sealCredential,
 } from "@/lib/security/credential-vault";
-import { PostgresRateLimitStore } from "@/lib/security/rate-limit";
+import { FlexiblePostgresRateLimitStore } from "@/lib/security/rate-limit";
 import {
   backupExpiryReport,
   deleteLearnerAccount,
@@ -961,7 +961,7 @@ describe("PostgreSQL migration contract", () => {
       "response",
       "stored_object",
       "quota_ledger",
-      "api_rate_limit_window",
+      "api_rate_limit",
       "data_lifecycle_run",
       "account_deletion_tombstone",
       "appeal_event",
@@ -1204,8 +1204,8 @@ describe("one active authentication device", () => {
 
 describe("distributed API rate limiting", () => {
   it("atomically admits only the configured concurrent budget and isolates keys", async () => {
-    const store = new PostgresRateLimitStore(pool, Number.POSITIVE_INFINITY);
-    const now = new Date("2026-07-12T10:00:10.000Z");
+    const store = new FlexiblePostgresRateLimitStore(pool, Number.POSITIVE_INFINITY);
+    const now = new Date();
     const consume = (keyHash: string) => store.consume({
       scope: "code_run_minute",
       keyHash,
@@ -1221,18 +1221,32 @@ describe("distributed API rate limiting", () => {
 
     const isolated = await consume("b".repeat(64));
     expect(isolated.count).toBe(1);
-    const rows = await db.select().from(apiRateLimitWindow);
+    const rows = await db.select().from(apiRateLimit);
     expect(rows).toHaveLength(2);
-    expect(rows.find((row) => row.keyHash === "a".repeat(64))?.requestCount).toBe(8);
-    expect(rows.find((row) => row.keyHash === "b".repeat(64))?.requestCount).toBe(1);
+    expect(rows.find((row) => row.key.startsWith(`code_run_minute:${"a".repeat(64)}:`))?.points).toBe(40);
+    expect(rows.find((row) => row.key.startsWith(`code_run_minute:${"b".repeat(64)}:`))?.points).toBe(1);
+    const restarted = new FlexiblePostgresRateLimitStore(pool, Number.POSITIVE_INFINITY);
+    expect(await restarted.consume({ scope: "code_run_minute", keyHash: "a".repeat(64),
+      limit: 7, windowSeconds: 60, now })).toEqual({ count: 8, resetAt: sameKey[0].resetAt });
+  });
+
+  it("keeps the legacy database cap as an exhausted budget without overflow or fresh admission", async () => {
+    const now = new Date();
+    const start = Math.floor(now.getTime() / 60_000) * 60_000;
+    const key = `code_run_minute:${"c".repeat(64)}:${start}`;
+    await db.insert(apiRateLimit).values({ key, points: 1_000_001, expire: start + 120_000 });
+    const store = new FlexiblePostgresRateLimitStore(pool, Number.POSITIVE_INFINITY);
+    await expect(store.consume({ scope: "code_run_minute", keyHash: "c".repeat(64),
+      limit: 10, windowSeconds: 60, now })).resolves.toEqual({ count: 11, resetAt: new Date(start + 60_000) });
+    expect((await db.select().from(apiRateLimit).where(eq(apiRateLimit.key, key)))[0].points).toBe(1_000_001);
   });
 
   it("enforces database checks that exclude malformed/raw identity keys", async () => {
     await expect(pool.query(
-      `INSERT INTO api_rate_limit_window
-        (scope, key_hash, window_start, request_count, expires_at)
-       VALUES ($1, $2, $3, $4, $5)`,
-      ["access_request_email", "raw.person@example.com", new Date(0), 1, new Date(60_000)],
+      `INSERT INTO api_rate_limit
+        (key, points, expire)
+       VALUES ($1, $2, $3)`,
+      ["access_request_email:raw.person@example.com:0", 1, 60_000],
     )).rejects.toMatchObject({ code: "23514" });
   });
 });

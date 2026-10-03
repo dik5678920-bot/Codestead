@@ -159,6 +159,7 @@
     "next": "^16.3.6",
     "pg": "^8.23.0",
     "qrcode": "^1.5.4",
+    "rate-limiter-flexible": "11.2.1",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "react-markdown": "^10.1.0",

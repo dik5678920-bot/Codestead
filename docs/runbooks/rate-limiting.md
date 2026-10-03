@@ -1,6 +1,6 @@
 # API rate limiting
 
-Codestead uses PostgreSQL-backed fixed-window counters so enforcement remains consistent across app processes and after a process restart. It does not require Redis. Every counter key is an HMAC-SHA-256 digest over a domain separator, policy scope, identity type, and normalized identity. Raw IP addresses, email addresses, invitation tokens, and user IDs are never written to the rate-limit table.
+Codestead uses `rate-limiter-flexible` with PostgreSQL-backed fixed-window counters so enforcement remains consistent across app processes and after a process restart. It does not require Redis. Every identity component of a counter key is an HMAC-SHA-256 digest over a domain separator, policy scope, identity type, and normalized identity. Raw IP addresses, email addresses, invitation tokens, and user IDs are never written to the rate-limit table.
 
 ## Default budgets
 
@@ -31,8 +31,8 @@ These request budgets complement provider token grants, upload byte quotas, runn
 
 ## Enforcement behavior
 
-- The increment is one atomic `INSERT ... ON CONFLICT DO UPDATE` operation. Concurrent requests cannot exceed a budget through a read/update race.
-- Counters saturate at `limit + 1`, preventing unbounded writes during an attack.
+- The library performs one atomic `INSERT ... ON CONFLICT DO UPDATE` consume operation. Runtime table creation, in-memory blocking, insurance/fallback limiters and unbounded library cleanup are disabled. Concurrent requests cannot exceed a budget through a read/update race.
+- Public decisions still saturate at `limit + 1`. The library stores consumed points up to the legacy database cap of 1,000,001. That exact cap CHECK rejection remains a 429; all other persistence errors fail closed with 503.
 - Expired rows are deleted opportunistically at most once per five minutes per app process, in batches of 500. Cleanup failure does not invalidate an already successful enforcement decision.
 - All current protected operations fail closed. If PostgreSQL or required key configuration is unavailable, the request returns `503 RATE_LIMIT_UNAVAILABLE` and `Retry-After: 30`; expensive/provider/runner work is not started.
 - An exhausted budget returns `429 RATE_LIMITED`. Responses include `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, `RateLimit-Policy`, `Retry-After`, and compatibility `X-RateLimit-*` fields. Successful responses include the applicable budget headers.
@@ -60,7 +60,7 @@ Restart app processes after changing policy configuration. Lowering a limit appl
 
 Monitor rates of HTTP 429 and `RATE_LIMIT_UNAVAILABLE` responses without logging request identities. A sudden cohort-wide 429 for anonymous endpoints can indicate a missing trusted IP header, because all such requests share the `unavailable` bucket. Check the Cloudflare-to-origin header and origin firewall before raising the limit.
 
-The table contains only `scope`, `key_hash`, `window_start`, a bounded count, and expiry. It can be included in normal database backup, but it is disposable operational state and does not need restoration. After a restore without counters, budgets simply begin fresh. Do not join hashes to learner data or attempt to reverse identities.
+The `api_rate_limit` table contains only `key`, `points` and `expire`. Its key encodes the unchanged scope, HMAC identity digest and epoch window start; expiry retains one extra window. It can be included in normal database backup, but it is disposable operational state and does not need restoration. After a restore without counters, budgets simply begin fresh. Do not join hashes to learner data or attempt to reverse identities.
 
 Run the focused safety suite after changing policies or wrappers:
 
@@ -69,3 +69,7 @@ npm test -- src/lib/security/__tests__/rate-limit.test.ts src/lib/security/__tes
 ```
 
 The suite covers exact boundaries, concurrent calls, window reset, identity/scope isolation, raw-identifier exclusion, fail-open/closed semantics, atomic SQL shape, cleanup failure, header behavior, proxy parsing, override validation, and route wiring.
+
+## Migration 0071
+
+Stop all app processes before applying `0071_rate_limiter_flexible`, then restart on this release. The migration locks the old table, copies every existing count and expiry without granting a fresh budget, and drops `api_rate_limit_window`. The old binary cannot run against the new layout; rollback requires restoring the pre-migration database and deploying the old binary together. Existing role reconciliation and restore authority pins advance to 0071 without widening grants.

@@ -19,6 +19,7 @@ import {
   unique,
   uniqueIndex,
   uuid,
+  varchar,
 } from "drizzle-orm/pg-core";
 
 const xid8 = customType<{ data: string; driverData: string }>({
@@ -4449,36 +4450,26 @@ export const codingBattleSubmission = pgTable(
  * Disposable abuse-prevention state. keyHash is an HMAC digest; raw IPs,
  * emails, invitation tokens, and user IDs must never be stored here.
  */
-export const apiRateLimitWindow = pgTable(
-  "api_rate_limit_window",
+export const apiRateLimit = pgTable(
+  "api_rate_limit",
   {
-    scope: text("scope").notNull(),
-    keyHash: text("key_hash").notNull(),
-    windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
-    requestCount: integer("request_count").default(1).notNull(),
-    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    key: varchar("key", { length: 255 }).primaryKey(),
+      points: integer("points").default(1).notNull(),
+    expire: bigint("expire", { mode: "number" }).notNull(),
   },
   (table) => [
-    primaryKey({
-      name: "api_rate_limit_window_pk",
-      columns: [table.scope, table.keyHash, table.windowStart],
-    }),
-    index("api_rate_limit_expiry_idx").on(table.expiresAt),
+    index("api_rate_limit_expiry_idx").on(table.expire),
     check(
-      "api_rate_limit_scope_check",
-      sql`char_length(${table.scope}) BETWEEN 1 AND 100`,
+      "api_rate_limit_key_check",
+      sql`${table.key} ~ '^[a-z][a-z0-9_]{0,99}:[0-9a-f]{64}:-?[0-9]{1,16}$'`,
     ),
     check(
-      "api_rate_limit_key_hash_check",
-      sql`${table.keyHash} ~ '^[0-9a-f]{64}$'`,
-    ),
-    check(
-      "api_rate_limit_count_check",
-      sql`${table.requestCount} BETWEEN 1 AND 1000001`,
+      "api_rate_limit_points_check",
+        sql`${table.points} BETWEEN 1 AND 1000001`,
     ),
     check(
       "api_rate_limit_expiry_check",
-      sql`${table.expiresAt} > ${table.windowStart}`,
+        sql`${table.expire} > split_part(${table.key}, ':', 3)::bigint`,
     ),
   ],
 );
