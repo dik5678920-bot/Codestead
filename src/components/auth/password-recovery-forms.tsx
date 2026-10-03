@@ -1,4 +1,5 @@
 "use client";
+import { BREACHED_PASSWORD_MESSAGE } from "@/lib/security/password-messages";
 
 import Link from "next/link";
 import { KeyRound, Mail } from "lucide-react";
@@ -126,7 +127,9 @@ export function ResetPasswordForm({ token, invalid }: { token?: string; invalid?
     try {
       const result = await authClient.resetPassword({ newPassword: password, token });
       if (result.error) {
-        setError("The reset link is invalid, expired, or already used. Request a new one.");
+        setError(result.error.code === "PASSWORD_COMPROMISED"
+          ? BREACHED_PASSWORD_MESSAGE
+          : "The reset link is invalid, expired, or already used. Request a new one.");
         return;
       }
       setComplete(true);

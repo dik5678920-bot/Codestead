@@ -44,6 +44,16 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 });
 
 describe("public auth form failure recovery", () => {
+  it("shows a breached-password explanation instead of blaming the reset link", async () => {
+    mocks.resetPassword.mockResolvedValueOnce({ error: { code: "PASSWORD_COMPROMISED" } });
+    const user = userEvent.setup();
+    render(<ResetPasswordForm token="reset-token" />);
+    await user.type(screen.getByLabelText("New password"), "a-long-new-password");
+    await user.type(screen.getByLabelText("Confirm new password"), "a-long-new-password");
+    await user.click(screen.getByRole("button", { name: "Change password" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("appeared in a data breach");
+    expect(screen.getByRole("button", { name: "Change password" })).toBeEnabled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.searchParamsGet.mockImplementation((name: string) => name === "token" ? "activation-token" : null);

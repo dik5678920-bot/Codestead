@@ -615,6 +615,25 @@ describe("resumable disclosed onboarding", () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith("/login"));
   });
 
+  it("explains a breached password and lets the learner retry rotation", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/onboarding/status") return json({ code: "PASSWORD_CHANGE_REQUIRED" }, { status: 403 });
+      if (url === "/api/security/forced-password-change") return json({ code: "PASSWORD_COMPROMISED" }, { status: 400 });
+      throw new Error(`Unexpected request: ${url}`);
+    }));
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+    await screen.findByRole("heading", { name: "Choose your own password." });
+    await user.type(screen.getByLabelText("Temporary password"), "temporary-password-1");
+    await user.type(screen.getByLabelText("New password"), "brand-new-password-1");
+    await user.type(screen.getByLabelText("Confirm new password"), "brand-new-password-1");
+    await user.click(screen.getByRole("button", { name: "Save password" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("appeared in a data breach");
+    expect(screen.getByRole("button", { name: "Save password" })).toBeEnabled();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
   it("recovers from a network failure while changing the temporary password", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
