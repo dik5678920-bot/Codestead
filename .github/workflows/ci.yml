@@ -167,13 +167,11 @@ jobs:
       - run: npm run web:executable:check
       - run: npm run audit:release
       - run: npm run evidence:verify
-      - name: Audit production dependencies strictly
-        run: npm audit --omit=dev --audit-level=moderate
+      - run: npm audit --omit=dev --audit-level=moderate
       - run: node --test scripts/audit-development-dependencies.test.mjs
       # Dev-only exception expires 2026-10-17; every other advisory still fails.
       # https://github.com/advisories/GHSA-vfj7-8cjw-p6xm
-      - name: Audit development dependencies with the expiring single-GHSA exception
-        run: node scripts/audit-development-dependencies.mjs
+      - run: node scripts/audit-development-dependencies.mjs
       - run: node infra/tests/validate-static.mjs
       - run: node --test infra/tests/database-secret-ceremony.test.mjs
       - run: node --test infra/tests/database-least-privilege-static.test.mjs
