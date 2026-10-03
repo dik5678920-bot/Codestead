@@ -1,5 +1,5 @@
 import { createOTP } from "@better-auth/utils/otp";
-import { symmetricDecrypt } from "better-auth/crypto";
+import { hashPassword, symmetricDecrypt } from "better-auth/crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -81,7 +81,9 @@ export async function POST(request: NextRequest) {
 
       if (!candidate?.passwordHash) {
         // Same verifier work for unknown accounts and accounts without TOTP.
-        dummyHash ??= context.password.hash("codestead-session-takeover-dummy-password");
+        // This is verifier work, not a new user password. The plugin-wrapped
+        // hasher requires an endpoint context and must not screen sign-ins.
+        dummyHash ??= hashPassword("codestead-session-takeover-dummy-password");
         await context.password.verify({ hash: await dummyHash, password });
         return fail();
       }

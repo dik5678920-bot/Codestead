@@ -27,6 +27,47 @@ function setup(response: string | Error, status = 200) {
 }
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 describe("breached password protection", () => {
+  it("bounds context-free requests and sends only a padded SHA-1 prefix", async () => {
+    const log = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { fetch } = setup(`${digest.slice(5)}:0\r\n`);
+    await expect(requireUnbreachedPassword(password)).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledOnce();
+    const [url, init] = fetch.mock.calls[0];
+    expect(String(url)).toBe(`https://api.pwnedpasswords.com/range/${digest.slice(0, 5)}`);
+    expect(new Headers(init?.headers).get("Add-Padding")).toBe("true");
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    expect(init?.redirect).toBe("error");
+    expect(init?.cache).toBe("no-store");
+    expect(JSON.stringify(fetch.mock.calls)).not.toContain(password);
+    expect(JSON.stringify(fetch.mock.calls)).not.toContain(digest.slice(5));
+    expect(log).not.toHaveBeenCalled();
+  });
+  it("aborts a stalled context-free request after five seconds and fails open", async () => {
+    const controller = new AbortController();
+    const deadline = vi.spyOn(AbortSignal, "timeout").mockReturnValue(controller.signal);
+    const log = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetch = vi.fn((_url: string, init: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init.signal?.addEventListener("abort", () => reject(new Error("private transport detail")), { once: true });
+    }));
+    vi.stubGlobal("fetch", fetch);
+    const check = requireUnbreachedPassword(password);
+    expect(deadline).toHaveBeenCalledWith(5_000);
+    controller.abort();
+    await expect(check).resolves.toBeUndefined();
+    expect(log.mock.calls).toEqual([["HIBP password check unavailable; proceeding without breach screening."]]);
+  });
+  it.each(["0", "00", "-1", "1.5", "NaN", "9007199254740992"])("handles padding or invalid matching count %s without rejecting a password", async (count) => {
+    const log = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setup(`${digest.slice(5)}:${count}\r\n`);
+    await expect(requireUnbreachedPassword(password)).resolves.toBeUndefined();
+    expect(log.mock.calls).toEqual(count === "0" ? [] : [["HIBP password check unavailable; proceeding without breach screening."]]);
+  });
+  it("matches lowercase suffixes locally and rejects a positive count without logging", async () => {
+    const log = vi.spyOn(console, "warn").mockImplementation(() => {});
+    setup(`${"A".repeat(35)}:99\r\n${digest.slice(5).toLowerCase()}:3\r\n`);
+    await expect(requireUnbreachedPassword(password)).rejects.toMatchObject({ body: { code: "PASSWORD_COMPROMISED" } });
+    expect(log).not.toHaveBeenCalled();
+  });
   it.each(["/sign-up/email", "/change-password", "/reset-password"])("rejects breached passwords on %s", async (path) => {
     endpoint.path = path;
     const { hash, originalHash } = setup(`${digest.slice(5)}:42\r\n`);

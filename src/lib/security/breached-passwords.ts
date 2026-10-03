@@ -1,4 +1,5 @@
-import { haveIBeenPwned, isPasswordCompromised } from "better-auth/plugins/haveibeenpwned";
+import { createHash } from "node:crypto";
+import { haveIBeenPwned } from "better-auth/plugins/haveibeenpwned";
 import { APIError } from "better-auth/api";
 
 import { BREACHED_PASSWORD_MESSAGE } from "./password-messages";
@@ -53,11 +54,36 @@ export function breachedPasswordPlugin() {
   };
 }
 export async function requireUnbreachedPassword(password: string) {
-  let compromised: boolean;
+  // Custom routes have no Better Auth endpoint context. Keep their screening
+  // independent of the plugin's context-aware password hasher.
+  const digest = createHash("sha1").update(password, "utf8").digest("hex").toUpperCase();
+  const prefix = digest.slice(0, 5);
+  const suffix = digest.slice(5);
+  let compromised = false;
   try {
-    compromised = await isPasswordCompromised(password);
-  } catch (error) {
-    if (!isHibpUnavailableError(error)) throw error;
+    const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
+      headers: { "Add-Padding": "true", "User-Agent": "Codestead Password Checker", Accept: "text/plain" },
+      signal: AbortSignal.timeout(5_000),
+      // Do not disclose even the prefix to a redirect destination or cache it.
+      redirect: "error",
+      cache: "no-store",
+    });
+    if (!response.ok) throw new Error("HIBP unavailable");
+    const body = (await response.text()).trim();
+    if (!body) throw new Error("Invalid HIBP range response");
+    for (const line of body.split(/\r?\n/u)) {
+      const entry = /^([a-f0-9]{35}):(0|[1-9]\d*)$/iu.exec(line);
+      const count = entry ? Number(entry[2]) : Number.NaN;
+      if (!entry || !Number.isSafeInteger(count)) throw new Error("Invalid HIBP range response");
+      // Padded entries have zero occurrences and must never reject a password.
+      if (entry[1].toUpperCase() === suffix && count > 0) {
+        compromised = true;
+        break;
+      }
+    }
+  } catch {
+    // Only transport/response handling lives in this try block. The local
+    // breach rejection below must not be swallowed by fail-open handling.
     logUnavailable();
     return;
   }
