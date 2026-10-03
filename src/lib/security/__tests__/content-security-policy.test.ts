@@ -15,7 +15,7 @@ describe("nonce Content-Security-Policy", () => {
     expect(response.status).toBe(403);
     expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
   });
-  it.each(["production", "development"])("authorizes only nonce scripts in %s", (environment) => {
+  it.each(["production", "development", "test"])("authorizes only nonce scripts in %s", (environment) => {
     vi.stubEnv("NODE_ENV", environment);
     const response = proxy(new NextRequest("https://codestead.test/login", {
       headers: { "x-nonce": "attacker", "content-security-policy": "script-src *" },
@@ -24,8 +24,16 @@ describe("nonce Content-Security-Policy", () => {
     expect(csp).toBeTruthy();
     const nonce = response.headers.get("x-middleware-request-x-nonce")!;
     expect(nonce).toMatch(/^[A-Za-z0-9+/]{43}=$/);
-    expect(csp).toContain(`script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`);
-    expect(csp).not.toContain("'unsafe-eval'");
+    // React's development build needs eval for debugging (Next.js CSP guide);
+    // every other environment, including production, must never allow it.
+    const scriptSrc = `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`;
+    if (environment === "development") {
+      expect(csp).toContain(`${scriptSrc} 'unsafe-eval'`);
+      expect(csp.match(/'unsafe-eval'/g)).toHaveLength(1);
+    } else {
+      expect(csp).toContain(`${scriptSrc};`);
+      expect(csp).not.toContain("'unsafe-eval'");
+    }
     expect(csp.split(";").find((directive) => directive.trim().startsWith("script-src"))).not.toContain("'unsafe-inline'");
     expect(csp).toContain("worker-src 'self' blob:");
     expect(csp).toContain("connect-src 'self'");

@@ -18,7 +18,9 @@ export function proxy(request: NextRequest) {
       "base-uri 'self'",
       "frame-ancestors 'none'",
       "object-src 'none'",
-      `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`,
+      // React's development build uses eval for debugging (Next.js CSP guide);
+      // production and test never allow it.
+      `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : ""}`,
       "script-src-attr 'none'",
       // Monaco and the application's inline style properties need this.
       "style-src 'self' 'unsafe-inline'",
