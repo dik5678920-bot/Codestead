@@ -80,10 +80,13 @@ docker run --rm --runtime io.containerd.kata.v2 alpine:3.22@sha256:3e9b4b680bfc9
 
 ## Build and start Piston
 
-Every change below goes through `/etc/learncoding/compose.env` and the guarded
-start (`systemctl reload learncoding-compose`), which runs the runtime
-validator before anything starts. The validator accepts `COMPOSE_PROFILES` of
-exactly empty, `uploads`, `piston`, or `uploads,piston`, requires a digest-pinned
+Every change below goes through `/etc/learncoding/compose.env` and then
+`infra/ops/redeploy-nuc.sh <git-sha>` with the currently deployed commit (the NUC
+has no `learncoding-compose.service`). Re-running it with the deployed sha
+rebuilds the same reproducible app images, restarts the app, workers and (when
+the profile lists it) `piston`, and waits for `/health/ready`. The runtime
+validator accepts `COMPOSE_PROFILES` of exactly empty, `uploads`, `piston`, or
+`uploads,piston`, requires a digest-pinned
 `PISTON_IMAGE` when `piston` is listed, and rejects `CODE_RUNNER_PROVIDER=piston`
 without the profile. The app is always attached to the internal `piston`
 network and reads `PISTON_URL=http://piston:2000` from `compose.yaml`.
@@ -102,19 +105,23 @@ network and reads `PISTON_URL=http://piston:2000` from `compose.yaml`.
    ```bash
    cd /opt/learncoding
    node infra/piston/prepare.mjs
-   docker buildx build --load --network=none --platform linux/amd64 --provenance=false --metadata-file infra/piston/build-metadata.json -t codestead-piston:$(git rev-parse --short HEAD) infra/piston
+   node infra/piston/build.mjs codestead-piston:$(git rev-parse --short HEAD)
+   node infra/piston/verify-digest.mjs
    docker image inspect --format '{{json .RepoDigests}}' codestead-piston:$(git -C /opt/learncoding rev-parse --short HEAD)
    ```
 
-   The second command must print one `codestead-piston@sha256:<64 hex>` entry.
+   The build is reproducible. `verify-digest.mjs` must print the digest from
+   `infra/piston/pr4b-runtime-handoff.json`, the same one CI built; stop if it
+   fails. The last command must print that same `codestead-piston@sha256:<64 hex>`
+   entry, which is the only `PISTON_IMAGE` that exam publication accepts.
 
 3. Edit `/etc/learncoding/compose.env`: set `PISTON_IMAGE` to that exact
    `codestead-piston@sha256:<64 hex>` value, add the token (`COMPOSE_PROFILES=piston`,
    or `uploads,piston` when uploads are on), and keep `CODE_RUNNER_PROVIDER=legacy`.
-   Then run the guarded start, which now also starts `piston`:
+   Then redeploy the running commit, which now also starts `piston`:
 
    ```bash
-   sudo systemctl reload learncoding-compose
+   sudo bash /opt/learncoding/infra/ops/redeploy-nuc.sh --no-scan "$(git -C /opt/learncoding rev-parse HEAD)"
    ```
 
 4. Kata cannot run Docker healthchecks (no exec into the guest), so check the
@@ -127,7 +134,7 @@ network and reads `PISTON_URL=http://piston:2000` from `compose.yaml`.
    ```
 
 5. Flag flip (owner approval): set `CODE_RUNNER_PROVIDER=piston` in
-   `/etc/learncoding/compose.env` and run `sudo systemctl reload learncoding-compose`
+   `/etc/learncoding/compose.env` and run the same `redeploy-nuc.sh` command
    again so the app is recreated with it. Practice, exam code and grading corrections all
    select Piston. **Do not flip the flag until the PR4b publication migration is ready:**
    legacy-pinned exam forms reject Piston runtime/image evidence, with no fallback.
@@ -153,10 +160,10 @@ listed; they never build or pull it, so rebuild (steps 2-3) to change it.
 ## Rollback
 
 1. Back to the legacy runner: set `CODE_RUNNER_PROVIDER=legacy` and run
-   `sudo systemctl reload learncoding-compose`. This alone is a full rollback for
+   rerun `redeploy-nuc.sh` with the deployed sha. This alone is a full rollback for
    learners; Piston keeps running but receives no requests.
 2. To also stop Piston: remove the `piston` token from `COMPOSE_PROFILES` (leave
-   `PISTON_IMAGE` or clear it), reload as above, then remove the container:
+   `PISTON_IMAGE` or clear it), redeploy as above, then remove the container:
 
    ```bash
    docker compose -p learncoding --env-file /etc/learncoding/compose.env -f /opt/learncoding/compose.yaml --profile piston rm -sf piston

@@ -19,10 +19,18 @@ Run from the repository root with Docker and Node 22 available:
 npm ci
 node --test infra/piston/prepare.test.mjs
 node infra/piston/prepare.mjs
-docker buildx build --load --network=none --platform linux/amd64 --provenance=false \
-  --metadata-file infra/piston/build-metadata.json -t codestead-piston:pr5 infra/piston
+node infra/piston/build.mjs codestead-piston:pr5
+node infra/piston/verify-digest.mjs
 node infra/piston/test-image.mjs codestead-piston:pr5
 ```
+
+The build is reproducible. `build.mjs` sets `SOURCE_DATE_EPOCH` to the locked
+Debian snapshot time (`sourceDateEpoch` in the lock) and rewrites every layer
+timestamp to it. It also builds AppCDS as a static dump of a sorted class list.
+Building the same commit twice, or on CI and on the NUC, gives the same manifest
+digest. `verify-digest.mjs` fails unless that digest equals the one in
+`pr4b-runtime-handoff.json`. Build from a Linux checkout: on a Windows checkout,
+CRLF line endings change the build-input hashes and therefore the digest.
 
 The fetcher fails on missing or incorrect SHA-256 values. The Dockerfile checks
 the same archive hashes again, installs only local `.deb` files and runs npm
@@ -54,10 +62,10 @@ the app adapter inventory and live API inventory are tested against these pins.
 The smoke command writes ignored `image-result.json`: actual image manifest and
 config digests, runtime labels, API inventory, build-input hashes and test result.
 CI uploads that record plus BuildKit metadata; it does not publish an image.
-`pr4b-runtime-handoff.json` records the locally tested build. A rebuilt image can
-have a different manifest (including AppCDS/build timestamps); PR4b must use the
-actual deployed build's verified digest, not treat this local record as a registry
-release or copy its digest onto a different image.
+`pr4b-runtime-handoff.json` records the reviewed reproducible build. Any rebuild
+of this commit must produce exactly its digest, and CI enforces this. If an input
+changes, rebuild, rerun the live tests, and update the handoff and the
+publication pins together.
 
 Legacy-pinned exam snapshots still fail closed on Piston. PR4b needs reviewed
 publication/tooling changes and new forms pinned to these exact runtime labels

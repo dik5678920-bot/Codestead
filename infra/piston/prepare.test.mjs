@@ -66,3 +66,54 @@ test("PR4b handoff matches the committed build and validation inputs", async () 
   assert.equal(handoff.validation.passed, true);
   assert.equal(handoff.validation.liveTests, 20);
 });
+
+test("the build is pinned to a reproducible epoch, timestamp rewrite and offline network", async () => {
+  const { buildArgs, sourceDateEpoch } = await import("./build.mjs");
+  const lock = JSON.parse(await readFile(new URL("./image-inputs.lock.json", import.meta.url)));
+  assert.equal(sourceDateEpoch(lock), Date.UTC(2026, 9, 1) / 1000);
+  assert.throws(() => sourceDateEpoch({ ...lock, sourceDateEpoch: lock.sourceDateEpoch + 1 }), /snapshot/);
+  assert.throws(() => sourceDateEpoch({ ...lock, sourceDateEpoch: undefined }), /snapshot/);
+  const args = buildArgs({ epoch: 1790812800, tag: "t", archive: "/tmp/i.tar", metadataFile: "m.json", context: "ctx" });
+  assert.ok(args.includes("--network=none") && args.includes("--provenance=false"));
+  assert.ok(args.includes("SOURCE_DATE_EPOCH=1790812800"));
+  assert.ok(args.includes("type=docker,name=t,dest=/tmp/i.tar,rewrite-timestamp=true"));
+  assert.ok(!args.includes("--load"), "--load unpacks and conflicts with rewrite-timestamp");
+});
+
+test("AppCDS uses a deterministic static dump, never a dynamic archive", async () => {
+  const script = await readFile(new URL("./build-cds.sh", import.meta.url), "utf8");
+  assert.ok(!script.includes("ArchiveClassesAtExit"));
+  assert.match(script, /-Xshare:dump -XX:SharedClassListFile=/);
+  assert.match(script, /LC_ALL=C sort -u/);
+});
+
+test("CI rejects any build whose digest differs from the reviewed handoff", async () => {
+  const { verifyDigest } = await import("./verify-digest.mjs");
+  const handoff = JSON.parse(await readFile(new URL("./pr4b-runtime-handoff.json", import.meta.url)));
+  const manifest = handoff.imageReference.split("@")[1];
+  const ok = { "containerimage.digest": manifest, "containerimage.config.digest": handoff.imageConfigDigest };
+  assert.equal(verifyDigest(ok, handoff), manifest);
+  assert.throws(() => verifyDigest({ ...ok, "containerimage.digest": `sha256:${"0".repeat(64)}` }, handoff), /not reproducible/);
+  assert.throws(() => verifyDigest({ ...ok, "containerimage.config.digest": `sha256:${"0".repeat(64)}` }, handoff), /not reproducible/);
+  assert.throws(() => verifyDigest({}, handoff), /not reproducible/);
+  const workflow = await readFile(new URL("../../.github/workflows/piston-image.yml", import.meta.url), "utf8");
+  assert.match(workflow, /node infra\/piston\/build\.mjs codestead-piston:ci/);
+  assert.match(workflow, /node infra\/piston\/verify-digest\.mjs/);
+});
+
+test("every build-context COPY fixes file modes so Windows and Linux contexts build the same image", async () => {
+  const dockerfile = await readFile(new URL("./Dockerfile", import.meta.url), "utf8");
+  const copies = dockerfile.split("\n").filter((line) => line.startsWith("COPY ") && !line.startsWith("COPY --from="));
+  for (const line of copies) {
+    if (line.startsWith("COPY .downloads/ ")) continue; // build stage only; archives are re-checked by sha256
+    assert.match(line, /^COPY --chmod=0[45]{3} /, line);
+  }
+});
+
+test("no COPY re-adds a path already copied from the build stage (its diff layer is not reproducible)", async () => {
+  const dockerfile = await readFile(new URL("./Dockerfile", import.meta.url), "utf8");
+  const sources = [...dockerfile.matchAll(/^COPY --from=build (\S+) /gm)].map((match) => match[1].replace(/\/$/, ""));
+  for (const source of sources) {
+    assert.ok(!sources.some((other) => other !== source && source.startsWith(`${other}/`)), source);
+  }
+});

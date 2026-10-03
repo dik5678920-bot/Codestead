@@ -282,7 +282,8 @@ latest-migration pins remain current.
 | JavaScript | Node.js 22 | Node.js 22.23.3 (Piston) |
 
 Every new Piston pin uses manifest
-`sha256:da7c26b38e7112eb1073696e65c2dfec9449d9d84ea4b4355d49a212246fe46a`.
+`sha256:5964ef2fa585c6e5f4dfbb458eed88ca86912805b352f6a19884f286a7533c63`, the reproducible build of
+`infra/piston/build.mjs` (any builder at that commit gets the same digest).
 The existing legacy manifest digests are recorded verbatim in the reviewed revision.
 This PR does not publish the image, deploy to the NUC or switch the production flag.
 Before rollout, verify the deployed image manifest and labels against the PR5 handoff,

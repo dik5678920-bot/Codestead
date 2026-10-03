@@ -36,12 +36,12 @@ jobs:
           node --test infra/piston/prepare.test.mjs > inputs.log 2>&1 || { cat inputs.log; exit 1; }
           node infra/piston/prepare.mjs > downloads.log 2>&1 || { cat downloads.log; exit 1; }
           rm inputs.log downloads.log
-      - name: Build without network access
+      - name: Build reproducibly without network access
         run: |
-          docker buildx build --load --network=none --platform linux/amd64 --provenance=false \
-            --metadata-file infra/piston/build-metadata.json -t codestead-piston:ci infra/piston \
-            > build.log 2>&1 || { tail -n 120 build.log; exit 1; }
+          node infra/piston/build.mjs codestead-piston:ci > build.log 2>&1 || { tail -n 120 build.log; exit 1; }
           rm build.log
+      - name: Require the reviewed reproducible digest
+        run: node infra/piston/verify-digest.mjs
       - name: Test actual image and record its manifest
         run: |
           node infra/piston/test-image.mjs codestead-piston:ci > smoke.log 2>&1 || { cat smoke.log; exit 1; }

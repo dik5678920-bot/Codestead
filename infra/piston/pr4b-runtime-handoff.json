@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "platform": "linux/amd64",
-  "imageReference": "codestead-piston@sha256:da7c26b38e7112eb1073696e65c2dfec9449d9d84ea4b4355d49a212246fe46a",
-  "imageConfigDigest": "sha256:9a0d56f824f90ccb5b5c8bf8b3e7e6264bd8994048fb560687ac7994a078b325",
+  "imageReference": "codestead-piston@sha256:5964ef2fa585c6e5f4dfbb458eed88ca86912805b352f6a19884f286a7533c63",
+  "imageConfigDigest": "sha256:969414c15abf668e773409b7d1ac4c17ca5e145e0bcb7bbbb94fb0d0b07492b1",
   "runtimeLabels": {
     "c": {
       "language": "c",
@@ -73,13 +73,13 @@
     }
   ],
   "buildInputSha256": {
-    "Dockerfile": "ab92693eced86a7192695e8dd3d9ae8ff6a895004e0dba4f1d1d2e6b6b1f7dc4",
+    "Dockerfile": "03be3cdbde8ad7bdbba5c3963c75c0a3503602592a534c631df1e2e692df4b1d",
     "entrypoint.sh": "7ee5301283c7af996c3df931a7797df46b2e04513147d795f29b6f01eb9029bc",
-    "build-cds.sh": "4e9659e2da4e3fc7857ec795b0e15cfb3acb54852ca5acc20410f8fc02ffae94",
+    "build-cds.sh": "bdc22515491a94ed12de518fbec555245aab4852141908fefb2ab751af4b7726",
     "install-packages.mjs": "d0c95da04cb8c0196d5a05ac48343e629f8e5287c092d3e0ddc1db65dd7bde47",
     "api-package.json": "128398b4394d3facbda38b27fdce6ccbac9bee024fa3774e7f4fe80ff35bc168",
     "api-package-lock.json": "5df84af17e80386b3ee90278c65d914c5db5f6e13cadcf65559343d8dc3e9f0b",
-    "image-inputs.lock.json": "9219a8a7f7c4ce1b9a5fe82c601296d94213ae891e74a2acbc5f5e7900e58908",
+    "image-inputs.lock.json": "3ab79882f2550aa0cd5c571f161887c88e0b6b805eed5100647a8070a9a4443d",
     "downloads.sha256": "bcc85ff6de59772998cea73b2df7189cba2bda55fbc375336ff0aa276b8cf7b8",
     ".dockerignore": "bd52ce28ab83c8b81157e33384229ea4b0360ae1523e0fb2e7121f6d05535875"
   },
@@ -96,13 +96,7 @@
     "kernel": "6.6.87.2-microsoft-standard-WSL2",
     "isolation": "isolate inside disposable Docker Desktop/CI VM; production Kata unchanged"
   },
-  "availability": "Local Docker Desktop build only; no registry publication or NUC deployment",
-  "publicationRequirement": "PR4b must publish new forms with these exact labels and the verified deployed-image manifest; immutable legacy-pinned attempts must not be rewritten",
-  "baseCommit": "39a774a0d3d43ce776eec297db5cecfbb5ba2a62",
-  "taskStatus": "PR5 implementation complete; paused for tonight after opening the PR",
-  "remainingSteps": [
-    "Confirm the Piston image CI job and required repository checks on the PR; investigate any failures when explicitly resumed.",
-    "Review and merge the single PR5 PR; no remaining local implementation or test steps.",
-    "For separate PR4b: validate the actual deployed-image build digest and these exact labels, update publication/runtime-pin tooling, and publish new forms without rewriting immutable legacy attempt snapshots. Keep the provider legacy until that migration and active-attempt transition are ready."
-  ]
+  "availability": "Reproducible build: node infra/piston/build.mjs at this commit yields exactly this manifest on CI, Docker Desktop and the NUC (verify-digest.mjs enforces it); no registry publication",
+  "publicationRequirement": "New exam forms pin these exact labels and this manifest digest; the deployed PISTON_IMAGE must be this digest; immutable legacy-pinned attempts must not be rewritten",
+  "baseCommit": "23215e49047a9aa8efc08e2a033244d7df18cfd3"
 }
