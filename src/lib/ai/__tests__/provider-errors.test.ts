@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { callProvider } from "../providers";
@@ -78,6 +79,12 @@ describe("provider protocol and response hardening", () => {
   ])("rejects malformed or empty OpenAI-compatible payload %#", async (payload) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
     await expect(callProvider(request())).rejects.toMatchObject({ code: "BAD_RESPONSE" });
+  });
+
+  it("preserves a coded error from another realm across the transport boundary", async () => {
+    const foreignError = runInNewContext('Object.assign(new Error("safe failure"), { name: "ProviderError", code: "RATE_LIMIT", status: 429, retryAfterSeconds: 17 })');
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(foreignError));
+    await expect(callProvider(request())).rejects.toBe(foreignError);
   });
 
   it("normalizes network failures without exposing their details", async () => {

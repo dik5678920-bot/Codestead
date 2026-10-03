@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import {
+  isProviderError,
   ProviderError,
   type ProviderRequest,
   type ProviderResult,
@@ -219,7 +220,7 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
     };
     return await Promise.race([invoke(), deadline]);
   } catch (error) {
-    if (error instanceof ProviderError) throw error;
+    if (isProviderError(error)) throw error;
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new ProviderError("Provider request timed out.", "TIMEOUT");
     }

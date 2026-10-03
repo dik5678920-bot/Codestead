@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ callProvider: vi.fn() }));
@@ -48,6 +49,14 @@ function result(overrides: Partial<ProviderResult> = {}): ProviderResult {
 
 describe("AI provider isolation and fallback policy", () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it("reports a foreign-realm provider failure before trying the next credential", async () => {
+    const foreignError = runInNewContext('Object.assign(new Error("safe failure"), { name: "ProviderError", code: "AUTHENTICATION", status: 401 })');
+    mocks.callProvider.mockRejectedValueOnce(foreignError).mockResolvedValueOnce(result());
+    const onFailure = vi.fn();
+    await routeTutorRequest({ learnerId: "learner-1", candidates: [candidate(), candidate({ credentialId: "credential-2" })], allowedProviders, messages, onFailure });
+    expect(onFailure).toHaveBeenCalledWith({ credentialId: "credential-1", provider: "nvidia_nim", code: "AUTHENTICATION", status: 401 });
+  });
 
   it("returns the first successful permitted provider with source attribution", async () => {
     mocks.callProvider.mockResolvedValue(result());

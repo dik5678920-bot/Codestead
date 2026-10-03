@@ -3,7 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { defaultModelForProvider, type CatalogProviderId } from "@/lib/ai/provider-catalog";
 import { callProvider } from "@/lib/ai/providers";
-import { ProviderError, type SupportedProvider } from "@/lib/ai/types";
+import { isProviderError, type SupportedProvider } from "@/lib/ai/types";
 import { db } from "@/lib/db/client";
 import { modelCall, providerPolicy } from "@/lib/db/schema";
 
@@ -41,6 +41,7 @@ export async function validateProviderCredential(input: {
         : defaultModelForProvider(input.provider as CatalogProviderId));
 
   if (!model) {
+    console.warn("Provider credential validation failed", { provider: input.provider, code: "POLICY" });
     return {
       status: "unreachable" as const,
       failureCode: "POLICY",
@@ -62,12 +63,13 @@ export async function validateProviderCredential(input: {
       timeoutMs: policy?.timeoutMs ?? 60_000,
     });
   } catch (error) {
-    const providerError = error instanceof ProviderError ? error : null;
+    const providerError = isProviderError(error) ? error : null;
     const status: CredentialValidationStatus =
       providerError?.code === "AUTHENTICATION"
         ? "invalid"
         : "unreachable";
     const failureCode = providerError?.code ?? "UNKNOWN";
+    console.warn("Provider credential validation failed", { provider: input.provider, code: failureCode });
     await db.insert(modelCall).values({
       userId: input.userId,
       credentialId: input.credentialId,
