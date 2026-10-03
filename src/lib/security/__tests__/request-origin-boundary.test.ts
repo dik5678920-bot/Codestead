@@ -11,6 +11,6 @@ describe("request-origin boundary", () => {
     const proxy = readFileSync(path.join(process.cwd(), "src/proxy.ts"), "utf8");
     expect(policy).toContain("export function evaluateRequestOrigin");
     expect(proxy).toContain("export function proxy");
-    expect(proxy).toContain('matcher: ["/api/:path*"]');
+    expect(proxy).toContain('matcher: ["/api/:path*", "/((?!api/|_next/static|_next/image|monaco/|favicon.ico).*)"]');
   });
 });

@@ -51,7 +51,7 @@ describe("self-hosted Monaco editor", () => {
     const { default: FreshEditor } = await import("../self-hosted-monaco-editor");
     render(<FreshEditor value={"print('ready')\n"} />);
 
-    expect(mocks.config).toHaveBeenCalledWith({ paths: { vs: "/monaco/vs" } });
+    expect(mocks.config).toHaveBeenCalledWith({ paths: { vs: new URL("/monaco/vs", window.location.origin).href } });
     expect(mocks.config.mock.invocationCallOrder[0]).toBeLessThan(mocks.init.mock.invocationCallOrder[0]);
     expect(await screen.findByRole("textbox", { name: "Rich practice editor" })).toHaveValue("print('ready')\n");
   });

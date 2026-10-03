@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { LandingPage } from "@/components/landing/landing-page";
 import { signedInDestination } from "@/lib/security/signed-in-destination";
@@ -15,5 +16,5 @@ export default async function HomePage() {
   // looking signed out on the marketing page.
   const destination = await signedInDestination();
   if (destination) redirect(destination);
-  return <LandingPage />;
+  return <LandingPage nonce={(await headers()).get("x-nonce") ?? undefined} />;
 }

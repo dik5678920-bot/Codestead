@@ -20,10 +20,11 @@ import { CurriculumChips } from "./curriculum-chips";
 import { PromiseCards } from "./promise-cards";
 import styles from "./landing-page.module.css";
 
-export function LandingPage() {
+export function LandingPage({ nonce }: { nonce?: string } = {}) {
   return (
     <div className={styles.page}>
       <script
+        nonce={nonce}
         dangerouslySetInnerHTML={{ __html: JSON.stringify(landingJsonLd()) }}
         type="application/ld+json"
       />

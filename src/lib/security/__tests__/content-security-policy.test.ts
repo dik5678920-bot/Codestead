@@ -1,0 +1,44 @@
+import { NextRequest } from "next/server";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { config, proxy } from "../../../proxy";
+
+afterEach(() => vi.unstubAllEnvs());
+describe("nonce Content-Security-Policy", () => {
+  it("keeps origin rejection responses locked down", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_URL", "https://codestead.test");
+    const response = proxy(new NextRequest("https://codestead.test/api/drafts", {
+      method: "PUT",
+      headers: { cookie: "learncoding.session_token=opaque", origin: "https://attacker.test" },
+    }));
+    expect(response.status).toBe(403);
+    expect(response.headers.get("content-security-policy")).toBe("default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+  });
+  it.each(["production", "development"])("authorizes only nonce scripts in %s", (environment) => {
+    vi.stubEnv("NODE_ENV", environment);
+    const response = proxy(new NextRequest("https://codestead.test/login", {
+      headers: { "x-nonce": "attacker", "content-security-policy": "script-src *" },
+    }));
+    const csp = response.headers.get("content-security-policy")!;
+    expect(csp).toBeTruthy();
+    const nonce = response.headers.get("x-middleware-request-x-nonce")!;
+    expect(nonce).toMatch(/^[A-Za-z0-9+/]{43}=$/);
+    expect(csp).toContain(`script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`);
+    expect(csp).not.toContain("'unsafe-eval'");
+    expect(csp.split(";").find((directive) => directive.trim().startsWith("script-src"))).not.toContain("'unsafe-inline'");
+    expect(csp).toContain("worker-src 'self' blob:");
+    expect(csp).toContain("connect-src 'self'");
+    expect(response.headers.get("x-middleware-request-content-security-policy")).toBe(csp);
+    expect(response.headers.get("cache-control")).toContain("no-store");
+    const second = proxy(new NextRequest("https://codestead.test/login"));
+    expect(second.headers.get("x-middleware-request-x-nonce")).not.toBe(nonce);
+  });
+  it.each(["/", "/login", "/playground", "/learn", "/api/auth/callback/google", "/api/monitoring/envelope"])("covers %s, including prefetches", (url) => {
+    expect(unstable_doesMiddlewareMatch({ config, url, headers: { "next-router-prefetch": "1" } })).toBe(true);
+  });
+  it.each(["/_next/static/chunk.js", "/_next/image", "/monaco/vs/loader.js", "/favicon.ico"])("excludes static asset %s", (url) => {
+    expect(unstable_doesMiddlewareMatch({ config, url })).toBe(false);
+  });
+});
+
