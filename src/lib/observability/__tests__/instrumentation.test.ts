@@ -16,13 +16,56 @@ const release = "a".repeat(40);
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
+  vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+  vi.spyOn(console, "error").mockImplementation(() => undefined);
 });
 afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 describe("runtime error-monitoring release", () => {
+  it.each(["nodejs", "edge"].flatMap((runtime) =>
+    [undefined, "", " \t "].flatMap((appUrl) =>
+      ["", "https://serverkey@errors.example.test/9"].map((dsn) => ({ runtime, appUrl, dsn })))),
+  )("rejects production startup before monitoring initialization: %j", async ({ runtime, appUrl, dsn }) => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_RUNTIME", runtime);
+    vi.stubEnv("APP_URL", appUrl);
+    vi.stubEnv("SENTRY_DSN", dsn);
+    const server = await import("../../../instrumentation");
+    await expect(server.register()).rejects.toThrow("APP_URL is required in production");
+    if (runtime === "nodejs") {
+      expect(process.exit).toHaveBeenCalledExactlyOnceWith(1);
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining("APP_URL is required in production"));
+    } else {
+      expect(process.exit).not.toHaveBeenCalled();
+    }
+    expect(sdkLoaded).not.toHaveBeenCalled();
+    expect(init).not.toHaveBeenCalled();
+  });
+
+  it.each(["development", "test"])("allows the localhost default outside production (%s)", async (nodeEnv) => {
+    vi.stubEnv("NODE_ENV", nodeEnv);
+    vi.stubEnv("APP_URL", undefined);
+    vi.stubEnv("SENTRY_DSN", "");
+    const server = await import("../../../instrumentation");
+    await expect(server.register()).resolves.toBeUndefined();
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(sdkLoaded).not.toHaveBeenCalled();
+  });
+
+  it("allows production startup with an explicit APP_URL when monitoring is disabled", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("APP_URL", "https://learn.example.test");
+    vi.stubEnv("SENTRY_DSN", "");
+    const server = await import("../../../instrumentation");
+    await expect(server.register()).resolves.toBeUndefined();
+    expect(process.exit).not.toHaveBeenCalled();
+    expect(sdkLoaded).not.toHaveBeenCalled();
+  });
+
   it.each(["nodejs", "edge"])("reads SENTRY_RELEASE when the %s server initializes", async (runtime) => {
     vi.stubEnv("NEXT_RUNTIME", runtime);
     vi.stubEnv("SENTRY_DSN", "https://serverkey@errors.example.test/9");
