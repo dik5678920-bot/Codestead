@@ -42,12 +42,12 @@ function stage(outcome: Outcome, hidden: boolean) {
  * Real HMAC/trust client and real Piston adapter, with HTTP stages injected.
  * This proves caller/normalization parity, not live toolchain equivalence.
  */
-export function transport(provider: string, outcome: Outcome, persistedRequest?: RunnerRequest) {
+export function transport(provider: string, outcome: Outcome, persistedRequest?: RunnerRequest, imageDigest = IMAGE) {
   vi.stubEnv("CODE_RUNNER_PROVIDER", provider);
   vi.stubEnv("RUNNER_BASE_URL", "http://legacy:4100");
   vi.stubEnv("RUNNER_SHARED_SECRET", SECRET);
   vi.stubEnv("PISTON_URL", "http://piston:2000");
-  vi.stubEnv("PISTON_IMAGE", IMAGE);
+  vi.stubEnv("PISTON_IMAGE", imageDigest);
   const fetchMock = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
     if (String(url).startsWith("http://legacy:")) {
       const request = init?.body ? JSON.parse(String(init.body)) as RunnerRequest : persistedRequest!;
@@ -55,7 +55,7 @@ export function transport(provider: string, outcome: Outcome, persistedRequest?:
       try {
         const config = testConfig({ tempRoot: root });
         const configured = { ...config, runtimes: { ...config.runtimes,
-          [request.language]: { ...config.runtimes[request.language], imageDigest: IMAGE } } };
+          [request.language]: { ...config.runtimes[request.language], imageDigest } } };
         let compiled = false;
         const executor = new DockerJobExecutor(configured, {
           async run(process) {

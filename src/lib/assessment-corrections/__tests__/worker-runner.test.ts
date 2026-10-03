@@ -69,10 +69,7 @@ vi.mock("@/lib/runner/admission", async (importOriginal) => {
     settleRunnerJob: mocks.settleRunnerJob,
   };
 });
-vi.mock("@/lib/runner/client", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/runner/client")>();
-  return { ...actual, configuredCodeRunnerClient: mocks.configuredCodeRunnerClient };
-});
+vi.mock("@/lib/runner/exam-client", () => ({ configuredExamRunnerClient: mocks.configuredCodeRunnerClient }));
 
 import { AssessmentCorrectionError } from "../domain";
 import { configuredRegradeExecutor, type RegradeExecutionInput } from "../runner-executor";

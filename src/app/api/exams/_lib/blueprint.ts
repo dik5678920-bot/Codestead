@@ -16,6 +16,7 @@ import {
   type ExamResult,
 } from "./contracts";
 import { examDurationMinutes } from "./policy";
+import { pinPublishedExamItemsToPiston, PISTON_EXAM_PIN_REVISION } from "@/lib/exams/piston-publication-pins";
 
 const LANGUAGE_BY_COURSE: Readonly<Record<string, ExamLanguage>> = {
   c: "c",
@@ -227,15 +228,20 @@ export function buildEquivalentExamForm(input: {
   readonly seed?: string;
   readonly formId?: string;
   readonly assessmentBanks?: readonly AssessmentBank[];
+  readonly runtimePinRevision?: typeof PISTON_EXAM_PIN_REVISION;
 }): ExamFormSnapshot {
   if (input.module.skills.length === 0) {
     throw new Error("Cannot build an exam for a module without skills.");
   }
   const seed = input.seed ?? randomBytes(16).toString("hex");
   const orderedSkills = shuffled(input.module.skills, seed);
-  const items = orderedSkills.map((skill, index) =>
+  const authoredItems = orderedSkills.map((skill, index) =>
     createItem(input.course, input.module, skill, index, seed, input.assessmentBanks ?? []),
   );
+  if (input.runtimePinRevision && (input.runtimePinRevision !== PISTON_EXAM_PIN_REVISION || !input.catalogVersion.startsWith("published:"))) {
+    throw new Error("Runtime pin migration requires an independently reviewed publication.");
+  }
+  const items = input.runtimePinRevision ? pinPublishedExamItemsToPiston(authoredItems) : authoredItems;
   const now = input.now ?? new Date();
   return {
     schemaVersion: 1,

@@ -248,7 +248,56 @@ What each item does:
    records the tested image manifest and exact runtime labels for the separate PR4b publication
    migration. This step does not rewrite existing exam snapshots or deploy to the NUC.
    Optional idle stop remains a separate follow-up.
-6. After a week on `piston` with no regressions: delete `services/runner`, `infra/runner*`, the runtime
-   image release tooling, and their evidence files.
+6. After a week on `piston` with no regressions AND no legacy-pinned attempt/correction/recheck
+   lineages requiring execution: separately review deletion of `services/runner`, `infra/runner*`,
+   the runtime image release tooling, and their evidence files. The rollout flag does not
+   authorize retiring a provider still required by an immutable exam snapshot.
 
 Rollback: set `CODE_RUNNER_PROVIDER=legacy` and restart the app. Nothing is deleted until step 6.
+Already-created Piston exam attempts still require Piston after rollback; legacy attempts
+always require legacy. Keep both providers configured while either pinned lineage remains.
+
+### PR4b: reviewed publication pin revision
+
+`infra/piston/pr4b-publication-pins.json` records revision `piston-pr4b-v1`, the reviewed
+legacy version/digest allowlist and PR5 image reference. The target labels come directly
+from `infra/piston/pr4b-runtime-handoff.json`; changes outside those exact pin pairs fail
+closed. Runtime label drift or a different configured image manifest blocks new Piston forms.
+
+When `CODE_RUNNER_PROVIDER=piston`, new formal forms from independently reviewed,
+pointer-selected database publications receive the handoff labels and image manifest
+before their immutable snapshots are inserted. With the default `legacy`, publication
+pins remain legacy. Draft/filesystem content cannot opt into this revision. The change
+copies only runtime pins: authored content, tests, hidden answers, scoring, eligibility,
+policy version and persisted publication/review/release records remain unchanged.
+No schema or persisted-artifact mutation is needed, so reviewed migration 0070 and its
+latest-migration pins remain current.
+
+| Language | Reviewed legacy label | New form label |
+| --- | --- | --- |
+| C | C23 / GCC 14.2.0 | C23 / GCC 14.2.0 (Piston) |
+| C++ | C++20 / G++ 14.2.0 | C++20 / G++ 14.2.0 (Piston) |
+| Java | Java 21 or authored Java SE 21 | Java 21.0.12.1+1 / Temurin (Piston) |
+| Python | Python 3.14 | Python 3.14.8 (Piston) |
+| JavaScript | Node.js 22 | Node.js 22.23.3 (Piston) |
+
+Every new Piston pin uses manifest
+`sha256:da7c26b38e7112eb1073696e65c2dfec9449d9d84ea4b4355d49a212246fe46a`.
+The existing legacy manifest digests are recorded verbatim in the reviewed revision.
+This PR does not publish the image, deploy to the NUC or switch the production flag.
+Before rollout, verify the deployed image manifest and labels against the PR5 handoff,
+configure `PISTON_URL` and `PISTON_IMAGE`, and retain legacy endpoint/secret/runtime images.
+
+Submission and correction dispatch use the attempt's pinned runtime label, including
+recovery of a queued remote job. Exact response version/image and test-manifest checks
+still run; unavailable selected providers fail without fallback. Stored snapshots are
+never re-pinned. Equivalent retakes/mastery rechecks retain the source lineage's exact
+reviewed pins before the unchanged full parity validator runs; arbitrary pin, content,
+point, policy or duration changes cannot use this revision to bypass parity.
+
+Publication-to-submission regression tests cover all five languages' accepted/wrong
+answer/runtime error/timeout/memory/output verdicts and scores with real legacy grading
+and Piston adapters using injected execution outcomes. They also check immutable source
+banks/legacy snapshots, exact digest rejection, rollout rollback and retained lineage
+parity. PR5's separate live image tests establish the toolchain/build contract; these
+caller tests do not claim exhaustive live equivalence for arbitrary learner programs.

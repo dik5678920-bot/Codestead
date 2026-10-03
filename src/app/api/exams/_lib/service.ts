@@ -47,7 +47,6 @@ import {
   type RunnerAdmission,
 } from "@/lib/runner/admission";
 import {
-  configuredCodeRunnerClient,
   RunnerClientError,
   RunnerIndeterminateError,
   runtimeByLanguage,
@@ -55,6 +54,8 @@ import {
   type RunnerLanguage,
   type RunnerRequest,
 } from "@/lib/runner/client";
+import { configuredExamRunnerClient } from "@/lib/runner/exam-client";
+import { publishedExamPinRevision, retainEquivalentExamRuntimePins } from "@/lib/exams/piston-publication-pins";
 import { lockUserAuthority } from "@/lib/security/user-authority-lock";
 
 import {
@@ -663,12 +664,13 @@ export async function startExam(
       { sessionId: active.session.id },
     );
   }
-  const form = buildEquivalentExamForm({
+  let form = buildEquivalentExamForm({
     course,
     module: courseModule,
     catalogVersion: snapshot?.catalog.version ?? `published:${published!.courseVersionId}`,
     now,
     assessmentBanks,
+    runtimePinRevision: published ? publishedExamPinRevision() : undefined,
   });
   const deadline = new Date(now.getTime() + form.durationMinutes * 60_000);
   let createdSessionId = "";
@@ -804,6 +806,7 @@ export async function startExam(
         { retake },
       );
     }
+    if (result !== null && lockedLatestResult?.form) form = retainEquivalentExamRuntimePins(lockedLatestResult.form, form);
     const parity = result !== null && lockedLatestResult?.form
       ? verifyEquivalentFormParity(lockedLatestResult.form, form)
       : null;
@@ -984,12 +987,13 @@ export async function startMasteryRecheck(
       "MASTERY_RECHECK_PUBLICATION_MISSING",
     );
   }
-  const candidate = buildEquivalentExamForm({
+  let candidate = buildEquivalentExamForm({
     course: published.course,
     module: published.module,
     catalogVersion: `published:${published.courseVersionId}`,
     now,
     assessmentBanks: published.assessmentBanks.filter((bank) => bank.moduleId === scheduled.moduleId),
+    runtimePinRevision: publishedExamPinRevision(),
   });
   let createdSessionId = "";
   await db.transaction(async (tx) => {
@@ -1073,6 +1077,7 @@ export async function startMasteryRecheck(
     }
     let form: ExamFormSnapshot;
     try {
+      candidate = retainEquivalentExamRuntimePins(sourceForm, candidate);
       form = buildTargetedMasteryRecheckForm({ sourceForm, sourceResult, candidateForm: candidate, now });
     } catch (error) {
       throw new ExamServiceError(
@@ -1768,7 +1773,7 @@ export async function executeExamCode(input: {
     requireFreshRunnerMutation(dispatchBoundary);
     immutableRemoteJobId = dispatchBoundary.remoteJobId ?? admission.remoteJobId;
     remoteJobId = immutableRemoteJobId;
-    const client = configuredCodeRunnerClient();
+    const client = configuredExamRunnerClient(input);
     let completed: RunnerJobResponse;
     if (immutableRemoteJobId !== null) {
       completed = await client.waitForJob(immutableRemoteJobId, request);
