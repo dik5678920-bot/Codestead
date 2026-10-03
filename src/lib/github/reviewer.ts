@@ -300,19 +300,56 @@ async function reviewPublicRepositoryReference(
     "x-github-api-version": "2026-03-10",
     "user-agent": "Codestead-Static-Review",
   };
-  if (process.env.GITHUB_TOKEN) headers.authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  const token = process.env.GITHUB_TOKEN?.trim();
+  if (token) headers.authorization = `Bearer ${token}`;
   const request = async (pathname: string) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15_000);
+    const unavailable = () => {
+      // Never propagate fetch/body exceptions or attach their cause: either may
+      // contain request headers, including the optional GitHub credential.
+      const error = new Error("GitHub is temporarily unavailable. Please try again later.");
+      if (controller.signal.aborted) error.name = "AbortError";
+      return error;
+    };
     try {
-      const response = await fetchImpl(`https://api.github.com${pathname}`, {
-        headers,
-        signal: controller.signal,
-        redirect: "error",
-        cache: "no-store",
-      });
-      if (!response.ok) throw new Error(`GitHub API returned ${response.status}.`);
-      return (await response.json()) as unknown;
+      let response: Response;
+      try {
+        response = await fetchImpl(`https://api.github.com${pathname}`, {
+          headers,
+          signal: controller.signal,
+          redirect: "error",
+          cache: "no-store",
+        });
+      } catch {
+        throw unavailable();
+      }
+      if (!response.ok) {
+        let rateLimited = response.status === 429;
+        if (response.status === 403) {
+          rateLimited = response.headers.get("x-ratelimit-remaining") === "0"
+            || response.headers.has("retry-after");
+          if (!rateLimited) {
+            // GitHub also reports secondary limits as 403 with a JSON message.
+            // Inspect it only for classification; never expose or log the body.
+            const body: unknown = await response.json().catch(() => null);
+            if (controller.signal.aborted) throw unavailable();
+            const message = body && typeof body === "object" && "message" in body ? body.message : null;
+            rateLimited = typeof message === "string" && /rate limit|abuse detection/i.test(message);
+          }
+        }
+        if (rateLimited) throw new Error("GitHub review is temporarily rate limited. Please try again later.");
+        if (response.status === 401) throw new Error("GitHub authentication failed. Ask an administrator to check the GitHub review token.");
+        if (response.status === 403) throw new Error("GitHub denied access to this public repository. Ask an administrator to check the GitHub review configuration.");
+        if (response.status === 404) throw new Error("GitHub repository or pinned commit was not found. Check that the repository is public and the requested commit still exists.");
+        if (response.status >= 500) throw unavailable();
+        throw new Error(`GitHub API returned ${response.status}.`);
+      }
+      try {
+        return (await response.json()) as unknown;
+      } catch {
+        throw unavailable();
+      }
     } finally {
       clearTimeout(timeout);
     }

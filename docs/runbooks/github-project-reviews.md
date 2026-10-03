@@ -1,0 +1,11 @@
+# GitHub project reviews
+
+`GITHUB_TOKEN` is an optional server-side credential for public-repository reviews. Set it in the app environment or the deployment Compose environment; Compose passes it only to the app and project-review-correction worker. Missing, empty, or whitespace-only values use anonymous requests. Surrounding whitespace is trimmed. This does not enable private repositories or replace the future GitHub App access flow.
+
+Authenticated requests have a higher primary request allowance than anonymous requests, but both can be rate limited. GitHub reports primary limits through HTTP 403/429 and rate-limit headers, and secondary limits may also use a 403 response message. See [GitHub REST API rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
+
+The reviewer reports a fixed, clear “temporarily rate limited” message and stops the current review. It does not retry within that request, drop authentication and retry anonymously, or produce a partial scored result. Repository metadata, commit, tree, and every selected blob must be fetched successfully before any review is stored. The existing review endpoint returns its normal 422 error response on failure; the project, stored reviews, and effective-result projection remain unchanged. Correction jobs retain their existing failure/retry policy and cannot apply a result from failed analysis.
+
+HTTP failure bodies and raw fetch/body exceptions are discarded rather than returned or logged. Authentication, access, missing-repository/commit, and temporary outage failures get safe messages. The credential is never included in results, errors, exception causes, or browser configuration. Keep deployment environment files private, and do not print expanded Compose configuration containing the token.
+
+Verification covers authenticated/anonymous result parity, every API request's authorization header, blank token handling, both primary and secondary limits, a mid-review blob limit, private repository denial, safe network/body errors, and route failures that never start a database write transaction. The regression suite was run against unmodified latest-main reviewer behavior first and failed before implementation.
