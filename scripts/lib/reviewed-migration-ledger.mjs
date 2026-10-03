@@ -214,10 +214,11 @@ export const REVIEWED_MIGRATION_LEDGER = Object.freeze([
   Object.freeze({ idx: 68, version: "7", when: 1785005772253, tag: "0068_mail_outbox_quarantine_redaction_authority_v2", breakpoints: true, sqlSha256: "1b9e669025e2dccb54099fd99adbf26c8c6eccf5a10a39f3319772b2fdef4b0f" }),
   Object.freeze({ idx: 69, version: "7", when: 1785009372253, tag: "0069_mail_outbox_guarded_delivery_authority", breakpoints: true, sqlSha256: "da33b7f35d6fe75c750e8ffdea9717e0c27098b7bb2a6a2e458cc9c7e2e9ec9c" }),
   Object.freeze({ idx: 70, version: "7", when: 1790851350433, tag: "0070_credential_validation_preference", breakpoints: true, sqlSha256: "a8bc8bb47d8da80858fcd16d0a2de6b4bbd6b06f22c5380fd4a879fe2ac36a3c" }),
+  Object.freeze({"idx":71,"version":"7","when":1791034812537,"tag":"0071_rate_limiter_flexible","breakpoints":true,"sqlSha256":"2884c59d9f338d8b4920bf4aaa6106f6f7fc8c072aae3034e4708cd66f27ad3e"}),
 ]);
 
 export const REVIEWED_MIGRATION_LEDGER_SHA256 =
-  "8baecb4eedbb6f55a41b685438f9329197431d72580645c8c01a6017d7cfeeb6";
+  "2e2d96ce631805bc230bdc2b1b96354628f8ca41239afa6d44fd9dcc5ba9dd6f";
 validateReviewedMigrationLedger(REVIEWED_MIGRATION_LEDGER, "CONTRACT_INVALID");
 if (
   reviewedMigrationLedgerSha256(REVIEWED_MIGRATION_LEDGER) !==

@@ -11,12 +11,12 @@ import ts from "typescript";
 
 import {
   BOOTSTRAP_SESSION_AUTHORITY,
-  CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
-  CURRENT_0070_REVIEWED_MIGRATION_TAG,
+  CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
+  CURRENT_0071_REVIEWED_MIGRATION_TAG,
   DATABASE_RUNTIME_CAPABILITY_PHASES,
   DATABASE_RUNTIME_CAPABILITY_SCHEMA_VERSION,
   POST_CONTRACT_DATABASE_RUNTIME_CAPABILITIES,
-  PREDECESSOR_0070_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
+  PREDECESSOR_0071_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
   canonicalDatabaseRuntimeCapabilitiesJson,
   canonicalizeDatabaseRuntimeCapabilities,
   classifyDatabaseRuntimeCapabilityPredecessorDelta,
@@ -152,11 +152,18 @@ async function deriveReviewedPublicColumnAttnums(journal) {
       "utf8",
     );
     assert.doesNotMatch(
-      source,
+      entry.tag === "0071_rate_limiter_flexible"
+        ? source.replace('DROP TABLE "public"."api_rate_limit_window";', "")
+        : source,
       /\b(?:DROP|RENAME)\s+COLUMN\b|\bDROP\s+TABLE\b/iu,
       entry.tag,
     );
     const events = [];
+    if (entry.tag === "0071_rate_limiter_flexible") {
+      const drops = [...source.matchAll(/\bDROP\s+TABLE\s+"public"\."([^"]+)";/gu)];
+      assert.deepEqual(drops.map(match => match[1]), ["api_rate_limit_window"]);
+      events.push({ kind: "drop", position: drops[0].index, table: "api_rate_limit_window" });
+    }
     const createPattern =
       /\bCREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:(?:"public"|public)\.)?(?:"([^"]+)"|([a-z_][a-z0-9_]*))\s*(\()/giu;
     for (const match of source.matchAll(createPattern)) {
@@ -189,6 +196,10 @@ async function deriveReviewedPublicColumnAttnums(journal) {
     events.sort((left, right) => left.position - right.position);
     for (const event of events) {
       const identity = `public.${event.table}`;
+      if (event.kind === "drop") {
+        assert.equal(tables.delete(identity), true, `DROP precedes CREATE TABLE ${identity}`);
+        continue;
+      }
       if (event.kind === "create") {
         assert.equal(tables.has(identity), false, `duplicate ${identity}`);
         tables.set(identity, [...event.columns]);
@@ -314,10 +325,10 @@ function applyPlan(catalog, plan) {
   return next;
 }
 
-test("publishes the exact migration-derived 0069 public and Drizzle inventory", async () => {
+test("publishes the exact migration-derived 0071 public and Drizzle inventory", async () => {
   const [snapshot, journal, physicalManifest] = await Promise.all([
     readFile(
-      new URL("../drizzle/meta/0070_snapshot.json", import.meta.url),
+      new URL("../drizzle/meta/0071_snapshot.json", import.meta.url),
       "utf8",
     ).then(JSON.parse),
     readFile(
@@ -326,7 +337,7 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
     ).then(JSON.parse),
     readFile(
       new URL(
-        "../drizzle/meta/0070_public_column_attnums.json",
+        "../drizzle/meta/0071_public_column_attnums.json",
         import.meta.url,
       ),
       "utf8",
@@ -341,7 +352,7 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
       (count, [, table]) => count + Object.keys(table.columns).length,
       0,
     ),
-    1_480,
+    1_478,
   );
   assert.equal(journal.entries.length, REVIEWED_MIGRATION_LEDGER.length);
   assert.deepEqual(
@@ -351,11 +362,11 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
   assert.equal(physicalManifest.schemaVersion, 1);
   assert.equal(
     physicalManifest.contract,
-    "codestead-public-column-attnums-0070-v1",
+    "codestead-public-column-attnums-0071-v1",
   );
   assert.equal(
     physicalManifest.reviewedMigrationTail,
-    CURRENT_0070_REVIEWED_MIGRATION_TAG,
+    CURRENT_0071_REVIEWED_MIGRATION_TAG,
   );
   assert.equal(
     physicalManifest.reviewedMigrationLedgerSha256,
@@ -365,20 +376,20 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
     createHash("sha256")
       .update(`${JSON.stringify(physicalManifest)}\n`, "utf8")
       .digest("hex"),
-    "4b9871085224de975a34cee6201687ce9a5d25b4d9cf7cbbad4c68caf06bff3b",
+    "268a23876bd151a6d64ae3a6554f7ffffea459ab2072ed80e8dfe0c1c8fc8729",
   );
 
   const derived = await deriveReviewedPublicColumnAttnums(journal);
   assert.equal(derived.tables.length, 127);
   assert.equal(
     derived.tables.reduce((count, table) => count + table.columns.length, 0),
-    1_489,
+    1_487,
   );
   assert.equal(derived.addedColumns, 97);
   assert.deepEqual(physicalManifest.tables, derived.tables);
 
   const publicTables =
-    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.inventory.tables
+    CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.inventory.tables
       .filter((table) => table.schema === "public")
       .map(({ identity, columns }) => ({
         identity,
@@ -407,7 +418,7 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
   assert.equal(publicTables.length, 127);
   assert.equal(
     publicTables.reduce((count, table) => count + table.columns.length, 0),
-    1_489,
+    1_487,
   );
 
   const physicalOrdinals = new Map(
@@ -453,7 +464,7 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
   );
 
   assert.deepEqual(
-    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.inventory.tables.filter(
+    CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.inventory.tables.filter(
       (table) => table.schema === "drizzle",
     ),
     [
@@ -483,11 +494,11 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
     ],
   );
   assert.deepEqual(
-    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.inventory.databases,
+    CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.inventory.databases,
     [{ identity: "@database", owner: "learncoding_owner" }],
   );
   assert.deepEqual(
-    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.inventory.sequences,
+    CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.inventory.sequences,
     [
       {
         identity: "drizzle.__drizzle_migrations_id_seq",
@@ -498,7 +509,7 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
     ],
   );
   assert.deepEqual(
-    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.inventory.types.filter(
+    CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.inventory.types.filter(
       (type) => type.schema === "drizzle",
     ),
     [
@@ -512,30 +523,30 @@ test("publishes the exact migration-derived 0069 public and Drizzle inventory", 
     ],
   );
   assert.equal(
-    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.inventory.sequences.filter(
+    CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.inventory.sequences.filter(
       (sequence) => sequence.schema === "public",
     ).length,
     0,
   );
   assert.deepEqual(
-    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.provenance.expected,
+    CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.provenance.expected,
     {
       publicTables: 127,
-      publicColumns: 1_489,
+      publicColumns: 1_487,
       publicTypes: 140,
       publicRoutines: 76,
       publicSequences: 0,
     },
   );
   assert.equal(
-    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.provenance.inventorySources[0]
+    CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.provenance.inventorySources[0]
       .physicalOrderSha256,
-    "4b9871085224de975a34cee6201687ce9a5d25b4d9cf7cbbad4c68caf06bff3b",
+    "268a23876bd151a6d64ae3a6554f7ffffea459ab2072ed80e8dfe0c1c8fc8729",
   );
 });
 
-test("pins independently reconstructed 0069 authority counts and digests", () => {
-  const policy = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
+test("pins independently reconstructed 0071 authority counts and digests", () => {
+  const policy = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES;
   const enums = policy.inventory.types
     .filter((entry) => entry.kind === "enum")
     .map(({ identity, values }) => ({ identity, values }));
@@ -595,13 +606,13 @@ test("pins independently reconstructed 0069 authority counts and digests", () =>
   assert.equal(tableColumnFacts.length, 128);
   assert.equal(
     tableColumnFacts.reduce((count, table) => count + table.columns.length, 0),
-    1_492,
+    1_490,
   );
   assert.equal(
     createHash("sha256")
       .update(`${JSON.stringify(tableColumnFacts)}\n`, "utf8")
       .digest("hex"),
-    "47d662eab56331ce714127a0e3b020eb2c1e0e70c19005cf9654226fc7738d0c",
+    "eeaa0f9bcaa730d954599c10432cbc284002a3dd559cbd4a8105f6568210db3a",
   );
   assert.deepEqual(
     {
@@ -621,12 +632,12 @@ test("pins independently reconstructed 0069 authority counts and digests", () =>
       memberships:
         "fc4a87027f6c9fdef31a85e92844288d72e0900ab924f0bda178b443ca7f5a7c",
       grants:
-        "c526c0eb406df10a32ef99c9445dc345ce9373a9553646d78d624f3887b12c08",
+        "e0d76a9847fbb2228356c242df3b2d688d8ea55787ebc731cc8bb62dd7d8a675",
       defaultAclRows:
         "700207ccf9e4790442c586343b235a6d1778f5dad5463c43a89f1bd726374de7",
       defaultAcls:
         "a2b591a761e6f4e1e5e1b1c4b03cc53abd480191b345a741cfdc2892e543c201",
-      types: "95913afb2c410367ab68505388fddb94a9ebe913d4a9a9866d1277f7af967f33",
+      types: "2e4eb973195098759716c9365d8a99d34c75a09e44bad6aeccc844bc2be00eca",
       routines:
         "f6090e4701c361678f475cfdf7b9f56d162edb09ee5cee71cf50455ae7ef1bfb",
       enums: "bd8a502fb97c9b362316bb48f88d150a2e15090ba4cbe27db46e643a54ff7c00",
@@ -642,7 +653,7 @@ test("rejects unreviewed snapshot, enum, attnum, and journal authority", async (
   const [reviewedSnapshot, reviewedJournal, reviewedPhysical] =
     await Promise.all([
       readFile(
-        new URL("../drizzle/meta/0070_snapshot.json", import.meta.url),
+        new URL("../drizzle/meta/0071_snapshot.json", import.meta.url),
         "utf8",
       ).then(JSON.parse),
       readFile(
@@ -651,7 +662,7 @@ test("rejects unreviewed snapshot, enum, attnum, and journal authority", async (
       ).then(JSON.parse),
       readFile(
         new URL(
-          "../drizzle/meta/0070_public_column_attnums.json",
+          "../drizzle/meta/0071_public_column_attnums.json",
           import.meta.url,
         ),
         "utf8",
@@ -678,7 +689,7 @@ test("rejects unreviewed snapshot, enum, attnum, and journal authority", async (
       await Promise.all([
         writeFile(modulePath, source),
         writeFile(
-          path.join(metadata, "0070_snapshot.json"),
+          path.join(metadata, "0071_snapshot.json"),
           JSON.stringify(snapshot),
         ),
         writeFile(
@@ -686,7 +697,7 @@ test("rejects unreviewed snapshot, enum, attnum, and journal authority", async (
           JSON.stringify(journal),
         ),
         writeFile(
-          path.join(metadata, "0070_public_column_attnums.json"),
+          path.join(metadata, "0071_public_column_attnums.json"),
           JSON.stringify(physical),
         ),
       ]);
@@ -757,19 +768,19 @@ test("exports deeply frozen JSON-domain policy and symbolic session authority", 
     kind: "bootstrap-session",
   });
   assertDeeplyFrozenJson(BOOTSTRAP_SESSION_AUTHORITY);
-  assertDeeplyFrozenJson(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+  assertDeeplyFrozenJson(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
   assertDeeplyFrozenJson(POST_CONTRACT_DATABASE_RUNTIME_CAPABILITIES);
   assertDeeplyFrozenJson(
-    PREDECESSOR_0070_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
+    PREDECESSOR_0071_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
   );
   assert.doesNotThrow(() =>
     validateDatabaseRuntimeCapabilities(
-      CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+      CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
     ),
   );
   assert.doesNotThrow(() =>
     validateDatabaseRuntimeCapabilities(
-      clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES),
+      clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES),
     ),
   );
   assert.doesNotThrow(() =>
@@ -779,7 +790,7 @@ test("exports deeply frozen JSON-domain policy and symbolic session authority", 
   );
   assert.doesNotThrow(() =>
     validateDatabaseRuntimeCapabilityAllowance(
-      PREDECESSOR_0070_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
+      PREDECESSOR_0071_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
     ),
   );
 });
@@ -865,12 +876,12 @@ test("the declaration compiles every runtime export and nested result contract",
       `
 import {
   BOOTSTRAP_SESSION_AUTHORITY,
-  CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
-  CURRENT_0070_REVIEWED_MIGRATION_TAG,
+  CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
+  CURRENT_0071_REVIEWED_MIGRATION_TAG,
   DATABASE_RUNTIME_CAPABILITY_PHASES,
   DATABASE_RUNTIME_CAPABILITY_SCHEMA_VERSION,
   POST_CONTRACT_DATABASE_RUNTIME_CAPABILITIES,
-  PREDECESSOR_0070_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
+  PREDECESSOR_0071_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
   DatabaseRuntimeCapabilityPhaseError,
   DatabaseRuntimeCapabilityValidationError,
   canonicalDatabaseRuntimeCapabilitiesJson,
@@ -890,12 +901,12 @@ import type {
 } from ${JSON.stringify(moduleSpecifier)};
 
 const schemaVersion: 1 = DATABASE_RUNTIME_CAPABILITY_SCHEMA_VERSION;
-const reviewedTag: "0070_credential_validation_preference" =
-  CURRENT_0070_REVIEWED_MIGRATION_TAG;
+const reviewedTag: "0071_rate_limiter_flexible" =
+  CURRENT_0071_REVIEWED_MIGRATION_TAG;
 const bootstrapKind: "bootstrap-session" = BOOTSTRAP_SESSION_AUTHORITY.kind;
-const phase = DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070;
+const phase = DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071;
 const catalog: DatabaseRuntimeCapabilityCatalog =
-  CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
+  CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES;
 const canonical: DatabaseRuntimeCapabilityJsonValue =
   canonicalizeDatabaseRuntimeCapabilities(catalog);
 const canonicalJson: string =
@@ -912,12 +923,12 @@ if (enumValues?.kind === "enum") {
   void firstEnumValue;
 }
 const drift = diffDatabaseRuntimeCapabilities(
-  CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+  CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
   catalog,
 );
 const observedGrantable: boolean | undefined =
   drift.extra.grants[0]?.grantable;
-const policyGrant = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.grants[0]!;
+const policyGrant = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.grants[0]!;
 const grantDelta = classifyDatabaseRuntimeCapabilityGrantDelta({
   phase,
   expectedGrants: [policyGrant],
@@ -926,12 +937,12 @@ const grantDelta = classifyDatabaseRuntimeCapabilityGrantDelta({
 const predecessorDelta = classifyDatabaseRuntimeCapabilityPredecessorDelta({
   phase,
   collection: "roles",
-  expected: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.roles,
-  observed: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.roles,
+  expected: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.roles,
+  observed: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.roles,
 });
 const plan = planDatabaseRuntimeCapabilityReconciliation({
   phase,
-  policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+  policy: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
   catalog,
 });
 for (const mutation of plan.mutations) {
@@ -941,7 +952,7 @@ for (const mutation of plan.mutations) {
   }
 }
 const allowance = validateDatabaseRuntimeCapabilityAllowance(
-  PREDECESSOR_0070_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
+  PREDECESSOR_0071_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
 );
 const resolution = resolveDatabaseRuntimeCapabilityPhase({
   journalPresent: false,
@@ -949,7 +960,7 @@ const resolution = resolveDatabaseRuntimeCapabilityPhase({
   reviewedPrefixExact: false,
   reviewedMigrationCount: 0,
   reviewedMigrationLedgerSha256:
-    "8baecb4eedbb6f55a41b685438f9329197431d72580645c8c01a6017d7cfeeb6",
+    "2e2d96ce631805bc230bdc2b1b96354628f8ca41239afa6d44fd9dcc5ba9dd6f",
 });
 if (resolution.phase === DATABASE_RUNTIME_CAPABILITY_PHASES.FOUNDATION) {
   const absentPolicy: null = resolution.policy;
@@ -1004,7 +1015,7 @@ void [
 });
 
 test("models normalized owner ACLs and physical default ACL rows exactly", () => {
-  const policy = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
+  const policy = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES;
   assert.equal(
     policy.inventory.types.filter((entry) => entry.schema === "public").length,
     140,
@@ -1078,8 +1089,8 @@ test("models normalized owner ACLs and physical default ACL rows exactly", () =>
 
 test("schema validation rejects closed-world and authority mutations", () => {
   const firstTable =
-    CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.inventory.tables[0];
-  const firstGrant = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.grants[0];
+    CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.inventory.tables[0];
+  const firstGrant = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.grants[0];
   const cases = [
     [
       "unknown key",
@@ -1209,7 +1220,7 @@ test("schema validation rejects closed-world and authority mutations", () => {
     [
       "phase and migration tail mismatch",
       (manifest) => {
-        manifest.ledger.reviewedMigrationTail = "0071";
+        manifest.ledger.reviewedMigrationTail = "0072";
       },
     ],
     [
@@ -1385,7 +1396,7 @@ test("schema validation rejects closed-world and authority mutations", () => {
   ];
 
   for (const [label, mutate] of cases) {
-    const manifest = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+    const manifest = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
     mutate(manifest);
     assert.throws(
       () => validateDatabaseRuntimeCapabilities(manifest),
@@ -1425,7 +1436,7 @@ test("canonicalization is code-point deterministic and fingerprint sensitive", (
     '{"":1,"𐀀":2}',
   );
 
-  const manifest = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+  const manifest = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
   const reversed = reverseUnorderedCollections(manifest);
   assert.deepEqual(
     canonicalizeDatabaseRuntimeCapabilities(reversed),
@@ -1505,7 +1516,7 @@ test("canonicalization is code-point deterministic and fingerprint sensitive", (
 });
 
 test("diff reports exact missing, extra, owner, membership, grant, and default ACL drift", () => {
-  const expected = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+  const expected = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
   const observed = clone(expected);
   const missingTable = observed.inventory.tables.pop();
   const extraTable = clone(observed.inventory.tables[0]);
@@ -1580,7 +1591,7 @@ test("diff reports exact missing, extra, owner, membership, grant, and default A
 });
 
 test("inventory planning fails closed for missing and extra schema, sequence, type, and routine identities", () => {
-  const expected = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
+  const expected = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES;
   const extras = {
     schemas: {
       identity: "unreviewed",
@@ -1613,7 +1624,7 @@ test("inventory planning fails closed for missing and extra schema, sequence, ty
     const missing = clone(expected);
     const removed = missing.inventory[collection].pop();
     const missingPlan = planDatabaseRuntimeCapabilityReconciliation({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
       policy: expected,
       catalog: missing,
     });
@@ -1630,7 +1641,7 @@ test("inventory planning fails closed for missing and extra schema, sequence, ty
     const extra = clone(expected);
     extra.inventory[collection].push(extras[collection]);
     const extraPlan = planDatabaseRuntimeCapabilityReconciliation({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
       policy: expected,
       catalog: extra,
     });
@@ -1647,7 +1658,7 @@ test("inventory planning fails closed for missing and extra schema, sequence, ty
 });
 
 test("diff detects every same-identity definition drift and rejects duplicates", () => {
-  const expected = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
+  const expected = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES;
   const mutations = [
     [
       "databases",
@@ -1790,13 +1801,13 @@ test("comparable catalogs reject malformed grant tuples before planning", () => 
       },
     ],
   ]) {
-    const catalog = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+    const catalog = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
     mutate(catalog.grants[0]);
     assert.throws(
       () =>
         planDatabaseRuntimeCapabilityReconciliation({
-          phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
-          policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+          phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
+          policy: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
           catalog,
         }),
       { name: "DatabaseRuntimeCapabilityValidationError" },
@@ -1804,13 +1815,13 @@ test("comparable catalogs reject malformed grant tuples before planning", () => 
     );
   }
 
-  const duplicate = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+  const duplicate = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
   duplicate.grants.push(clone(duplicate.grants[0]));
   assert.throws(
     () =>
       planDatabaseRuntimeCapabilityReconciliation({
-        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
-        policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
+        policy: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
         catalog: duplicate,
       }),
     {
@@ -1819,7 +1830,7 @@ test("comparable catalogs reject malformed grant tuples before planning", () => 
     },
   );
 
-  const conflicting = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+  const conflicting = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
   conflicting.grants.push({
     ...clone(conflicting.grants[0]),
     grantable: true,
@@ -1827,8 +1838,8 @@ test("comparable catalogs reject malformed grant tuples before planning", () => 
   assert.throws(
     () =>
       planDatabaseRuntimeCapabilityReconciliation({
-        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
-        policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
+        policy: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
         catalog: conflicting,
       }),
     {
@@ -1837,11 +1848,11 @@ test("comparable catalogs reject malformed grant tuples before planning", () => 
     },
   );
 
-  const repairable = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+  const repairable = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
   repairable.grants[0].grantable = true;
   const repairPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
-    policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
+    policy: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
     catalog: repairable,
   });
   assert.equal(repairPlan.blocked, false);
@@ -1874,13 +1885,13 @@ test("comparable catalogs reject unknown observed table and column keys", () => 
       },
     ],
   ]) {
-    const catalog = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+    const catalog = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
     mutate(catalog);
     assert.throws(
       () =>
         planDatabaseRuntimeCapabilityReconciliation({
-          phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
-          policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+          phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
+          policy: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
           catalog,
         }),
       {
@@ -1901,7 +1912,7 @@ test("comparable catalog metadata is bound before diffing or planning", () => {
       catalog.contract = "unreviewed-contract";
     }],
     ["phase", (catalog) => {
-      catalog.phase = DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071;
+      catalog.phase = DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072;
     }],
     ["available", (catalog) => {
       catalog.available = false;
@@ -1913,18 +1924,18 @@ test("comparable catalog metadata is bound before diffing or planning", () => {
       catalog.provenance.expected.publicTables += 1;
     }],
   ]) {
-    const catalog = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+    const catalog = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
     mutate(catalog);
     for (const operation of [
       () =>
         diffDatabaseRuntimeCapabilities(
-          CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+          CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
           catalog,
         ),
       () =>
         planDatabaseRuntimeCapabilityReconciliation({
-          phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
-          policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+          phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
+          policy: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
           catalog,
         }),
     ]) {
@@ -1939,8 +1950,8 @@ test("comparable catalog metadata is bound before diffing or planning", () => {
 test("comparable catalogs reject malformed default ACL tuples before planning", () => {
   const run = (catalog) =>
     planDatabaseRuntimeCapabilityReconciliation({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
-      policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
+      policy: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
       catalog,
     });
   for (const [label, mutate] of [
@@ -2016,7 +2027,7 @@ test("comparable catalogs reject malformed default ACL tuples before planning", 
       },
     ],
   ]) {
-    const catalog = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+    const catalog = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
     mutate(catalog.defaultAcls[0]);
     assert.throws(
       () => run(catalog),
@@ -2025,7 +2036,7 @@ test("comparable catalogs reject malformed default ACL tuples before planning", 
     );
   }
 
-  const missingRow = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+  const missingRow = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
   const tuple = missingRow.defaultAcls[0];
   const rowIdentity = defaultAclRowIdentity(tuple);
   missingRow.defaultAclRows = missingRow.defaultAclRows.filter(
@@ -2038,7 +2049,7 @@ test("comparable catalogs reject malformed default ACL tuples before planning", 
   );
 
   for (const variant of ["exact", "same-identity"]) {
-    const duplicate = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+    const duplicate = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
     const copy = clone(duplicate.defaultAcls[0]);
     if (variant === "same-identity") copy.grantable = true;
     duplicate.defaultAcls.push(copy);
@@ -2049,11 +2060,11 @@ test("comparable catalogs reject malformed default ACL tuples before planning", 
     );
   }
 
-  const exact = run(clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES));
+  const exact = run(clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES));
   assert.equal(exact.blocked, false);
   assert.deepEqual(exact.mutations, []);
 
-  const removable = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+  const removable = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
   removable.defaultAcls.push({
     identity: "learncoding_owner|@global|routine|PUBLIC|EXECUTE",
     creator: "learncoding_owner",
@@ -2079,7 +2090,7 @@ test("comparable catalogs reject malformed default ACL tuples before planning", 
 });
 
 test("predecessor allowance is finite and phase-safe across all collections", () => {
-  const policy = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
+  const policy = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES;
   const predecessors = {
     roles: [clone(policy.roles.at(-1))],
     memberships: [clone(policy.memberships.at(-1))],
@@ -2089,11 +2100,11 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
   };
   const allowance = {
     schemaVersion: DATABASE_RUNTIME_CAPABILITY_SCHEMA_VERSION,
-    allowance: "codestead-database-runtime-predecessor-0070-v1",
+    allowance: "codestead-database-runtime-predecessor-0071-v1",
     available: true,
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
-    validOnlyAtMigrationIndex: 70,
-    expiresAtMigrationIndex: 71,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
+    validOnlyAtMigrationIndex: 71,
+    expiresAtMigrationIndex: 72,
     reason: null,
     ...predecessors,
   };
@@ -2183,7 +2194,7 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
   ]) {
     const predecessor = predecessors[collection][0];
     const present = classifyDatabaseRuntimeCapabilityPredecessorDelta({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
       collection,
       expected: [],
       observed: [predecessor],
@@ -2195,7 +2206,7 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
     assert.deepEqual(present.forbidden, [], collection);
 
     const absent = classifyDatabaseRuntimeCapabilityPredecessorDelta({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
       collection,
       expected: [],
       observed: [],
@@ -2205,7 +2216,7 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
     assert.deepEqual(absent.reportOnly, [], collection);
 
     const contracted = classifyDatabaseRuntimeCapabilityPredecessorDelta({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072,
       collection,
       expected: [],
       observed: [predecessor],
@@ -2226,7 +2237,7 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
       nearMatch.identity = `${nearMatch.creator}|other|${nearMatch.objectKind}`;
     }
     const forbidden = classifyDatabaseRuntimeCapabilityPredecessorDelta({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
       collection,
       expected: [],
       observed: [nearMatch],
@@ -2242,7 +2253,7 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
     if (collection === "roles") replacement.connectionLimit = 7;
     if (collection === "memberships") replacement.setOption = false;
     const expanded = classifyDatabaseRuntimeCapabilityPredecessorDelta({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
       collection,
       expected: [replacement],
       observed: [predecessor],
@@ -2252,7 +2263,7 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
     assert.deepEqual(expanded.grant, [], collection);
     assert.deepEqual(expanded.revoke, [], collection);
     const contracted = classifyDatabaseRuntimeCapabilityPredecessorDelta({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072,
       collection,
       expected: [replacement],
       observed: [predecessor],
@@ -2266,7 +2277,7 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
 
   const allowedGrant = predecessors.grants[0];
   const cardinality = classifyDatabaseRuntimeCapabilityGrantDelta({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
     expectedGrants: [],
     observedGrants: [allowedGrant, clone(allowedGrant)],
     allowance,
@@ -2276,7 +2287,7 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
 
   const expectedPolicyGrant = clone(policy.grants[0]);
   const missingPolicyAuthority = classifyDatabaseRuntimeCapabilityGrantDelta({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
     expectedGrants: [expectedPolicyGrant],
     observedGrants: [],
     allowance,
@@ -2286,7 +2297,7 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
   assert.throws(
     () =>
       classifyDatabaseRuntimeCapabilityPredecessorDelta({
-        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071,
+        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072,
         collection: "grants",
         expected: [],
         observed: [predecessors.grants[0]],
@@ -2304,10 +2315,10 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
       value.validOnlyAtMigrationIndex = 69;
     },
     (value) => {
-      value.expiresAtMigrationIndex = 72;
+      value.expiresAtMigrationIndex = 73;
     },
     (value) => {
-      value.phase = DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071;
+      value.phase = DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072;
     },
   ]) {
     const invalid = clone(allowance);
@@ -2321,7 +2332,7 @@ test("predecessor allowance is finite and phase-safe across all collections", ()
 test("contracted policy rejects broad table and sequence default ACLs", () => {
   for (const objectKind of ["table", "sequence"]) {
     const manifest = clone(POST_CONTRACT_DATABASE_RUNTIME_CAPABILITIES);
-    const broad = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.defaultAcls.find(
+    const broad = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.defaultAcls.find(
       (entry) => entry.schema === "public" && entry.objectKind === objectKind,
     );
     assert.ok(broad, objectKind);
@@ -2338,12 +2349,12 @@ test("contracted policy rejects broad table and sequence default ACLs", () => {
 });
 
 test("planner rejects unavailable authority and returns no executable blocked mutations", () => {
-  const policy = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
+  const policy = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES;
   const catalog = clone(policy);
   assert.throws(
     () =>
       planDatabaseRuntimeCapabilityReconciliation({
-        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071,
+        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072,
         policy: POST_CONTRACT_DATABASE_RUNTIME_CAPABILITIES,
         catalog: clone(POST_CONTRACT_DATABASE_RUNTIME_CAPABILITIES),
       }),
@@ -2352,7 +2363,7 @@ test("planner rejects unavailable authority and returns no executable blocked mu
   assert.throws(
     () =>
       planDatabaseRuntimeCapabilityReconciliation({
-        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071,
+        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072,
         policy,
         catalog,
       }),
@@ -2361,10 +2372,10 @@ test("planner rejects unavailable authority and returns no executable blocked mu
   assert.throws(
     () =>
       planDatabaseRuntimeCapabilityReconciliation({
-        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
         policy,
         catalog,
-        allowance: PREDECESSOR_0070_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
+        allowance: PREDECESSOR_0071_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
       }),
     { name: "DatabaseRuntimeCapabilityPhaseError" },
   );
@@ -2379,7 +2390,7 @@ test("planner rejects unavailable authority and returns no executable blocked mu
   ];
   blockedCatalog.inventory.tables.push(unknownTable);
   const blocked = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog: blockedCatalog,
   });
@@ -2395,7 +2406,7 @@ test("planner rejects unavailable authority and returns no executable blocked mu
     objectKind: "schema",
   });
   const emptyDefaultAclRowPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog: emptyDefaultAclRowCatalog,
   });
@@ -2416,7 +2427,7 @@ test("planner rejects unavailable authority and returns no executable blocked mu
   assert.throws(
     () =>
       planDatabaseRuntimeCapabilityReconciliation({
-        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+        phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
         policy,
         catalog: hiddenAuthorityCatalog,
       }),
@@ -2430,7 +2441,7 @@ test("planner rejects unavailable authority and returns no executable blocked mu
     name: "learncoding_ghost",
   });
   const unknownRole = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog: unknownRoleCatalog,
   });
@@ -2461,7 +2472,7 @@ test("planner rejects unavailable authority and returns no executable blocked mu
   extraCatalog.grants.push(extraGrant);
   extraCatalog.defaultAcls.push(extraDefaultAcl);
   const removalPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog: extraCatalog,
   });
@@ -2476,7 +2487,7 @@ test("planner rejects unavailable authority and returns no executable blocked mu
 });
 
 test("table privilege revocation restores every expected column grant removed by PostgreSQL CASCADE", () => {
-  const policy = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
+  const policy = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES;
   const tableByColumn = new Map(
     policy.inventory.tables.flatMap((table) =>
       table.columns.map((column) => [column.identity, table.identity]),
@@ -2534,7 +2545,7 @@ test("table privilege revocation restores every expected column grant removed by
     const catalog = clone(policy);
     catalog.grants.push(extraTableGrant);
     const plan = planDatabaseRuntimeCapabilityReconciliation({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
       policy,
       catalog,
     });
@@ -2572,7 +2583,7 @@ test("table privilege revocation restores every expected column grant removed by
       ...columnRegrants.map((mutation) => clone(mutation.value)),
     );
     const converged = planDatabaseRuntimeCapabilityReconciliation({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
       policy,
       catalog: afterPostgresCascade,
     });
@@ -2582,7 +2593,7 @@ test("table privilege revocation restores every expected column grant removed by
 });
 
 test("missing physical default ACL rows require an explicit owner-only baseline action", () => {
-  const policy = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+  const policy = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
   const catalog = clone(policy);
   const rowIdentity = "learncoding_owner|@global|routine";
   const rowIndex = catalog.defaultAclRows.findIndex(
@@ -2599,7 +2610,7 @@ test("missing physical default ACL rows require an explicit owner-only baseline 
   catalog.defaultAcls.splice(tupleIndex, 1);
 
   const firstPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog,
   });
@@ -2633,7 +2644,7 @@ test("missing physical default ACL rows require an explicit owner-only baseline 
     true,
   );
   const secondPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog: reconciled,
   });
@@ -2642,7 +2653,7 @@ test("missing physical default ACL rows require an explicit owner-only baseline 
 });
 
 test("known extra physical default ACL rows converge only through their exact last tuple", () => {
-  const policy = CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES;
+  const policy = CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES;
   const catalog = clone(policy);
   const extraRow = {
     identity: "learncoding_owner|drizzle|table",
@@ -2665,7 +2676,7 @@ test("known extra physical default ACL rows converge only through their exact la
   catalog.defaultAcls.push(extraTuple);
 
   const firstPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog,
   });
@@ -2686,7 +2697,7 @@ test("known extra physical default ACL rows converge only through their exact la
     (entry) => entry.identity !== extraRow.identity,
   );
   const secondPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog: reconciled,
   });
@@ -2696,7 +2707,7 @@ test("known extra physical default ACL rows converge only through their exact la
   const tupleless = clone(policy);
   tupleless.defaultAclRows.push(extraRow);
   const tuplelessPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog: tupleless,
   });
@@ -2747,7 +2758,7 @@ test("known extra physical default ACL rows converge only through their exact la
     unsafe.defaultAclRows.push(row);
     unsafe.defaultAcls.push(tuple);
     const unsafePlan = planDatabaseRuntimeCapabilityReconciliation({
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
       policy,
       catalog: unsafe,
     });
@@ -2790,10 +2801,10 @@ test("phase resolution binds the exact frozen reviewed ledger prefix", () => {
 
   const current = resolveDatabaseRuntimeCapabilityPhase({
     ...request(REVIEWED_MIGRATION_LEDGER.length),
-    requestedPhase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    requestedPhase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
   });
-  assert.equal(current.policy, CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
-  assert.equal(current.phase, DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070);
+  assert.equal(current.policy, CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
+  assert.equal(current.phase, DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071);
   assert.equal(Object.isFrozen(current), true);
   assert.equal(Object.isFrozen(current.ledgerIdentity), true);
 
@@ -2815,7 +2826,7 @@ test("phase resolution binds the exact frozen reviewed ledger prefix", () => {
     request(REVIEWED_MIGRATION_LEDGER.length, { reviewedMigrationCount: REVIEWED_MIGRATION_LEDGER.length + 1 }),
     {
       ...request(70),
-      requestedPhase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
+      requestedPhase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
     },
     {
       ...request(0),
@@ -2830,7 +2841,7 @@ test("phase resolution binds the exact frozen reviewed ledger prefix", () => {
 });
 
 test("structured reconciliation is statefully idempotent", () => {
-  const policy = clone(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+  const policy = clone(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
   const catalog = clone(policy);
   catalog.grants.pop();
   catalog.defaultAcls.pop();
@@ -2848,7 +2859,7 @@ test("structured reconciliation is statefully idempotent", () => {
   };
 
   const firstPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog,
   });
@@ -2861,7 +2872,7 @@ test("structured reconciliation is statefully idempotent", () => {
     true,
   );
   const permutedPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog: reverseUnorderedCollections(catalog),
   });
@@ -2882,7 +2893,7 @@ test("structured reconciliation is statefully idempotent", () => {
   const reconciled = applyPlan(catalog, firstPlan);
   assert.deepEqual(reconciled, policy);
   const secondPlan = planDatabaseRuntimeCapabilityReconciliation({
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     policy,
     catalog: reconciled,
   });

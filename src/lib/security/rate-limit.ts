@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { isIP } from "node:net";
 
 import { NextResponse } from "next/server";
+import { RateLimiterPostgres, RateLimiterRes } from "rate-limiter-flexible";
 
 import { pool } from "@/lib/db/client";
 
@@ -215,14 +216,15 @@ export interface RateLimitStore {
 }
 
 type Queryable = {
-  query<T extends Record<string, unknown> = Record<string, unknown>>(
-    text: string,
+  query(
+    text: string | { text: string; values?: unknown[]; name?: string },
     values?: unknown[],
-  ): Promise<{ rows: T[] }>;
+  ): Promise<{ rows: Record<string, unknown>[] }>;
 };
 
-export class PostgresRateLimitStore implements RateLimitStore {
+export class FlexiblePostgresRateLimitStore implements RateLimitStore {
   private lastCleanupAt = 0;
+  private readonly limiters = new Map<string, RateLimiterPostgres>();
 
   constructor(
     private readonly queryable: Queryable,
@@ -233,27 +235,45 @@ export class PostgresRateLimitStore implements RateLimitStore {
   async consume(input: ConsumeInput): Promise<ConsumeResult> {
     const windowMs = input.windowSeconds * 1_000;
     const windowStartMs = Math.floor(input.now.getTime() / windowMs) * windowMs;
-    const windowStart = new Date(windowStartMs);
     const resetAt = new Date(windowStartMs + windowMs);
-    // Keep one extra window for operational inspection, then bounded cleanup removes it.
-    const expiresAt = new Date(resetAt.getTime() + windowMs);
-    const result = await this.queryable.query<{ request_count: number }>(
-      `INSERT INTO api_rate_limit_window
-        (scope, key_hash, window_start, request_count, expires_at)
-       VALUES ($1, $2, $3, 1, $4)
-       ON CONFLICT (scope, key_hash, window_start)
-       DO UPDATE SET
-         request_count = LEAST(api_rate_limit_window.request_count + 1, $5),
-         expires_at = GREATEST(api_rate_limit_window.expires_at, EXCLUDED.expires_at)
-       RETURNING request_count`,
-      [input.scope, input.keyHash, windowStart, expiresAt, input.limit + 1],
-    );
-    const count = Number(result.rows[0]?.request_count);
-    if (!Number.isSafeInteger(count) || count < 1) {
+    const configKey = `${input.limit}:${input.windowSeconds}`;
+    let limiter = this.limiters.get(configKey);
+    if (!limiter) {
+      limiter = new RateLimiterPostgres({
+        storeClient: this.queryable, storeType: "pool", schemaName: "public",
+        tableName: "api_rate_limit", tableCreated: true, clearExpiredByTimeout: false,
+        keyPrefix: "", points: input.limit, duration: input.windowSeconds,
+        blockDuration: 0, execEvenly: false, inMemoryBlockOnConsumed: 0,
+      });
+      this.limiters.set(configKey, limiter);
+    }
+    // Preserve the original (scope, HMAC identity, epoch window) bucket. The
+    // extra retention window prevents the library resetting a live bucket;
+    // public reset headers still use the exact epoch boundary above.
+    const key = `${input.scope}:${input.keyHash}:${windowStartMs}`;
+    let result: RateLimiterRes;
+    try {
+      result = await limiter.consume(key, 1, {
+        customDuration: (resetAt.getTime() + windowMs - input.now.getTime()) / 1_000,
+      });
+    } catch (error) {
+      // Keep the legacy database-wide cap without replacing the library's
+      // atomic counter. Only this exact CHECK failure means a spent budget;
+      // every other persistence failure continues to fail closed with 503.
+      if (error instanceof Error && "code" in error && error.code === "23514"
+        && "constraint" in error && error.constraint === "api_rate_limit_points_check") {
+        await this.maybeCleanup(input.now);
+        return { count: input.limit + 1, resetAt };
+      }
+      if (!(error instanceof RateLimiterRes)) throw error;
+      result = error;
+    }
+    if (!Number.isSafeInteger(result.consumedPoints) || result.consumedPoints < 1
+      || !Number.isFinite(result.msBeforeNext) || result.msBeforeNext < 0) {
       throw new Error("Rate-limit counter did not return a valid value.");
     }
     await this.maybeCleanup(input.now);
-    return { count, resetAt };
+    return { count: Math.min(result.consumedPoints, input.limit + 1), resetAt };
   }
 
   private async maybeCleanup(now: Date) {
@@ -261,14 +281,14 @@ export class PostgresRateLimitStore implements RateLimitStore {
     this.lastCleanupAt = now.getTime();
     try {
       await this.queryable.query(
-        `DELETE FROM api_rate_limit_window
+        `DELETE FROM api_rate_limit
          WHERE ctid IN (
-           SELECT ctid FROM api_rate_limit_window
-           WHERE expires_at < $1
-           ORDER BY expires_at
+           SELECT ctid FROM api_rate_limit
+           WHERE expire < $1
+           ORDER BY expire
            LIMIT $2
          )`,
-        [now, this.cleanupBatchSize],
+        [now.getTime(), this.cleanupBatchSize],
       );
     } catch {
       // A cleanup failure must not erase an otherwise valid enforcement result.
@@ -278,7 +298,7 @@ export class PostgresRateLimitStore implements RateLimitStore {
   }
 }
 
-const postgresStore = new PostgresRateLimitStore(pool);
+const postgresStore = new FlexiblePostgresRateLimitStore(pool);
 
 function rateLimitSecret(): string {
   const secret = process.env.RATE_LIMIT_HASH_KEY?.trim() || process.env.BETTER_AUTH_SECRET;

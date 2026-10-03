@@ -1,30 +1,30 @@
 import { createHash } from "node:crypto";
 
-import journal0070 from "../drizzle/meta/_journal.json" with { type: "json" };
-import physicalPublicColumns0070 from "../drizzle/meta/0070_public_column_attnums.json" with { type: "json" };
-import snapshot0070 from "../drizzle/meta/0070_snapshot.json" with { type: "json" };
+import journal0071 from "../drizzle/meta/_journal.json" with { type: "json" };
+import physicalPublicColumns0071 from "../drizzle/meta/0071_public_column_attnums.json" with { type: "json" };
+import snapshot0071 from "../drizzle/meta/0071_snapshot.json" with { type: "json" };
 
 export const DATABASE_RUNTIME_CAPABILITY_SCHEMA_VERSION = 1;
 
 export const DATABASE_RUNTIME_CAPABILITY_PHASES = Object.freeze({
   FOUNDATION: "foundation",
-  CURRENT_0070: "0070-current",
-  EXPAND_PREPARE_0070: "0070-expand-prepare",
-  CONTRACTED_0071: "0071-contracted",
+  CURRENT_0071: "0071-current",
+  EXPAND_PREPARE_0071: "0071-expand-prepare",
+  CONTRACTED_0072: "0072-contracted",
 });
 
-export const CURRENT_0070_REVIEWED_MIGRATION_TAG =
-  "0070_credential_validation_preference";
+export const CURRENT_0071_REVIEWED_MIGRATION_TAG =
+  "0071_rate_limiter_flexible";
 
-const REVIEWED_0070_FULL_LEDGER_SHA256 =
-  "8baecb4eedbb6f55a41b685438f9329197431d72580645c8c01a6017d7cfeeb6";
-const REVIEWED_0070_JOURNAL_TAGS_SHA256 =
-  "f29657c9a020854098688b3c9edab9c018b3ac51066f844bd06198d69eca84a2";
-const REVIEWED_0070_PUBLIC_COLUMN_MANIFEST_SHA256 =
-  "4b9871085224de975a34cee6201687ce9a5d25b4d9cf7cbbad4c68caf06bff3b";
+const REVIEWED_0071_FULL_LEDGER_SHA256 =
+  "2e2d96ce631805bc230bdc2b1b96354628f8ca41239afa6d44fd9dcc5ba9dd6f";
+const REVIEWED_0071_JOURNAL_TAGS_SHA256 =
+  "25e3d092980546ba7765e1b317dc61ab3fe7acf8fdedf8efe056754d730e70c0";
+const REVIEWED_0071_PUBLIC_COLUMN_MANIFEST_SHA256 =
+  "268a23876bd151a6d64ae3a6554f7ffffea459ab2072ed80e8dfe0c1c8fc8729";
 const REVIEWED_MIGRATION_TAGS = Object.freeze(
-  Array.isArray(journal0070.entries)
-    ? journal0070.entries.map((entry) => entry.tag)
+  Array.isArray(journal0071.entries)
+    ? journal0071.entries.map((entry) => entry.tag)
     : [],
 );
 
@@ -257,7 +257,7 @@ const CURRENT_MEMBERSHIPS = [
 ];
 
 const PHYSICAL_PUBLIC_TABLES = new Map(
-  physicalPublicColumns0070.tables.map((table) => [table.identity, table]),
+  physicalPublicColumns0071.tables.map((table) => [table.identity, table]),
 );
 
 function physicalPublicColumns(identity) {
@@ -297,7 +297,7 @@ function tableFromSnapshot(identity, table) {
   };
 }
 
-const SNAPSHOT_PUBLIC_TABLES = Object.entries(snapshot0070.tables)
+const SNAPSHOT_PUBLIC_TABLES = Object.entries(snapshot0071.tables)
   .filter(([identity]) => identity.startsWith("public."))
   .map(([identity, table]) => tableFromSnapshot(identity, table));
 
@@ -348,7 +348,7 @@ const PUBLIC_TABLES = [...SNAPSHOT_PUBLIC_TABLES, ...RAW_0065_TABLES].toSorted(
   (left, right) => compareCodePoints(left.identity, right.identity),
 );
 
-const ENUM_TYPES = Object.entries(snapshot0070.enums)
+const ENUM_TYPES = Object.entries(snapshot0071.enums)
   .filter(([identity]) => identity.startsWith("public."))
   .map(([identity, definition]) => ({
     identity,
@@ -478,12 +478,12 @@ const CURRENT_INVENTORY = {
   routines: PUBLIC_ROUTINES,
 };
 
-const REVIEWED_0070_TABLE_COLUMN_SHA256 =
-  "47d662eab56331ce714127a0e3b020eb2c1e0e70c19005cf9654226fc7738d0c";
-const REVIEWED_0070_ENUM_SHA256 =
+const REVIEWED_0071_TABLE_COLUMN_SHA256 =
+  "eeaa0f9bcaa730d954599c10432cbc284002a3dd559cbd4a8105f6568210db3a";
+const REVIEWED_0071_ENUM_SHA256 =
   "bd8a502fb97c9b362316bb48f88d150a2e15090ba4cbe27db46e643a54ff7c00";
 
-function assertReviewed0070InventoryPins() {
+function assertReviewed0071InventoryPins() {
   const publicTables = CURRENT_INVENTORY.tables.filter(
     (table) => table.schema === "public",
   );
@@ -523,22 +523,22 @@ function assertReviewed0070InventoryPins() {
     .update(`${JSON.stringify(REVIEWED_MIGRATION_TAGS)}\n`, "utf8")
     .digest("hex");
   const physicalManifestDigest = createHash("sha256")
-    .update(`${JSON.stringify(physicalPublicColumns0070)}\n`, "utf8")
+    .update(`${JSON.stringify(physicalPublicColumns0071)}\n`, "utf8")
     .digest("hex");
   const physicalManifestExact =
-    physicalPublicColumns0070.schemaVersion === 1 &&
-    physicalPublicColumns0070.contract ===
-      "codestead-public-column-attnums-0070-v1" &&
-    physicalPublicColumns0070.reviewedMigrationTail ===
-      CURRENT_0070_REVIEWED_MIGRATION_TAG &&
-    physicalPublicColumns0070.reviewedMigrationLedgerSha256 ===
-      REVIEWED_0070_FULL_LEDGER_SHA256 &&
-    physicalPublicColumns0070.tables.length === 127 &&
-    physicalPublicColumns0070.tables.reduce(
+    physicalPublicColumns0071.schemaVersion === 1 &&
+    physicalPublicColumns0071.contract ===
+      "codestead-public-column-attnums-0071-v1" &&
+    physicalPublicColumns0071.reviewedMigrationTail ===
+      CURRENT_0071_REVIEWED_MIGRATION_TAG &&
+    physicalPublicColumns0071.reviewedMigrationLedgerSha256 ===
+      REVIEWED_0071_FULL_LEDGER_SHA256 &&
+    physicalPublicColumns0071.tables.length === 127 &&
+    physicalPublicColumns0071.tables.reduce(
       (count, table) => count + table.columns.length,
       0,
-    ) === 1_489 &&
-    physicalPublicColumns0070.tables.every(
+    ) === 1_487 &&
+    physicalPublicColumns0071.tables.every(
       (table) =>
         table.generation === 1 &&
         table.maxAttnum === table.columns.length &&
@@ -550,40 +550,40 @@ function assertReviewed0070InventoryPins() {
         ),
     );
   const journalExact =
-    REVIEWED_MIGRATION_TAGS.length === 71 &&
-    journal0070.entries.every(
+    REVIEWED_MIGRATION_TAGS.length === 72 &&
+    journal0071.entries.every(
       (entry, index) =>
         entry.idx === index &&
         entry.tag === REVIEWED_MIGRATION_TAGS[index] &&
         entry.tag.startsWith(String(index).padStart(4, "0") + "_"),
     ) &&
-    REVIEWED_MIGRATION_TAGS.at(-1) === CURRENT_0070_REVIEWED_MIGRATION_TAG;
+    REVIEWED_MIGRATION_TAGS.at(-1) === CURRENT_0071_REVIEWED_MIGRATION_TAG;
   if (
     !journalExact ||
-    journalTagsDigest !== REVIEWED_0070_JOURNAL_TAGS_SHA256 ||
+    journalTagsDigest !== REVIEWED_0071_JOURNAL_TAGS_SHA256 ||
     !physicalManifestExact ||
-    physicalManifestDigest !== REVIEWED_0070_PUBLIC_COLUMN_MANIFEST_SHA256 ||
+    physicalManifestDigest !== REVIEWED_0071_PUBLIC_COLUMN_MANIFEST_SHA256 ||
     SNAPSHOT_PUBLIC_TABLES.length !== 125 ||
     SNAPSHOT_PUBLIC_TABLES.reduce(
       (count, table) => count + table.columns.length,
       0,
-    ) !== 1_480 ||
+    ) !== 1_478 ||
     publicTables.length !== 127 ||
-    publicColumns !== 1_489 ||
+    publicColumns !== 1_487 ||
     CURRENT_INVENTORY.tables.length !== 128 ||
-    digest !== REVIEWED_0070_TABLE_COLUMN_SHA256 ||
+    digest !== REVIEWED_0071_TABLE_COLUMN_SHA256 ||
     CURRENT_INVENTORY.types.length !== 141 ||
     enums.length !== 13 ||
     enumLabelCount !== 79 ||
-    fingerprintDatabaseRuntimeCapabilities(enums) !== REVIEWED_0070_ENUM_SHA256
+    fingerprintDatabaseRuntimeCapabilities(enums) !== REVIEWED_0071_ENUM_SHA256
   ) {
     throw new DatabaseRuntimeCapabilityValidationError(
-      "the reviewed 0070 inventory pin does not match",
+      "the reviewed 0071 inventory pin does not match",
     );
   }
 }
 
-assertReviewed0070InventoryPins();
+assertReviewed0071InventoryPins();
 
 const MAIL_WORKER_OUTBOX_INSERT_COLUMNS = [
   "operation_id",
@@ -899,12 +899,12 @@ const CURRENT_PROVENANCE = {
   inventorySources: [
     {
       kind: "drizzle-snapshot",
-      path: "drizzle/meta/0070_snapshot.json",
+      path: "drizzle/meta/0071_snapshot.json",
       publicTables: 125,
-      publicColumns: 1_480,
+      publicColumns: 1_478,
       columnOrder: "migration-derived-pg-attribute-attnum-v1",
-      physicalOrderSource: "drizzle/meta/0070_public_column_attnums.json",
-      physicalOrderSha256: REVIEWED_0070_PUBLIC_COLUMN_MANIFEST_SHA256,
+      physicalOrderSource: "drizzle/meta/0071_public_column_attnums.json",
+      physicalOrderSha256: REVIEWED_0071_PUBLIC_COLUMN_MANIFEST_SHA256,
     },
     {
       kind: "reviewed-migration-overlay",
@@ -922,7 +922,7 @@ const CURRENT_PROVENANCE = {
   ],
   expected: {
     publicTables: 127,
-    publicColumns: 1_489,
+    publicColumns: 1_487,
     publicTypes: 140,
     publicRoutines: 76,
     publicSequences: 0,
@@ -960,14 +960,14 @@ function makePolicy({
   };
 }
 
-export const CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES = deepFreeze(
+export const CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES = deepFreeze(
   makePolicy({
-    contract: "codestead-database-runtime-capabilities-0070-current-v1",
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
+    contract: "codestead-database-runtime-capabilities-0071-current-v1",
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
     available: true,
-    reviewedMigrationTail: CURRENT_0070_REVIEWED_MIGRATION_TAG,
+    reviewedMigrationTail: CURRENT_0071_REVIEWED_MIGRATION_TAG,
     requiredMigrationFile:
-      "drizzle/0070_credential_validation_preference.sql",
+      "drizzle/0071_rate_limiter_flexible.sql",
     reason: null,
     grants: CURRENT_GRANTS,
     defaultAclRows: CURRENT_DEFAULT_ACL_ROWS,
@@ -978,28 +978,28 @@ export const CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES = deepFreeze(
 export const POST_CONTRACT_DATABASE_RUNTIME_CAPABILITIES = deepFreeze(
   makePolicy({
     contract: "codestead-database-runtime-capabilities-post-contract-v1",
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072,
     available: false,
-    reviewedMigrationTail: "0071",
+    reviewedMigrationTail: "0072",
     requiredMigrationFile: null,
     reason:
-      "Task 3 replacement identities and Task 4 capabilities are not yet reviewed; 0071 is unavailable",
+      "Task 3 replacement identities and Task 4 capabilities are not yet reviewed; 0072 is unavailable",
     grants: CURRENT_GRANTS,
     defaultAclRows: CONTRACTED_DEFAULT_ACL_ROWS,
     defaultAcls: CONTRACTED_DEFAULT_ACLS,
   }),
 );
 
-export const PREDECESSOR_0070_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE =
+export const PREDECESSOR_0071_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE =
   deepFreeze({
     schemaVersion: DATABASE_RUNTIME_CAPABILITY_SCHEMA_VERSION,
-    allowance: "codestead-database-runtime-predecessor-0070-v1",
+    allowance: "codestead-database-runtime-predecessor-0071-v1",
     available: false,
-    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
-    validOnlyAtMigrationIndex: 70,
-    expiresAtMigrationIndex: 71,
+    phase: DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
+    validOnlyAtMigrationIndex: 71,
+    expiresAtMigrationIndex: 72,
     reason:
-      "The 0070 migration and Task 3 replacement identity delta are not yet reviewed",
+      "The 0071 migration and Task 3 replacement identity delta are not yet reviewed",
     roles: [],
     memberships: [],
     grants: [],
@@ -1023,21 +1023,21 @@ const TOP_LEVEL_POLICY_KEYS = new Set([
 ]);
 
 const POLICY_PHASE_DESCRIPTORS = Object.freeze({
-  [DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070]: Object.freeze({
-    contract: "codestead-database-runtime-capabilities-0070-current-v1",
+  [DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071]: Object.freeze({
+    contract: "codestead-database-runtime-capabilities-0071-current-v1",
     available: true,
-    reviewedMigrationTail: CURRENT_0070_REVIEWED_MIGRATION_TAG,
+    reviewedMigrationTail: CURRENT_0071_REVIEWED_MIGRATION_TAG,
     requiredMigrationFile:
-      "drizzle/0070_credential_validation_preference.sql",
+      "drizzle/0071_rate_limiter_flexible.sql",
     reason: null,
   }),
-  [DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071]: Object.freeze({
+  [DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072]: Object.freeze({
     contract: "codestead-database-runtime-capabilities-post-contract-v1",
     available: false,
-    reviewedMigrationTail: "0071",
+    reviewedMigrationTail: "0072",
     requiredMigrationFile: null,
     reason:
-      "Task 3 replacement identities and Task 4 capabilities are not yet reviewed; 0071 is unavailable",
+      "Task 3 replacement identities and Task 4 capabilities are not yet reviewed; 0072 is unavailable",
   }),
 });
 
@@ -1197,7 +1197,7 @@ function validatePolicyDefaultAclRow(value, roleNames, phase) {
     validationFailure(`invalid default ACL row authority: ${value.identity}`);
   }
   if (
-    phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071 &&
+    phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072 &&
     (value.schema !== null ||
       !["routine", "type"].includes(value.objectKind) ||
       ![OWNER_ROLE, "bootstrap-session"].includes(creator))
@@ -1330,7 +1330,7 @@ function validateDefaultAcl(value, roleNames, phase) {
     validationFailure("schema-local routine defaults are forbidden");
   }
   if (
-    phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071 &&
+    phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072 &&
     (value.schema !== null ||
       !["routine", "type"].includes(value.objectKind) ||
       creator !== grantee)
@@ -1627,11 +1627,11 @@ export function validateDatabaseRuntimeCapabilities(value) {
     memberships: CURRENT_MEMBERSHIPS,
     grants: CURRENT_GRANTS,
     defaultAclRows:
-      value.phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070
+      value.phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071
         ? CURRENT_DEFAULT_ACL_ROWS
         : CONTRACTED_DEFAULT_ACL_ROWS,
     defaultAcls:
-      value.phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070
+      value.phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071
         ? CURRENT_DEFAULT_ACLS
         : CONTRACTED_DEFAULT_ACLS,
   };
@@ -2139,10 +2139,10 @@ export function validateDatabaseRuntimeCapabilityAllowance(
   assertExactKeys(value, ALLOWANCE_KEYS, "predecessor allowance");
   if (
     value.schemaVersion !== DATABASE_RUNTIME_CAPABILITY_SCHEMA_VERSION ||
-    value.allowance !== "codestead-database-runtime-predecessor-0070-v1" ||
-    value.phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070 ||
-    value.validOnlyAtMigrationIndex !== 70 ||
-    value.expiresAtMigrationIndex !== 71 ||
+    value.allowance !== "codestead-database-runtime-predecessor-0071-v1" ||
+    value.phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071 ||
+    value.validOnlyAtMigrationIndex !== 71 ||
+    value.expiresAtMigrationIndex !== 72 ||
     typeof value.available !== "boolean"
   ) {
     validationFailure("invalid predecessor allowance identity or bounds");
@@ -2250,7 +2250,7 @@ export function validateDatabaseRuntimeCapabilityAllowance(
     validateDefaultAcl(
       defaultAcl,
       roleNames,
-      DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
+      DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
     );
   }
   for (const key of ["grants", "defaultAcls"]) {
@@ -2266,7 +2266,7 @@ export function validateDatabaseRuntimeCapabilityAllowance(
     if (
       exactSetDifference(
         value[key],
-        CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES[key],
+        CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES[key],
       ).length !== 0
     ) {
       validationFailure(`allowance ${key} contains non-predecessor authority`);
@@ -2307,11 +2307,11 @@ function classifyExactCollectionDelta({
     const isAllowed = remaining > 0;
     if (isAllowed) allowanceCounts.set(key, remaining - 1);
     if (
-      phase === DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070 &&
+      phase === DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071 &&
       isAllowed
     ) {
       reportOnly.push(entry);
-    } else if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070) {
+    } else if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071) {
       revoke.push(entry);
     } else {
       forbidden.push(entry);
@@ -2349,24 +2349,24 @@ export function classifyDatabaseRuntimeCapabilityPredecessorDelta({
   }
   if (
     ![
-      DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
-      DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070,
-      DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071,
+      DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
+      DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071,
+      DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072,
     ].includes(phase)
   ) {
     phaseFailure(`unsupported capability delta phase: ${phase}`);
   }
-  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070) {
+  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071) {
     if (allowance !== null) {
-      phaseFailure("the 0070 current phase forbids predecessor allowances");
+      phaseFailure("the 0071 current phase forbids predecessor allowances");
     }
-  } else if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070) {
+  } else if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071) {
     validateDatabaseRuntimeCapabilityAllowance(allowance);
     if (!allowance.available) {
       phaseFailure("the predecessor allowance is unavailable");
     }
   } else if (allowance !== null) {
-    phaseFailure("the expired 0070 predecessor allowance is forbidden at 0071");
+    phaseFailure("the expired 0071 predecessor allowance is forbidden at 0072");
   }
   return classifyExactCollectionDelta({
     phase,
@@ -2420,22 +2420,22 @@ function validatePlannerAuthority({ phase, policy, allowance }) {
       `planner phase ${phase} does not match policy phase ${policy.phase}`,
     );
   }
-  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070) {
+  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071) {
     if (allowance !== null) {
-      plannerAuthorityFailure("the 0070 current phase forbids an allowance");
+      plannerAuthorityFailure("the 0071 current phase forbids an allowance");
     }
     return;
   }
   if (
-    phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0070 &&
-    phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071
+    phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.EXPAND_PREPARE_0071 &&
+    phase !== DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072
   ) {
     plannerAuthorityFailure(`unsupported planner phase: ${phase}`);
   }
-  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0071) {
+  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CONTRACTED_0072) {
     if (allowance !== null) {
       plannerAuthorityFailure(
-        "the expired 0070 predecessor allowance is forbidden at 0071",
+        "the expired 0071 predecessor allowance is forbidden at 0072",
       );
     }
   } else {
@@ -2444,7 +2444,7 @@ function validatePlannerAuthority({ phase, policy, allowance }) {
       allowance.available !== true ||
       !isDeepEqual(
         allowance,
-        PREDECESSOR_0070_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
+        PREDECESSOR_0071_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
       )
     ) {
       plannerAuthorityFailure(
@@ -2639,7 +2639,7 @@ export function planDatabaseRuntimeCapabilityReconciliation({
     drift.mismatched.roles,
     (entry) => entry.identity,
   );
-  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070) {
+  if (phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071) {
     roleDelta.forbidden.push(...roleDelta.revoke);
     roleDelta.revoke = [];
   }
@@ -2676,7 +2676,7 @@ export function planDatabaseRuntimeCapabilityReconciliation({
     identity: (entry) => entry.identity,
   });
   const defaultAclRowRevocations =
-    phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070
+    phase === DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071
       ? partitionRepairableDefaultAclRowRevocations({
           policy,
           catalog,
@@ -2786,7 +2786,7 @@ export function resolveDatabaseRuntimeCapabilityPhase({
     !Number.isSafeInteger(reviewedMigrationCount) ||
     reviewedMigrationCount < 0 ||
     reviewedMigrationCount > REVIEWED_MIGRATION_TAGS.length ||
-    reviewedMigrationLedgerSha256 !== REVIEWED_0070_FULL_LEDGER_SHA256 ||
+    reviewedMigrationLedgerSha256 !== REVIEWED_0071_FULL_LEDGER_SHA256 ||
     journalPresent !== reviewedMigrationCount > 0 ||
     reviewedPrefixExact !== reviewedMigrationCount > 0
   ) {
@@ -2814,15 +2814,15 @@ export function resolveDatabaseRuntimeCapabilityPhase({
     };
   } else if (reviewedMigrationCount === REVIEWED_MIGRATION_TAGS.length) {
     if (
-      exactTail !== CURRENT_0070_REVIEWED_MIGRATION_TAG ||
-      CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES.ledger
+      exactTail !== CURRENT_0071_REVIEWED_MIGRATION_TAG ||
+      CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES.ledger
         .requiredMigrationFile !== `drizzle/${exactTail}.sql`
     ) {
       phaseFailure("current capability policy is not bound to its exact tail");
     }
     resolved = {
-      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0070,
-      policy: CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES,
+      phase: DATABASE_RUNTIME_CAPABILITY_PHASES.CURRENT_0071,
+      policy: CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES,
       reconcileApplicationAcls: true,
     };
   } else {
@@ -2848,10 +2848,10 @@ export function resolveDatabaseRuntimeCapabilityPhase({
   });
 }
 
-validateDatabaseRuntimeCapabilities(CURRENT_0070_DATABASE_RUNTIME_CAPABILITIES);
+validateDatabaseRuntimeCapabilities(CURRENT_0071_DATABASE_RUNTIME_CAPABILITIES);
 validateDatabaseRuntimeCapabilities(
   POST_CONTRACT_DATABASE_RUNTIME_CAPABILITIES,
 );
 validateDatabaseRuntimeCapabilityAllowance(
-  PREDECESSOR_0070_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
+  PREDECESSOR_0071_DATABASE_RUNTIME_CAPABILITY_ALLOWANCE,
 );

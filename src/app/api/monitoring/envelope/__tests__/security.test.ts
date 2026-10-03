@@ -5,7 +5,7 @@ import { MAX_ENVELOPE_BYTES } from "@/lib/observability/envelope-tunnel";
 const mocks = vi.hoisted(() => ({
   getSession: vi.fn(),
   account: vi.fn(),
-  consume: vi.fn(),
+  query: vi.fn(),
   counters: new Map<string, number>(),
 }));
 
@@ -22,7 +22,7 @@ vi.mock("@/lib/security/rate-limit", async (importOriginal) => {
     ...original,
     withRateLimit: (checks: Parameters<typeof original.withRateLimit>[0], handler: () => Promise<Response>) =>
       original.withRateLimit(checks, handler, {
-        store: { consume: mocks.consume },
+        store: new original.FlexiblePostgresRateLimitStore({ query: mocks.query }, Infinity),
         now: () => new Date("2026-10-03T00:00:10Z"),
         secret: "monitoring-test-rate-limit-secret-32-bytes",
       }),
@@ -48,11 +48,12 @@ beforeEach(() => {
   mocks.account.mockResolvedValue([{
     status: "active", role: "learner", twoFactorEnabled: true, mustChangePassword: false,
   }]);
-  mocks.consume.mockImplementation(async (input) => {
-    const key = `${input.scope}:${input.keyHash}`;
+  vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-03T00:00:10Z"));
+  mocks.query.mockImplementation(async (command) => {
+    const key = command.values[0];
     const count = (mocks.counters.get(key) ?? 0) + 1;
     mocks.counters.set(key, count);
-    return { count, resetAt: new Date("2026-10-03T00:01:00Z") };
+    return { rows: [{ points: count, expire: command.values[2] }] };
   });
   vi.stubEnv("SENTRY_BROWSER_DSN", "https://serverkey@errors.example.test/9");
   vi.stubEnv("RATE_LIMIT_TRUSTED_IP_HEADER", "x-real-ip");
@@ -116,7 +117,7 @@ describe("monitoring relay security", () => {
   });
 
   it("fails closed when the limiter store is unavailable", async () => {
-    mocks.consume.mockRejectedValue(new Error("store unavailable"));
+    mocks.query.mockRejectedValue(new Error("store unavailable"));
     expect((await post()).status).toBe(503);
     expect(fetchMock).not.toHaveBeenCalled();
   });

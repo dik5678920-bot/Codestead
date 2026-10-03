@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   getRateLimitPolicy,
   hashRateLimitIdentity,
-  PostgresRateLimitStore,
+  FlexiblePostgresRateLimitStore,
   rateLimitIp,
   sameRateLimitHash,
   type ConsumeInput,
@@ -204,12 +204,30 @@ describe("configuration and proxy identities", () => {
   });
 });
 
-describe("PostgresRateLimitStore", () => {
+describe("FlexiblePostgresRateLimitStore", () => {
+  it("returns an exhausted budget only for the exact legacy cap constraint", async () => {
+    const input = { scope: "code_run_minute", keyHash: "a".repeat(64), limit: 10,
+      windowSeconds: 60, now: new Date("2026-10-03T00:00:10Z") };
+    const capError = Object.assign(new Error("counter cap"), {
+      code: "23514", constraint: "api_rate_limit_points_check",
+    });
+    const query = vi.fn().mockRejectedValue(capError);
+    const store = new FlexiblePostgresRateLimitStore({ query }, Infinity);
+    await expect(store.consume(input)).resolves.toEqual({
+      count: 11, resetAt: new Date("2026-10-03T00:01:00Z"),
+    });
+    query.mockRejectedValue(Object.assign(new Error("invalid key"), {
+      code: "23514", constraint: "api_rate_limit_key_check",
+    }));
+    await expect(store.consume(input)).rejects.toThrow("invalid key");
+    query.mockRejectedValue(Object.assign(new Error("integer overflow"), { code: "22003" }));
+    await expect(store.consume(input)).rejects.toThrow("integer overflow");
+  });
   it("uses an atomic upsert and bounded cleanup", async () => {
     const query = vi.fn()
-      .mockResolvedValueOnce({ rows: [{ request_count: 2 }] })
+      .mockResolvedValueOnce({ rows: [{ points: 2, expire: Date.now() + 60_000 }] })
       .mockResolvedValueOnce({ rows: [] });
-    const store = new PostgresRateLimitStore({ query });
+    const store = new FlexiblePostgresRateLimitStore({ query });
     const result = await store.consume({
       scope: "code_run_minute",
       keyHash: "a".repeat(64),
@@ -218,9 +236,10 @@ describe("PostgresRateLimitStore", () => {
       now: new Date("2026-07-12T00:00:10Z"),
     });
     expect(result).toEqual({ count: 2, resetAt: new Date("2026-07-12T00:01:00Z") });
-    expect(query.mock.calls[0][0]).toContain("ON CONFLICT (scope, key_hash, window_start)");
-    expect(query.mock.calls[0][0]).toContain("LEAST(api_rate_limit_window.request_count + 1, $5)");
-    expect(query.mock.calls[0][1]).toEqual(expect.arrayContaining(["code_run_minute", "a".repeat(64), 11]));
+    expect(query.mock.calls[0][0].text).toContain("ON CONFLICT(key)");
+    expect(query.mock.calls[0][0].text).toContain('"public"."api_rate_limit".points + ($2)');
+    expect(query.mock.calls[0][0].values[0]).toBe(`code_run_minute:${"a".repeat(64)}:1783814400000`);
+    expect(query.mock.calls[0][0].values[1]).toBe(1);
     expect(query.mock.calls[1][0]).toContain("LIMIT $2");
     expect(query.mock.calls[1][1][1]).toBe(500);
   });
@@ -228,9 +247,9 @@ describe("PostgresRateLimitStore", () => {
   it("keeps enforcement valid when opportunistic cleanup fails", async () => {
     vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const query = vi.fn()
-      .mockResolvedValueOnce({ rows: [{ request_count: 1 }] })
+      .mockResolvedValueOnce({ rows: [{ points: 1, expire: Date.now() + 60_000 }] })
       .mockRejectedValueOnce(new Error("cleanup unavailable"));
-    const store = new PostgresRateLimitStore({ query });
+    const store = new FlexiblePostgresRateLimitStore({ query });
     await expect(store.consume({
       scope: "ai_tutor_minute",
       keyHash: "b".repeat(64),
@@ -242,8 +261,8 @@ describe("PostgresRateLimitStore", () => {
   });
 
   it("rejects malformed database results", async () => {
-    const query = vi.fn().mockResolvedValue({ rows: [] });
-    const store = new PostgresRateLimitStore({ query }, Number.POSITIVE_INFINITY);
+    const query = vi.fn().mockResolvedValue({ rows: [{ points: 0, expire: Date.now() + 60_000 }] });
+    const store = new FlexiblePostgresRateLimitStore({ query }, Number.POSITIVE_INFINITY);
     await expect(store.consume({
       scope: "exam_run_user",
       keyHash: "c".repeat(64),
