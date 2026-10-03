@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { APIError } from "better-auth/api";
 
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
+  checkPassword: vi.fn(),
 }));
 
 vi.mock("@/lib/db/client", () => ({ db: { transaction: mocks.transaction } }));
+vi.mock("@/lib/security/breached-passwords", () => ({ requireUnbreachedPassword: mocks.checkPassword }));
 
 import { completeForcedPasswordChange } from "../forced-password-change";
 
@@ -182,7 +185,14 @@ function chainable<T>(result: T) {
 }
 
 describe("productionDependencies transaction wiring", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { vi.clearAllMocks(); mocks.checkPassword.mockResolvedValue(undefined); });
+
+  it("rejects breached passwords before hashing or changing durable authority", async () => {
+    mocks.checkPassword.mockRejectedValueOnce(new APIError("BAD_REQUEST", { code: "PASSWORD_COMPROMISED" }));
+    await expect(completeForcedPasswordChange({ userId: "learner-1", currentPassword: "temporary-password", newPassword: "synthetic-test-passphrase" }))
+      .rejects.toMatchObject({ body: { code: "PASSWORD_COMPROMISED" } });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
 
   function fakeTx(handlers: {
     ownerRow?: { mustChangePassword: boolean }[];

@@ -1,4 +1,6 @@
+import { runInNewContext } from "node:vm";
 import { NextRequest } from "next/server";
+import { APIError } from "better-auth/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
@@ -7,6 +9,11 @@ const mocks = vi.hoisted(() => ({
   rateLimitIp: vi.fn(),
   signUpEmail: vi.fn(),
   withRateLimit: vi.fn(),
+  checkPassword: vi.fn(),
+}));
+vi.mock("@/lib/security/breached-passwords", async (original) => ({
+  ...await original<typeof import("@/lib/security/breached-passwords")>(),
+  requireUnbreachedPassword: mocks.checkPassword,
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -50,8 +57,29 @@ function validBody() {
 }
 
 describe("invitation activation", () => {
+  it.each(["checkPassword", "signUpEmail"] as const)("returns a friendly error for a foreign breached password from %s", async (source) => {
+    const error: unknown = runInNewContext('Object.assign(new Error("private detail"), { name: "APIError", statusCode: 400, body: { code: "PASSWORD_COMPROMISED" } })');
+    expect(error).not.toBeInstanceOf(APIError);
+    mocks[source].mockRejectedValueOnce(error);
+    const response = await POST(request(validBody()));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "PASSWORD_COMPROMISED", error: expect.stringContaining("data breach") });
+    if (source === "checkPassword") {
+      expect(mocks.consumeInvitationByToken).not.toHaveBeenCalled();
+      expect(mocks.signUpEmail).not.toHaveBeenCalled();
+    }
+  });
+  it("rejects a breached password without consuming the invitation", async () => {
+    mocks.checkPassword.mockRejectedValueOnce(new APIError("BAD_REQUEST", { code: "PASSWORD_COMPROMISED" }));
+    const response = await POST(request(validBody()));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "PASSWORD_COMPROMISED", error: expect.stringContaining("data breach") });
+    expect(mocks.consumeInvitationByToken).not.toHaveBeenCalled();
+    expect(mocks.signUpEmail).not.toHaveBeenCalled();
+  });
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.checkPassword.mockResolvedValue(undefined);
     mocks.rateLimitIp.mockReturnValue("trusted-ip-hash");
     mocks.withRateLimit.mockImplementation(
       async (_config, operation: () => Promise<Response>) => operation(),

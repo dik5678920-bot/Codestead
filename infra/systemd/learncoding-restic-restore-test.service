@@ -1,6 +1,6 @@
 [Unit]
 Description=LearnCoding monthly restic restore test into a throwaway PostgreSQL
-Documentation=/opt/learncoding/docs/runbooks/backups-r2.md
+Documentation=file:/opt/learncoding/docs/runbooks/backups-r2.md
 After=network-online.target docker.service
 Wants=network-online.target
 OnFailure=learncoding-alert@%n.service

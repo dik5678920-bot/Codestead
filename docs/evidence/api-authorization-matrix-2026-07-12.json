@@ -1539,7 +1539,7 @@
       "admin": "allowed",
       "objectAuthorization": "public-input",
       "ownershipProof": "validated public request",
-      "operationSourceSha256": "8a8ffc1a41a0c665f19533593d2ec0b0a02bfae776fdff5dd7737e53258500fd"
+      "operationSourceSha256": "6d5b577d9298be8195023c9f9898fc6a67d1a6ab3b6fcf40b8a8d468312ada9d"
     },
     {
       "operation": "GET /api/invitations/validate",
@@ -2098,7 +2098,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "6d0134c43733857e7a23a871b5249f17084ea0d2d036a825e28378e5d4b2a081"
+      "operationSourceSha256": "070d791b573a6faa82885d8eac54448224617b83f47db31a8ecaaa5e2a6d7fe1"
     },
     {
       "operation": "POST /api/security/fresh-mfa",
@@ -2124,7 +2124,7 @@
       "admin": "allowed",
       "objectAuthorization": "public-input",
       "ownershipProof": "validated public request",
-      "operationSourceSha256": "4b7975155012227355059fb29c38f5ad5fab364a23384e6290fbf26d3609d0f2"
+      "operationSourceSha256": "57319d52f5af0c7a763670bb4d286cd050de4af4ab6685e1040bee05d604f296"
     },
     {
       "operation": "POST /api/security/verify-backup-code",

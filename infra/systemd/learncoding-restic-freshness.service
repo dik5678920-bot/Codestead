@@ -1,6 +1,6 @@
 [Unit]
 Description=Check LearnCoding restic backup and restore-test freshness
-Documentation=/opt/learncoding/docs/runbooks/backups-r2.md
+Documentation=file:/opt/learncoding/docs/runbooks/backups-r2.md
 OnFailure=learncoding-alert@%n.service
 
 [Service]

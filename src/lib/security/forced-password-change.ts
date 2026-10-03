@@ -4,6 +4,7 @@ import { hashPassword, verifyPassword } from "better-auth/crypto";
 import { db } from "@/lib/db/client";
 import { account, authSessionHistory, session, user } from "@/lib/db/schema";
 import { boundedUserAgent } from "@/lib/session-controls";
+import { requireUnbreachedPassword } from "@/lib/security/breached-passwords";
 
 type LockedAuthority = {
   mustChangePassword: boolean;
@@ -54,7 +55,10 @@ export interface ForcedPasswordChangeDependencies {
 
 const productionDependencies: ForcedPasswordChangeDependencies = {
   now: () => new Date(),
-  hashPassword,
+  async hashPassword(password) {
+    await requireUnbreachedPassword(password);
+    return hashPassword(password);
+  },
   verifyPassword: (hash, password) => verifyPassword({ hash, password }),
   transaction: (operation) => db.transaction(async (tx) => operation({
     async lockAuthority(userId) {

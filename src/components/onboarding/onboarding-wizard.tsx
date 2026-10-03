@@ -1,4 +1,5 @@
 "use client";
+import { BREACHED_PASSWORD_MESSAGE } from "@/lib/security/password-messages";
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -171,7 +172,8 @@ function ForcedPasswordChange({ onChanged }: { onChanged: () => void }) {
         body: JSON.stringify({ currentPassword, newPassword }),
       });
       if (!response.ok) {
-        setError(response.status === 429
+        const body = await response.json().catch(() => null) as { code?: string } | null;
+        setError(body?.code === "PASSWORD_COMPROMISED" ? BREACHED_PASSWORD_MESSAGE : response.status === 429
           ? "Too many attempts. Wait a few minutes and try again."
           : "Password change could not be completed. Check the temporary password and try again.");
         return;
