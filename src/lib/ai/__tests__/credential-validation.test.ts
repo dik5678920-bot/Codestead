@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { runInNewContext } from "node:vm";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const limit = vi.fn();
@@ -29,6 +30,7 @@ const base = {
 describe("provider credential validation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(console, "warn").mockImplementation(() => {});
     mocks.limit.mockReset().mockResolvedValue([]);
     mocks.values.mockResolvedValue(undefined);
     mocks.callProvider.mockResolvedValue({
@@ -40,6 +42,8 @@ describe("provider credential validation", () => {
       latencyMs: 5,
     });
   });
+
+  afterEach(() => vi.restoreAllMocks());
 
   it("uses the safe default NIM probe and records hashes, never the secret", async () => {
     await expect(validateProviderCredential(base)).resolves.toMatchObject({
@@ -59,6 +63,7 @@ describe("provider credential validation", () => {
       requestHash: expect.stringMatching(/^[a-f0-9]{64}$/),
       responseHash: expect.stringMatching(/^[a-f0-9]{64}$/),
     }));
+    expect(console.warn).not.toHaveBeenCalled();
     expect(JSON.stringify(mocks.values.mock.calls)).not.toContain(base.secret);
   });
 
@@ -110,6 +115,30 @@ describe("provider credential validation", () => {
       status: "unreachable",
       failureCode: code,
     });
+  });
+
+  it.each(["AUTHENTICATION", "RATE_LIMIT", "TIMEOUT"] as const)("preserves foreign-realm %s failures in validation and model-call rows", async (code) => {
+    const foreignError = runInNewContext(
+      'Object.assign(new Error("private provider body"), { name: "ProviderError", code })',
+      { code },
+    );
+    expect(foreignError).not.toBeInstanceOf(ProviderError);
+    mocks.callProvider.mockRejectedValueOnce(foreignError);
+    await expect(validateProviderCredential(base)).resolves.toMatchObject({
+      status: code === "AUTHENTICATION" ? "invalid" : "unreachable",
+      failureCode: code,
+    });
+    expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ status: "failed", errorCode: code }));
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith("Provider credential validation failed", { provider: base.provider, code });
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(base.secret);
+    expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain("private provider body");
+  });
+
+  it("logs only UNKNOWN for an unrecognized error marker", async () => {
+    mocks.callProvider.mockRejectedValueOnce({ name: "ProviderError", code: "private provider body", message: base.secret });
+    await expect(validateProviderCredential(base)).resolves.toMatchObject({ status: "unreachable", failureCode: "UNKNOWN" });
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith("Provider credential validation failed", { provider: base.provider, code: "UNKNOWN" });
+    expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ errorCode: "UNKNOWN" }));
   });
 
   it("marks only an explicit provider authentication rejection as invalid", async () => {

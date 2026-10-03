@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { callProvider } from "./providers";
 import { AUTHORED_TUTOR_FALLBACK_MESSAGE } from "./context";
 import { fallbackCostPaise } from "./fallback-budget";
-import { ProviderError, type ProviderResult, type SupportedProvider, type TutorMessage } from "./types";
+import { isProviderError, ProviderError, type ProviderResult, type SupportedProvider, type TutorMessage } from "./types";
 
 export interface ProviderCandidate {
   ownerUserId: string;
@@ -160,7 +160,7 @@ export async function routeTutorRequest(input: {
       }
     } catch (error) {
       const normalized =
-        error instanceof ProviderError
+        isProviderError(error)
           ? error
           : new ProviderError("Unexpected provider failure.", "UNKNOWN");
       if (fallbackReservation && input.reconcileFallback) {
