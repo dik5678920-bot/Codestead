@@ -42,6 +42,18 @@ describe("nonce Content-Security-Policy", () => {
     const second = proxy(new NextRequest("https://codestead.test/login"));
     expect(second.headers.get("x-middleware-request-x-nonce")).not.toBe(nonce);
   });
+  it.each(["development", "production"])("passes allowed API requests through untouched in %s (no request rewrite, no document CSP)", (environment) => {
+    // Rewriting request headers on API routes left GET handlers hanging under
+    // the dev server; APIs render no HTML, so they need no nonce or CSP.
+    vi.stubEnv("NODE_ENV", environment);
+    const response = proxy(new NextRequest("https://codestead.test/api/monitoring/envelope", {
+      headers: { "x-nonce": "attacker" },
+    }));
+    expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("x-middleware-override-headers")).toBeNull();
+    expect(response.headers.get("x-middleware-request-x-nonce")).toBeNull();
+    expect(response.headers.get("content-security-policy")).toBeNull();
+  });
   it.each(["/", "/login", "/playground", "/learn", "/api/auth/callback/google", "/api/monitoring/envelope"])("covers %s, including prefetches", (url) => {
     expect(unstable_doesMiddlewareMatch({ config, url, headers: { "next-router-prefetch": "1" } })).toBe(true);
   });

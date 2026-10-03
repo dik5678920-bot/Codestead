@@ -10,6 +10,9 @@ export function proxy(request: NextRequest) {
     appUrl: process.env.APP_URL,
     production: process.env.NODE_ENV === "production",
   });
+  // API routes render no HTML and need no nonce or document CSP. Rewriting
+  // their request headers left route handlers hanging under the dev server.
+  if (decision.allowed && request.nextUrl.pathname.startsWith("/api/")) return NextResponse.next();
   if (decision.allowed) {
     const nonce = randomBytes(32).toString("base64");
     const production = process.env.NODE_ENV === "production";
