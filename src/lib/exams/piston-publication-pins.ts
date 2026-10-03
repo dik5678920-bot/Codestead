@@ -1,10 +1,13 @@
-import handoff from "../../../infra/piston/pr4b-runtime-handoff.json";
-import publicationPins from "../../../infra/piston/pr4b-publication-pins.json";
+// Shipped under src/ for standalone app and worker images. The sync test checks
+// this projection against the reviewed infra handoff and publication manifest.
+import runtimePins from "./piston-runtime-pins.json";
 import type { RunnerLanguage } from "@/lib/runner/client";
 import { PISTON_RUNTIMES } from "@/lib/runner/piston-client";
 import { pinnedPistonImageDigest } from "@/lib/runner/exam-client";
 
 import type { ExamFormSnapshot, ExamItem } from "./contracts";
+
+const { handoff, publicationPins } = runtimePins;
 
 export const PISTON_EXAM_PIN_REVISION = "piston-pr4b-v1";
 export const PISTON_EXAM_IMAGE_DIGEST = handoff.imageReference.split("@")[1]!;
