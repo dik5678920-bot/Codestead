@@ -5,7 +5,18 @@ import { BREACHED_PASSWORD_MESSAGE } from "./password-messages";
 export { BREACHED_PASSWORD_MESSAGE } from "./password-messages";
 
 export function isBreachedPasswordError(error: unknown): boolean {
-  return error instanceof APIError && error.body?.code === "PASSWORD_COMPROMISED";
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as { name?: unknown; body?: { code?: unknown } | null };
+  return candidate.name === "APIError" && candidate.body?.code === "PASSWORD_COMPROMISED";
+}
+
+function isHibpUnavailableError(error: unknown): boolean {
+  // Next server chunks can contain distinct copies of the APIError constructor.
+  // Prefer statusCode; only fall back to a numeric status when it is absent.
+  if (typeof error !== "object" || error === null) return false;
+  const candidate = error as Record<string, unknown>;
+  const status = candidate.statusCode === undefined ? candidate.status : candidate.statusCode;
+  return candidate.name === "APIError" && typeof status === "number" && status === 500;
 }
 
 function logUnavailable() {
@@ -32,7 +43,7 @@ export function breachedPasswordPlugin() {
           try {
             return await checked(password);
           } catch (error) {
-            if (hashing || !(error instanceof APIError) || error.statusCode !== 500) throw error;
+            if (hashing || !isHibpUnavailableError(error)) throw error;
             logUnavailable();
             return originalHash(password);
           }
@@ -46,7 +57,7 @@ export async function requireUnbreachedPassword(password: string) {
   try {
     compromised = await isPasswordCompromised(password);
   } catch (error) {
-    if (!(error instanceof APIError) || error.statusCode !== 500) throw error;
+    if (!isHibpUnavailableError(error)) throw error;
     logUnavailable();
     return;
   }

@@ -1,3 +1,4 @@
+import { runInNewContext } from "node:vm";
 import { NextRequest, NextResponse } from "next/server";
 import { APIError } from "better-auth/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -30,6 +31,15 @@ const validBody = {
 };
 
 describe("forced password change endpoint", () => {
+  it("returns a friendly error for a foreign breached password without clearing auth cookies", async () => {
+    const error: unknown = runInNewContext('Object.assign(new Error("private detail"), { name: "APIError", statusCode: 400, body: { code: "PASSWORD_COMPROMISED" } })');
+    expect(error).not.toBeInstanceOf(APIError);
+    mocks.complete.mockRejectedValueOnce(error);
+    const response = await POST(request(validBody));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ code: "PASSWORD_COMPROMISED", error: expect.stringContaining("data breach") });
+    expect(response.headers.get("set-cookie")).toBeNull();
+  });
   it("returns a friendly breached-password error without clearing auth cookies", async () => {
     mocks.complete.mockRejectedValueOnce(new APIError("BAD_REQUEST", { code: "PASSWORD_COMPROMISED" }));
     const response = await POST(request(validBody));
