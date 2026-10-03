@@ -11,6 +11,8 @@ All accepted source, text, and PDF uploads begin with `scan_status='pending'` an
 - The web app permits download only for the exact `safe` status. Pending, scanning, quarantined, scanner-error, deleted, and legacy statuses fail closed.
 
 Before each release, set `CLAMAV_IMAGE` to a reviewed version-specific `clamav/clamav:<version>_base` image with an immutable `@sha256:<64 hex>` digest. Runtime validation rejects a tag-only reference. The persistent `/var/lib/clamav` volume is required for the base image and avoids downloading the full database after every restart. Reserve at least 4 GB memory for the service, per the official [ClamAV Docker guidance](https://docs.clamav.net/manual/Installing/Docker.html). The [clamd protocol documentation](https://docs.clamav.net/manual/Usage/ClamdProtocol.html) is the authority for the `INSTREAM` framing used by the worker.
+The scan scratch `/tmp` tmpfs is capped at 256 MiB with `noexec,nosuid,nodev`; the service memory cap remains 4 GiB. The increase from 64 MiB adds at most 192 MiB of scratch capacity (about 0.6% of the documented 32 GiB NUC RAM), within that existing service cap. Tmpfs consumes memory as used, rather than reserving the full limit at startup. This gives large and concurrent streams more spooling/unpacking headroom; it is not a guarantee for arbitrary archive expansion.
+
 Before either pilot or full-mode startup, systemd runs `prepare-object-storage.mjs` as root. The host parent must be `root:root` mode `0750`; the object root must be `root:1000` mode `01770`; and `.codestead-object-root-v1` must be a one-link `root:1000` mode `0440` regular file with the exact reviewed content. App, scanner, and lifecycle containers mount only that nested source, so UID 1000 has no writable parent path from which it could replace the root. Any mismatch fails startup and keeps uploads unavailable.
 
 ```bash
@@ -35,6 +37,8 @@ Do not paste database rows or raw scanner logs into public issues. Operational l
 ## State and retry behavior
 
 The default lease is 180 seconds. A crashed worker's expired `scanning` lease is reclaimed. Transient clamd, socket, timeout, and protocol failures retry with exponential backoff from 5 seconds to 15 minutes. After eight attempts the object remains unavailable with `scanner_error`. Invalid paths, missing files, symlinks, size changes, or digest changes become `scanner_error` immediately because retrying cannot safely repair them.
+
+An `INSTREAM size limit exceeded` daemon reply is a permanent `scanner_size_limit` rejection on the first attempt. The object stays unavailable, and the file library asks the learner to upload a smaller file. Unknown protocol errors still use the bounded retry policy.
 
 Changing retry settings requires an operator review. Keep the lease longer than `CLAMD_TIMEOUT_SECONDS` plus worst-case database latency. Never mount the parent app-data directory or widen write access beyond the exact reviewed objects bind.
 

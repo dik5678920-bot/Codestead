@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => {
   const insertValues = vi.fn();
   const insert = vi.fn(() => ({ values: insertValues }));
   const returning = vi.fn();
-  const updateWhere = vi.fn((_condition: SQL) => ({ returning }));
+  const updateWhere = vi.fn<(condition: SQL) => { returning: typeof returning }>(() => ({ returning }));
   const set = vi.fn(() => ({ where: updateWhere }));
   const update = vi.fn(() => ({ set }));
   const execute = vi.fn();

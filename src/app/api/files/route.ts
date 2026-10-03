@@ -8,6 +8,7 @@ import { withRateLimit } from "@/lib/security/rate-limit";
 import {
   DEFAULT_STORAGE_QUOTA_BYTES,
   validateUpload,
+  uploadScanFailureReason,
 } from "@/lib/storage/policy";
 import { objectStorageRoot } from "@/lib/storage/object-root";
 import { StorageQuotaExceededError } from "@/lib/storage/quota-store";
@@ -43,6 +44,7 @@ export async function GET() {
       mediaType: storedObject.mediaType,
       sizeBytes: storedObject.sizeBytes,
       scanStatus: storedObject.scanStatus,
+      scanErrorCode: storedObject.scanErrorCode,
       createdAt: storedObject.createdAt,
     })
     .from(storedObject)
@@ -59,7 +61,10 @@ export async function GET() {
     .limit(1);
   const activeFiles = files.filter((file) => file.scanStatus !== "deleted");
   return NextResponse.json({
-    files: activeFiles,
+    files: activeFiles.map(({ scanErrorCode, ...file }) => {
+      const reason = uploadScanFailureReason(file.scanStatus, scanErrorCode);
+      return reason ? { ...file, scanFailureReason: reason } : file;
+    }),
     uploadsEnabled: uploadsEnabled(),
     quota: {
       usedBytes: activeFiles.reduce((sum, file) => sum + file.sizeBytes, 0),

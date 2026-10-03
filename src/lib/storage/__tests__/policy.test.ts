@@ -5,12 +5,19 @@ import {
   MAX_STORAGE_QUOTA_BYTES,
   MAX_UPLOAD_BYTES,
   isStoredObjectDownloadable,
+  uploadScanFailureReason,
   sanitizeUploadName,
   uploadWouldExceedQuota,
   validateUpload,
 } from "../policy";
 
 describe("stored object download policy", () => {
+  it("exposes only the fixed reason for a terminal size rejection", () => {
+    expect(uploadScanFailureReason("scanner_error", "scanner_size_limit")).toBe("This file exceeds the safety scanner's size limit. Upload a smaller file.");
+    expect(uploadScanFailureReason("safe", "scanner_size_limit")).toBeNull();
+    expect(uploadScanFailureReason("pending", "scanner_size_limit")).toBeNull();
+    expect(uploadScanFailureReason("scanner_error", "private daemon text")).toBeNull();
+  });
   it("allows only objects that passed the isolated scanner", () => {
     const status = "safe";
     expect(isStoredObjectDownloadable(status)).toBe(true);

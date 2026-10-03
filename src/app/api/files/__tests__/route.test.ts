@@ -196,6 +196,21 @@ describe("learner file API integrity metadata boundary", () => {
     expect(response.headers.get("cache-control")).toContain("no-store");
   });
 
+  it("returns a safe size-limit reason without exposing raw scanner errors", async () => {
+    mocks.select.mockImplementation(() => {
+      const call = mocks.select.mock.calls.length;
+      return { from: () => ({ where: () => call === 1 ? Promise.resolve([
+        { id: "size-rejected", sizeBytes: 5, scanStatus: "scanner_error", scanErrorCode: "scanner_size_limit" },
+        { id: "other-error", sizeBytes: 5, scanStatus: "scanner_error", scanErrorCode: "private daemon text" },
+      ]) : { limit: async () => [{ quota: 2 * 1024 ** 3 }] } }) };
+    });
+    const response = await GET();
+    const body = await response.json();
+    expect(body.files[0].scanFailureReason).toBe("This file exceeds the safety scanner's size limit. Upload a smaller file.");
+    expect(JSON.stringify(body)).not.toContain("scanErrorCode");
+    expect(JSON.stringify(body)).not.toContain("private daemon text");
+  });
+
   it("keeps the digest in the server reservation while omitting it from the upload response", async () => {
     const form = new FormData();
     form.set("file", new File(["hello"], "main.py", { type: "text/plain" }));

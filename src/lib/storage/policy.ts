@@ -96,3 +96,10 @@ export function uploadWouldExceedQuota(usedBytes: number, incomingBytes: number,
   }
   return usedBytes > quotaBytes - incomingBytes;
 }
+
+/** Only fixed, learner-safe reasons may leave the scanner metadata boundary. */
+export function uploadScanFailureReason(scanStatus: string, errorCode: unknown): string | null {
+  return scanStatus === "scanner_error" && errorCode === "scanner_size_limit"
+    ? "This file exceeds the safety scanner's size limit. Upload a smaller file."
+    : null;
+}
