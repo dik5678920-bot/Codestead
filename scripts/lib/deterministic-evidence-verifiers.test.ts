@@ -62,6 +62,28 @@ afterEach(async () => {
 });
 
 describe("deterministic evidence check/apply contract", () => {
+  it("captures the exact differing candidate without replacing evidence or passing the check", async () => {
+    const setup = await fixture();
+    const original = '{"old":true}\n';
+    await writeFile(setup.target, original, "utf8");
+    let candidate: string | undefined;
+    await expect(verifyOrApplyDeterministicEvidence({
+      ...options(setup.root, ["--check"]),
+      onMismatch: async (bytes: string) => { candidate = bytes; },
+    })).rejects.toThrow(/Stale evidence artifact/);
+    expect(candidate).toBe(bytes());
+    expect(await readFile(setup.target, "utf8")).toBe(original);
+  });
+  it("does not capture a candidate when the strict bytes already match", async () => {
+    const setup = await fixture();
+    await writeFile(setup.target, bytes(), "utf8");
+    let captures = 0;
+    await verifyOrApplyDeterministicEvidence({
+      ...options(setup.root, ["--check"]),
+      onMismatch: async () => { captures += 1; },
+    });
+    expect(captures).toBe(0);
+  });
   it.each([
     { argv: [] as readonly string[] },
     { argv: ["--check"] as readonly string[] },
