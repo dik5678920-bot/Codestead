@@ -49,7 +49,7 @@ describe("API authorization and IDOR contract matrix", () => {
     const learnerRows = report.rows.filter((row) => row.boundary === "authenticated");
     const selfRows = learnerRows.filter((row) => row.objectAuthorization === "session-user");
 
-    expect(selfRows).toHaveLength(86);
+    expect(selfRows).toHaveLength(88);
     expect(report.identifierOwnershipContracts).toBe(36);
     expect(report.supportingOwnershipProofs).toHaveLength(19);
     expect(report.supportingOwnershipProofs.every((proof) => proof.anchors > 0)).toBe(true);
@@ -66,4 +66,10 @@ describe("API authorization and IDOR contract matrix", () => {
         "POST /api/onboarding/interests/preview",
       ]);
   });
+});
+
+it("binds both password settings operations to the authenticated owner", async () => {
+  for (const operation of ["GET /api/security/password-status", "POST /api/security/change-password"]) {
+    expect(report.rows.find((row) => row.operation === operation)).toMatchObject({ boundary: "authenticated", objectAuthorization: "session-user", anonymous: "authenticated" });
+  }
 });

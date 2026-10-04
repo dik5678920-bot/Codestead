@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, desc, eq, gt, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lte, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -17,6 +17,8 @@ import {
 } from "@/lib/ai/fallback-budget";
 import { AI_PROVIDER_CATALOG, defaultModelForProvider } from "@/lib/ai/provider-catalog";
 import { routeTutorRequest, type ProviderCandidate } from "@/lib/ai/router";
+import { buildPlatformCandidates } from "@/lib/ai/platform-credentials";
+import { consumePlatformQuota, isPlatformQuotaError } from "@/lib/ai/platform-quota";
 import {
   loadMentorRecommendation,
   loadTutorStructuredMemory,
@@ -221,12 +223,14 @@ export async function POST(request: NextRequest) {
       updatedAtToken: providerCredentialUpdatedAtToken,
       lastFour: providerCredential.lastFour,
       isPreferred: providerCredential.isPreferred,
+      status: providerCredential.status,
     })
     .from(providerCredential)
     .where(
       and(
         eq(providerCredential.userId, authz.session.user.id),
-        eq(providerCredential.status, "active"),
+        isNull(providerCredential.disabledAt),
+        inArray(providerCredential.status, ["pending_validation", "active", "invalid", "rate_limited", "unreachable"]),
       ),
     )
     .orderBy(desc(providerCredential.isPreferred), asc(providerCredential.createdAt)),
@@ -237,16 +241,18 @@ export async function POST(request: NextRequest) {
       { status: 409 },
     );
   }
-  const ownCredentials = (encryptedOwnCredentials as EncryptedRow[]).filter((credential) => {
+  const ownCredentials = (encryptedOwnCredentials.filter((row) => row.status === "active") as EncryptedRow[]).filter((credential) => {
     const purpose = consentPurposeForProvider(credential.provider);
     return purpose ? isCurrentConsentAccepted(currentConsents, purpose) : false;
   });
 
-  const policies = await db
+  const providerRows = await db
     .select()
     .from(providerPolicy)
-    .where(eq(providerPolicy.operation, "tutor"))
+    .where(inArray(providerPolicy.operation, ["tutor", "provider_configuration"]))
     .orderBy(asc(providerPolicy.priority));
+  const policies = providerRows.filter((row) => row.operation === "tutor");
+  const connections = providerRows.filter((row) => row.operation === "provider_configuration");
   const configuredProviders = new Set<string>();
   const policyByProvider = new Map<string, (typeof policies)[number]>();
   const policyByProviderModel = new Map<string, (typeof policies)[number]>();
@@ -352,7 +358,19 @@ export async function POST(request: NextRequest) {
   // A learner key that just failed (invalid/rate_limited) drops out of the
   // active set, so an authorized fallback grant must still be considered
   // before deciding there is no routing path.
-  if (ownCredentials.length === 0 && dedupedFallbackRows.length === 0) {
+  const allowedPlatformProviders = new Set(connections.filter((row) => {
+    const purpose = consentPurposeForProvider(row.provider);
+    return row.enabled && row.platformCredential && purpose && isCurrentConsentAccepted(currentConsents, purpose);
+  }).map((row) => row.provider));
+  if (ownCredentials.length === 0 && dedupedFallbackRows.length === 0 && allowedPlatformProviders.size === 0) {
+    const needsPlatformConsent = connections.some((connection) => connection.enabled && connection.platformCredential
+      && !encryptedOwnCredentials.some((row) => row.provider === connection.provider)
+      && policies.some((policy) => policy.enabled && policy.provider === connection.provider
+        && policy.baseUrl === connection.baseUrl && policy.configurationVersion === connection.configurationVersion));
+    if (needsPlatformConsent) return NextResponse.json({
+      error: "Review and accept your provider's routing disclosure in Settings → Privacy & consent to use platform AI.",
+      code: "PLATFORM_AI_CONSENT_REQUIRED",
+    }, { status: 409, headers: noStore });
     return NextResponse.json(
       { error: "Connect an AI key to enable the tutor.", code: "NO_AI_CREDENTIAL" },
       { status: 409 },
@@ -373,6 +391,13 @@ export async function POST(request: NextRequest) {
   const secretBuffers: string[] = [];
   const candidates: ProviderCandidate[] = [];
   try {
+    const platformCandidates = buildPlatformCandidates({
+      learnerId: authz.session.user.id, policies, connections,
+      ownProviders: new Set(encryptedOwnCredentials.map((row) => row.provider)),
+      allowedProviders: allowedPlatformProviders, master,
+    });
+    for (const candidate of platformCandidates) secretBuffers.push(candidate.apiKey);
+    candidates.push(...platformCandidates);
     for (const credential of ownCredentials) {
       const policy = policyByProvider.get(credential.provider);
       if (!policy) continue;
@@ -430,8 +455,8 @@ export async function POST(request: NextRequest) {
       ownCredentials.filter((credential) => credential.isPreferred).map((credential) => credential.id),
     );
     candidates.sort((left, right) => {
-      const sourceOrder = Number(left.source === "admin_fallback") -
-        Number(right.source === "admin_fallback");
+      const sourceOrder = Number(left.source !== "learner") -
+        Number(right.source !== "learner");
       if (sourceOrder !== 0) return sourceOrder;
       const leftPriority = policyByProviderModel.get(`${left.provider}\u0000${left.model}`)?.priority ?? 999;
       const rightPriority = policyByProviderModel.get(`${right.provider}\u0000${right.model}`)?.priority ?? 999;
@@ -523,7 +548,7 @@ export async function POST(request: NextRequest) {
       learnerId: authz.session.user.id,
       candidates,
       allowedProviders: [...new Set(
-        [...ownCredentials, ...dedupedFallbackRows].map((credential) => credential.provider),
+        [...ownCredentials, ...dedupedFallbackRows, ...platformCandidates].map((credential) => credential.provider),
       )],
       messages,
       onFailure: async (failure) => {
@@ -535,6 +560,7 @@ export async function POST(request: NextRequest) {
           });
         }
       },
+      consumePlatformQuota,
       reserveFallback: async (reservation) => reserveFallbackBudget({
         reservationId: reservation.reservationId,
         grantId: reservation.grantId,
@@ -584,12 +610,13 @@ export async function POST(request: NextRequest) {
       await tx.insert(modelCall).values({
         id: callId,
         userId: authz.session.user.id,
-        credentialId: routed.credentialId,
+        credentialId: routed.source === "platform" ? null : routed.credentialId,
         provider: routed.result.provider,
         model: routed.result.model,
         operation: "tutor",
         promptVersion: BUDDY_TUTOR_PROMPT_VERSION,
-        contextManifest: { ...tutorContextManifest, credentialSource: routed.source },
+        contextManifest: { ...tutorContextManifest, credentialSource: routed.source,
+          ...(routed.source === "platform" ? { platformConnectionId: routed.credentialId } : {}) },
         inputTokens: routed.result.inputTokens,
         outputTokens: routed.result.outputTokens,
         latencyMs: routed.result.latencyMs,
@@ -689,6 +716,11 @@ export async function POST(request: NextRequest) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
+    if (isPlatformQuotaError(error)) {
+      return NextResponse.json({ error: error.message, code: error.code }, {
+        status: error.status, headers: { ...noStore, "Retry-After": String(error.retryAfterSeconds) },
+      });
+    }
     // Provider and vault details stay server-side. The authored fallback is
     // the only learner-visible outage message, even for normalized failures.
     void error;

@@ -5,6 +5,12 @@ import { AdminAiModels } from "../admin-ai-models";
 const provider = { provider: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", version: 2, hasPlatformKey: true, model: "test/model", priority: 1, verification: "untested", source: "admin" };
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
 afterEach(() => vi.unstubAllGlobals());
+it("shows today's authoritative platform usage and configured per-user daily limit", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => json({ providers: [provider], platformUsage: { count: 17, date: "2026-10-05", dailyLimit: 25 } })));
+  render(<AdminAiModels />);
+  expect(await screen.findByText(/17 platform requests today/)).toBeInTheDocument();
+  expect(screen.getByText(/25 per user per UTC day/)).toBeInTheDocument();
+});
 it("loads searchable models and labels free variants", async () => {
   vi.stubGlobal("fetch", vi.fn(async (_url, init) => init?.method === "POST" ? json({ models: [{ id: "qwen/model:free", name: "Qwen", free: true }, { id: "paid/model", name: "Paid", free: false }] }) : json({ providers: [provider] })));
   render(<AdminAiModels />);

@@ -19,6 +19,7 @@ import type { MentorRecommendation } from "@/lib/ai/mentor-policy";
 
 import { AiOutputReport } from "./ai-output-report";
 import { ContactAdminButton } from "./contact-admin";
+import { PlatformQuotaDialog } from "@/components/lesson/platform-quota-dialog";
 import styles from "./product-pages.module.css";
 
 type Message = {
@@ -92,6 +93,7 @@ function providerName(value: string | null | undefined) {
 
 function credentialLabel(source: string | null | undefined) {
   if (source === "learner") return "your key";
+  if (source === "platform") return "platform key";
   if (source === "admin_fallback") return "admin-funded fallback";
   return "credential source unavailable";
 }
@@ -141,6 +143,8 @@ export function TutorView() {
   const [sanitizationNotice, setSanitizationNotice] = useState<string | null>(null);
   const [mentorRecommendation, setMentorRecommendation] = useState<MentorRecommendation | null>(null);
   const [hasAiKey, setHasAiKey] = useState<boolean | null>(null);
+  const [quotaPopup, setQuotaPopup] = useState(false);
+  const [consentPopup, setConsentPopup] = useState(false);
   const readSequence = useRef(0);
 
   useEffect(() => {
@@ -339,6 +343,7 @@ export function TutorView() {
       ? failedSend.requestId
       : crypto.randomUUID();
     const optimisticId = `local-user-${requestId}`;
+    let reuseRequestOnFailure = true;
     setMessages((items) => [...items, { id: optimisticId, role: "user", content }]);
     setDrafts((current) => ({ ...current, [draftKey]: "" }));
     setFailedSend(null);
@@ -382,6 +387,11 @@ export function TutorView() {
          mentorRecommendation?: MentorRecommendation;
        }>(response);
       if (!response.ok || !body.content || !body.threadId) {
+        if (body.code === "PLATFORM_AI_QUOTA_EXCEEDED") setQuotaPopup(true);
+        if (body.code === "PLATFORM_AI_CONSENT_REQUIRED") setConsentPopup(true);
+        // These denials occur before any provider call. A later attempt must
+        // re-check consent/credentials/quota instead of replaying the denial.
+        if (body.code?.startsWith("PLATFORM_AI_")) reuseRequestOnFailure = false;
         setMessages((items) => items.filter((message) => message.id !== optimisticId));
         if (body.code === "THREAD_ARCHIVED" && selectedThread) {
           setSelectedThread({ ...selectedThread, status: "archived" });
@@ -430,7 +440,7 @@ export function TutorView() {
         ...current,
         [draftKey]: current[draftKey]?.trim() ? current[draftKey] : content,
       }));
-      setFailedSend({ content, draftKey, requestId });
+      setFailedSend(reuseRequestOnFailure ? { content, draftKey, requestId } : null);
       const message = cause instanceof Error
         ? cause.message
         : "Codestead is offline. Your authored learning tools are still available.";
@@ -469,7 +479,7 @@ export function TutorView() {
       {hasAiKey === false && (
         <section aria-label="No AI provider connected" className={`${styles.aiKeyNotice} card`} role="status">
           <Bot aria-hidden="true" size={20} />
-          <span><strong>Connect an AI key to enable the tutor.</strong><small>Explanations, hints, and chat need a connected provider. Authored lessons and grading still work without one.</small></span>
+          <span><strong>No personal AI key connected.</strong><small>You can use the daily platform allowance when an administrator has configured a provider and you have accepted its routing disclosure. Add your own key to use that provider without the platform quota.</small></span>
           <Link className="button button-secondary" href="/settings">Go to settings</Link>
         </section>
       )}
@@ -514,6 +524,8 @@ export function TutorView() {
         </>}
       </section>}
 
+      {quotaPopup && <PlatformQuotaDialog onClose={() => setQuotaPopup(false)} />}
+      {consentPopup && <PlatformQuotaDialog consent onClose={() => setConsentPopup(false)} />}
       <section className={`${styles.tutorLayout} card`}>
         <aside className={styles.tutorContext} aria-label="Tutor thread history and context">
           <div className={styles.threadHeading}>

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 
 const protectedRoutes = [
+  ["src/app/api/security/change-password/route.ts", ["forced_password_change_user"]],
   ["src/app/api/monitoring/envelope/route.ts", ["monitoring_envelope_user", "monitoring_envelope_ip"]],
   ["src/app/api/access-requests/route.ts", ["access_request_ip", "access_request_email"]],
   ["src/app/api/invitations/validate/route.ts", ["invitation_validate_ip", "invitation_validate_token"]],
