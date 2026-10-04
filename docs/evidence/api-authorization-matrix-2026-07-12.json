@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "files": 125,
-  "operations": 161,
-  "matrixRows": 161,
+  "files": 126,
+  "operations": 163,
+  "matrixRows": 163,
   "boundaryCounts": {
     "public": 6,
     "auth-handler": 2,
-    "authenticated": 90,
+    "authenticated": 92,
     "admin": 63
   },
   "objectAuthorizationCounts": {
     "public-input": 6,
     "administrator-scope": 63,
-    "session-user": 84,
+    "session-user": 86,
     "auth-provider": 2,
     "no-user-object": 4,
     "consent-projected-cohort": 2
@@ -96,6 +96,12 @@
       "purpose": "learner-owned certificate and independent mastery trophy projection",
       "anchors": 3,
       "sourceSha256": "97e18c644acd82affed768be0ed8dec584750ebaec45f127f16acfc432a4817a"
+    },
+    {
+      "file": "src/lib/preferences/profile-settings.ts",
+      "purpose": "owner-bound learning profile preferences and consent-gated cohort visibility",
+      "anchors": 6,
+      "sourceSha256": "a243bc982a675252d708660eb404b4f0ccfbee6d5b0307857c7481dff318c0ef"
     },
     {
       "file": "src/lib/social/profile-service.ts",
@@ -2205,6 +2211,32 @@
       "operationSourceSha256": "936d1e311f20de1d1ac9c5a7a4f1194462f6fa1deb83e10cb328828252fdc902"
     },
     {
+      "operation": "GET /api/settings/profile",
+      "file": "src/app/api/settings/profile/route.ts",
+      "route": "/api/settings/profile",
+      "method": "GET",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "session-user",
+      "ownershipProof": "all user context is derived from authz.session.user.id",
+      "operationSourceSha256": "398101abc7581e538208edb22cf8c1a4726e17bc6b0613faf6e26a507083f986"
+    },
+    {
+      "operation": "PATCH /api/settings/profile",
+      "file": "src/app/api/settings/profile/route.ts",
+      "route": "/api/settings/profile",
+      "method": "PATCH",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "session-user",
+      "ownershipProof": "all user context is derived from authz.session.user.id",
+      "operationSourceSha256": "b79d2944b013449a19bae885574f552dd0f22c6908b03db0b0e5099f4289a630"
+    },
+    {
       "operation": "GET /api/trophies",
       "file": "src/app/api/trophies/route.ts",
       "route": "/api/trophies",
@@ -2224,7 +2256,7 @@
     "guardDecisionTest": "src/lib/http/__tests__/authz.test.ts",
     "representativeObjectAuthorizationTest": "integration/runtime-authorization.integration.test.ts",
     "protectedOperationInvocations": {
-      "anonymousAuthenticated": 90,
+      "anonymousAuthenticated": 92,
       "anonymousAdmin": 63,
       "learnerAdmin": 63
     },

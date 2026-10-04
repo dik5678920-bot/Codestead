@@ -49,9 +49,9 @@ describe("API authorization and IDOR contract matrix", () => {
     const learnerRows = report.rows.filter((row) => row.boundary === "authenticated");
     const selfRows = learnerRows.filter((row) => row.objectAuthorization === "session-user");
 
-    expect(selfRows).toHaveLength(84);
+    expect(selfRows).toHaveLength(86);
     expect(report.identifierOwnershipContracts).toBe(36);
-    expect(report.supportingOwnershipProofs).toHaveLength(17);
+    expect(report.supportingOwnershipProofs).toHaveLength(18);
     expect(report.supportingOwnershipProofs.every((proof) => proof.anchors > 0)).toBe(true);
     expect(report.supportingOwnershipProofs.every((proof) => /^[0-9a-f]{64}$/.test(proof.sourceSha256))).toBe(true);
     expect(selfRows.every((row) => row.ownershipProof.length > 20)).toBe(true);

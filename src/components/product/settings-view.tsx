@@ -22,6 +22,7 @@ import { ModalDialog } from "@/components/ui/modal-dialog";
 import { PasswordInput } from "@/components/ui/password-input";
 
 import styles from "./product-pages.module.css";
+import { ProfileSettingsPanel } from "./profile-settings-panel";
 import { DeviceSessionsPanel } from "./device-sessions-panel";
 import { PrivacyConsentPanel } from "./privacy-consent-panel";
 import { NotificationPreferencesPanel } from "./notification-preferences-panel";
@@ -461,7 +462,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
     if (tab === "privacy") return <PrivacyConsentPanel />;
     if (tab === "device") return <DeviceSessionsPanel />;
     if (tab === "notifications") return <NotificationPreferencesPanel />;
-    return <><h2>Learning profile</h2><p>Your public cohort profile never includes email, failures, raw code, chat, or provider data.</p><div className={styles.form}><label>Display name<input defaultValue="Aarav Rao" /></label><label>Bio<textarea defaultValue="Learning Python and DSA one honest step at a time." /></label><label>Analogy preference<select><option>When helpful</option><option>Frequent</option><option>Neutral only</option></select></label><label>Public cohort fields<select><option>Alias, selected badges, streak, projects</option><option>Alias only</option><option>Hidden profile</option></select></label><button className="button button-primary">Save profile</button></div></>;
+    return <ProfileSettingsPanel />;
   }
 
   return (
