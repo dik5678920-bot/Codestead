@@ -358,7 +358,7 @@ function practiceStatus(value: unknown, responseOk: boolean) {
   return responseOk ? "practice_result" : "error";
 }
 
-function practiceQueueNotice(queue: PracticeRunBody["queue"]) {
+function practiceQueueNotice(queue: PracticeRunBody["queue"], runnerLabel: string) {
   if (!queue || typeof queue.initialState !== "string") return undefined;
   const state = queue.initialState.toLowerCase();
   if (!["queued", "running", "completed", "failed"].includes(state)) return undefined;
@@ -366,16 +366,18 @@ function practiceQueueNotice(queue: PracticeRunBody["queue"]) {
     ? queue.position
     : null;
   return state === "queued"
-    ? `The bounded two-slot runner accepted this job${position ? ` at queue position ${position}` : " in its queue"}.`
-    : `The bounded two-slot runner accepted this job in ${state} state.`;
+    ? `The ${runnerLabel} accepted this job${position ? ` at queue position ${position}` : " in its queue"}.`
+    : `The ${runnerLabel} accepted this job in ${state} state.`;
 }
 
 export function CodeLab({
+  runnerLabel = "isolated NUC runner",
   allowLanguageSelection = false,
   courseId,
   dsaRunnerLanguage,
   skillId,
 }: {
+  runnerLabel?: string;
   allowLanguageSelection?: boolean;
   courseId: string;
   dsaRunnerLanguage?: DsaParityLanguage;
@@ -418,6 +420,7 @@ export function CodeLab({
       <small>Each language keeps a separate saved draft.</small>
     </div>}
     <CodeLabSession
+      runnerLabel={runnerLabel}
       courseId={draftCourseId}
       key={`${draftCourseId}:${starter.language}`}
       onRunningChange={setRunning}
@@ -428,11 +431,13 @@ export function CodeLab({
 }
 
 function CodeLabSession({
+  runnerLabel,
   courseId,
   onRunningChange,
   skillId,
   starter,
 }: {
+  runnerLabel: string;
   courseId: string;
   onRunningChange: (running: boolean) => void;
   skillId: string;
@@ -573,7 +578,7 @@ function CodeLabSession({
     setResultStdin(stdin);
     setResult({
       status: "queued",
-      message: "Waiting for one of two isolated runner slots. The queue is bounded, so this screen will not wait forever.",
+      message: `Waiting for the ${runnerLabel}. The queue is bounded, so this screen will not wait forever.`,
     });
     const payload: PracticeRunRequestPayload = {
       language: starter.language,
@@ -639,7 +644,7 @@ function CodeLabSession({
         stderr: typeof body.stderr === "string"
           ? body.stderr
           : undefined,
-        queueNotice: practiceQueueNotice(body.queue),
+        queueNotice: practiceQueueNotice(body.queue, runnerLabel),
       });
     } catch (error) {
       const clientError = error instanceof PracticeRunClientError ? error.kind : "transport";
@@ -664,7 +669,7 @@ function CodeLabSession({
 
   return <>
     <div className={styles.codeToolbar}>
-      <span><Code2 size={15} /> {codeLabLanguageLabel(starter.language)} practice · isolated NUC runner · no mastery award</span>
+      <span><Code2 size={15} /> {codeLabLanguageLabel(starter.language)} practice · {runnerLabel} · no mastery award</span>
       <div>
         <button disabled={running || inputBlocksEditing} onClick={requestReset} type="button"><RotateCcw size={14} /> Reset</button>
         <button aria-busy={running} aria-controls={outputId} className={styles.runButton} disabled={runDisabled} onClick={run} type="button">{running ? <LoaderCircle className={styles.spin} size={15} /> : <CirclePlay size={15} />} {running ? "Running…" : "Run"}</button>
@@ -850,6 +855,7 @@ export function AuthoredLessonCard({ lesson, publishedStage }: { lesson: Authore
 }
 
 export type LessonWorkspaceProps = {
+  runnerLabel?: string;
   blueprint: AuthoredFallbackLessonBlueprint;
   authoredLesson?: AuthoredLesson;
   assessmentBank?: LearnerAssessmentBank;
@@ -953,7 +959,7 @@ const LESSON_OUTLINE = [
   { id: "source-provenance", label: "Sources" },
 ] as const;
 
-function AuthoredLessonWorkspace({ authoredLesson, assessmentBank, blueprint, skill, courseTitle, moduleTitle, dsaRunnerLanguage, previousHref, nextHref, publishedStage }: LessonWorkspaceProps & { authoredLesson: AuthoredLesson }) {
+function AuthoredLessonWorkspace({ authoredLesson, assessmentBank, blueprint, skill, courseTitle, moduleTitle, dsaRunnerLanguage, previousHref, nextHref, publishedStage, runnerLabel }: LessonWorkspaceProps & { authoredLesson: AuthoredLesson }) {
   const [mode, setMode] = useState<LearningMode>("lesson");
   // Collapsed by default so the lesson gets the width; a viewer who opens it
   // has that choice remembered (see the mount effect below).
@@ -1016,7 +1022,7 @@ function AuthoredLessonWorkspace({ authoredLesson, assessmentBank, blueprint, sk
         <section aria-labelledby={`learning-mode-tab-${mode}`} id="learning-mode-panel" role="tabpanel" tabIndex={0}>
           {mode === "lesson" && <><AuthoredLessonCard lesson={authoredLesson} publishedStage={publishedStage} /><InlineTopicCheckpoint draftPreviewCount={assessmentBank?.items.length ?? 0} skillId={skill.id} /></>}
           {mode === "practice" && <PracticePanel skillId={skill.id} draftPreviewCount={assessmentBank?.items.length ?? 0} />}
-          {mode === "code" && <CodeLab courseId={blueprint.courseId} dsaRunnerLanguage={dsaRunnerLanguage} skillId={skill.id} />}
+          {mode === "code" && <CodeLab courseId={blueprint.courseId} dsaRunnerLanguage={dsaRunnerLanguage} skillId={skill.id} runnerLabel={runnerLabel} />}
           {mode === "visual" && <Visualizer trace={authoredLesson.trace} />}
           {mode === "game" && <LogicGame bank={assessmentBank} skill={skill} />}
         </section>
@@ -1029,7 +1035,7 @@ function AuthoredLessonWorkspace({ authoredLesson, assessmentBank, blueprint, sk
   </div>;
 }
 
-function BlueprintLessonWorkspace({ assessmentBank, blueprint, skill, courseTitle, moduleTitle, dsaRunnerLanguage, nextHref }: LessonWorkspaceProps) {
+function BlueprintLessonWorkspace({ assessmentBank, blueprint, skill, courseTitle, moduleTitle, dsaRunnerLanguage, nextHref, runnerLabel }: LessonWorkspaceProps) {
   const [active, setActive] = useState(0);
   const [mode, setMode] = useState<LearningMode>("lesson");
   useRegisterTutorLesson({ courseId: blueprint.courseId, skillId: skill.id, skillTitle: skill.title });
@@ -1056,7 +1062,7 @@ function BlueprintLessonWorkspace({ assessmentBank, blueprint, skill, courseTitl
         <section aria-labelledby={`learning-mode-tab-${mode}`} id="learning-mode-panel" role="tabpanel" tabIndex={0}>
           {mode === "lesson" && <><article className={styles.lessonCard}><div className={styles.blockMeta}><span>{String(active + 1).padStart(2, "0")} / {String(blueprint.blocks.length).padStart(2, "0")}</span><i>{block.kind.replaceAll("-", " ")}</i></div><h1>{block.title}</h1><p className={styles.blockSummary}>{blockSummary(block)}</p><LessonBlock block={block} /><div className={styles.draftNotice}><ListChecks size={17} /><span><strong>Beta authored fallback</strong><small>{blueprint.provenance.notice}</small></span></div></article><InlineTopicCheckpoint draftPreviewCount={assessmentBank?.items.length ?? 0} skillId={skill.id} /></>}
           {mode === "practice" && <PracticePanel skillId={skill.id} draftPreviewCount={assessmentBank?.items.length ?? 0} />}
-          {mode === "code" && <CodeLab courseId={blueprint.courseId} dsaRunnerLanguage={dsaRunnerLanguage} skillId={skill.id} />}
+          {mode === "code" && <CodeLab courseId={blueprint.courseId} dsaRunnerLanguage={dsaRunnerLanguage} skillId={skill.id} runnerLabel={runnerLabel} />}
           {mode === "visual" && <Visualizer />}
           {mode === "game" && <LogicGame bank={assessmentBank} skill={skill} />}
         </section>

@@ -11,6 +11,7 @@ import { requireAuth } from "@/lib/http/authz";
 import { dsaRunnerLanguage } from "@/lib/learning-service/planner";
 import { learningService } from "@/lib/learning-service/runtime";
 import type { DsaLanguage } from "@/lib/learning-service/types";
+import { configuredRunnerPresentation } from "@/lib/runner/presentation";
 import { isApplicationAuthRequired } from "@/lib/security/runtime-policy";
 
 export default async function SkillPage({ params }: { params: Promise<{ courseId: string; skillId: string }> }) {
@@ -49,5 +50,5 @@ export default async function SkillPage({ params }: { params: Promise<{ courseId
   const index = allSkills.findIndex((skill) => skill.id === location.skill.id);
   const previous = allSkills[index - 1];
   const next = allSkills[index + 1];
-  return <LessonWorkspace blueprint={blueprint} authoredLesson={authoredLesson} assessmentBank={assessmentBank} skill={location.skill} courseTitle={course.title} moduleTitle={location.module.title} dsaRunnerLanguage={selectedDsaLanguage ? dsaRunnerLanguage(selectedDsaLanguage) : undefined} previousHref={previous ? `/courses/${course.id}/skills/${encodeURIComponent(previous.id)}` : undefined} nextHref={next ? `/courses/${course.id}/skills/${encodeURIComponent(next.id)}` : undefined} publishedStage={publishedStage} />;
+  return <LessonWorkspace runnerLabel={configuredRunnerPresentation().runnerLabel} blueprint={blueprint} authoredLesson={authoredLesson} assessmentBank={assessmentBank} skill={location.skill} courseTitle={course.title} moduleTitle={location.module.title} dsaRunnerLanguage={selectedDsaLanguage ? dsaRunnerLanguage(selectedDsaLanguage) : undefined} previousHref={previous ? `/courses/${course.id}/skills/${encodeURIComponent(previous.id)}` : undefined} nextHref={next ? `/courses/${course.id}/skills/${encodeURIComponent(next.id)}` : undefined} publishedStage={publishedStage} />;
 }

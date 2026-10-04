@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import SkillPage from "../page";
 
@@ -66,7 +66,17 @@ beforeEach(() => {
   mocks.isApplicationAuthRequired.mockReturnValue(true);
 });
 
+afterEach(() => vi.unstubAllEnvs());
+
 describe("DSA skill page language binding", () => {
+  it("passes the server-selected Piston label into lesson code labs", async () => {
+    vi.stubEnv("CODE_RUNNER_PROVIDER", "piston");
+    mocks.getDsaImplementationLanguage.mockResolvedValue("Python");
+    render(await SkillPage({ params: Promise.resolve({ courseId: "dsa", skillId: "dsa.arrays" }) }));
+    expect(mocks.lessonWorkspace).toHaveBeenCalledWith(expect.objectContaining({
+      runnerLabel: "isolated Piston runner",
+    }));
+  });
   it.each([
     ["C", "c"],
     ["C++", "cpp"],
