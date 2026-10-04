@@ -1,5 +1,5 @@
-// Piston service maxima in compose.yaml. The deployment contract test keeps
-// these values aligned; the execution adapter and learner copy share them.
+// Public Piston service maxima for learner copy. The deployment contract test
+// keeps these aligned with compose.yaml; exam-pinned execution code stays intact.
 export const PISTON_LIMITS = Object.freeze({
   runTimeoutMs: 3_000,
   compileTimeoutMs: 10_000,

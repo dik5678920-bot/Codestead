@@ -1,7 +1,6 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { configuredPistonRunnerClient, type PistonRunnerClient } from "./piston-client";
-import { configuredCodeRunnerProvider } from "./provider-config";
 
 export type RunnerLanguage = "c" | "cpp" | "java" | "python" | "javascript";
 
@@ -588,7 +587,7 @@ export function isTrustedRunnerJob(job: unknown, request: RunnerRequest): job is
  * configured throws; it never falls back to the other provider.
  */
 export function configuredCodeRunnerClient(): RunnerClient | PistonRunnerClient {
-  const provider = configuredCodeRunnerProvider();
+  const provider = process.env.CODE_RUNNER_PROVIDER || "legacy";
   if (provider === "legacy") return configuredRunnerClient();
   if (provider === "piston") return configuredPistonRunnerClient();
   throw new Error("CODE_RUNNER_PROVIDER must be legacy or piston.");
