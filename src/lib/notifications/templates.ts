@@ -38,6 +38,8 @@ const subjects: Record<EmailTemplate, string> = {
   "lost-device-proof": "Confirm your Codestead lost-device request",
   "access-rejected": "Your Codestead access request",
   "learning-request-updated": "Your Codestead curriculum request was reviewed",
+  "support-request-admin": "A Codestead support request needs attention",
+  "support-request-fixed": "Your Codestead support request was marked fixed",
   "new-device": "A Codestead device was approved",
   "session-revocation-requested": "A device revocation needs review",
   "session-revocation-updated": "Your device revocation request was reviewed",
@@ -78,6 +80,8 @@ export function renderEmail(
     case "lost-device-proof": lead = "Confirm that you requested help with the only active browser profile. This short-lived link is single-use and only opens an administrator review; it does not sign you in or reset a password or authenticator."; action = "Confirm lost-device request"; break;
     case "access-rejected": lead = "The administrator reviewed your private-pilot request and cannot offer a learning seat at this time. No account was created."; action = "Learn more"; break;
     case "learning-request-updated": lead = `The administrator reviewed your curriculum request${variables.subject ? ` for ${variables.subject}` : ""}. Open Codestead to see the decision and recorded reason.`; action = "View request"; break;
+    case "support-request-admin": lead = "A learner sent a new support request. Open the requests queue to review it. Messages and diagnostics are available only inside Codestead."; action = "Review requests"; break;
+    case "support-request-fixed": lead = "The administrator marked your support request fixed. Open Codestead to read the optional reply and try again."; action = "View request"; break;
     case "new-device": lead = "A new browser profile was approved for your account. Contact the administrator immediately if you do not recognize it."; action = "Review security"; break;
     case "session-revocation-requested": lead = `A learner requested revocation of ${variables.device ?? "an approved browser profile"}. Confirm the learner's identity before deciding.`; action = "Review request"; break;
     case "session-revocation-updated": lead = `Your browser-profile revocation request was ${variables.decision ?? "reviewed"}. ${variables.reason ?? "Open Codestead for the recorded decision."}`; action = "Review security"; break;

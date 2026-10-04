@@ -178,14 +178,15 @@ describe("0067 final replay taxonomy", () => {
     );
   });
 
-  it("binds the logical producer registry to exactly 28 native templates and one database-owned backup source map", () => {
+  it("binds the logical producer registry to 30 native templates and one database-owned backup source map", () => {
     const reviewedTemplates = [
       ...SOURCE_MAP_POLICY_TEMPLATES,
       ...Object.keys(RETAINED_TEMPLATE_VERSIONS),
     ];
     expect(new Set(reviewedTemplates).size).toBe(29);
+    const currentTemplates = [...reviewedTemplates, "support-request-admin", "support-request-fixed"];
     expect([...PRODUCTION_EMAIL_TEMPLATES].sort()).toEqual(
-      [...reviewedTemplates].sort(),
+      [...currentTemplates].sort(),
     );
 
     const claimWitness = migrationBlock(
@@ -216,7 +217,7 @@ describe("0067 final replay taxonomy", () => {
       ]),
     );
     const expectedManifest = Object.fromEntries(
-      reviewedTemplates.map((template) => [
+      currentTemplates.map((template) => [
         template,
         template === "backup-status"
           ? "event-v1-source-map"
@@ -226,7 +227,7 @@ describe("0067 final replay taxonomy", () => {
     expect(actualManifest).toEqual(expectedManifest);
     expect(Object.values(actualManifest).filter(
       (version) => version === "event-v1-native",
-    )).toHaveLength(28);
+    )).toHaveLength(30);
     expect(Object.values(actualManifest).filter(
       (version) => version === "event-v1-source-map",
     )).toEqual(["event-v1-source-map"]);

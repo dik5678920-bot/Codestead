@@ -6,6 +6,8 @@ const PRODUCTION_EMAIL_TEMPLATE_DEFINITIONS = Object.freeze([
   "lost-device-proof",
   "access-rejected",
   "learning-request-updated",
+  "support-request-admin",
+  "support-request-fixed",
   "new-device",
   "session-revocation-requested",
   "session-revocation-updated",
@@ -214,6 +216,8 @@ const TEMPLATE_AUTHORITY_POLICY_DEFINITIONS = {
     versions: VERSION_1,
     account: ACTIVE_LEARNER,
   },
+  "support-request-admin": { scope: "account", versions: VERSION_1, account: ACTIVE_ADMIN },
+  "support-request-fixed": { scope: "account", versions: VERSION_1, account: ACTIVE_LEARNER },
   "new-device": {
     scope: "account",
     versions: VERSION_1,

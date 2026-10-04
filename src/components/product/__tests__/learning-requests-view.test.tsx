@@ -31,6 +31,20 @@ async function completeForm(user: ReturnType<typeof userEvent.setup>) {
 describe("learner curriculum request view", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("shows support history with open/resolved labels and an escaped 1000-character message", async () => {
+    const message = '"'.repeat(1000);
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(json({ requests: [
+      { ...existingRequest, kind: "support-ai", subject: "AI model/key problem · google", details: JSON.stringify({ message }), status: "approved", decisionReason: "Try again now" },
+      { ...existingRequest, id: "10000000-0000-4000-8000-000000000002", kind: "support-other", subject: "Other support request", details: JSON.stringify({ message: "Help" }), status: "pending" },
+    ] })));
+    render(<LearningRequestsView />);
+    await screen.findByText("resolved", { exact: true });
+    expect(screen.getByText("open", { exact: true })).toBeInTheDocument();
+    expect(screen.getByText(message)).toBeInTheDocument();
+    expect(screen.getByText("Try again now")).toBeInTheDocument();
+    expect(screen.getByText("Help", { exact: true })).toBeInTheDocument();
+  });
+
   it("loads a validated semantic request list with clear status and details", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ requests: [existingRequest] }));
     vi.stubGlobal("fetch", fetchMock);

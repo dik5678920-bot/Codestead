@@ -8,6 +8,9 @@ import {
 } from "@/lib/learning-requests/repository";
 import { withRateLimit } from "@/lib/security/rate-limit";
 import { containsCredentialOrHiddenEvidence } from "@/lib/security/sensitive-text";
+import { evaluateRequestOrigin } from "@/lib/security/request-origin-policy";
+import { isSupportKind, supportRequestSchema } from "@/lib/learning-requests/support-contract";
+import { createSupportRequest } from "@/lib/learning-requests/support-service";
 
 const createSchema = z.object({
   requestId: z.uuid(),
@@ -64,7 +67,19 @@ export async function POST(request: NextRequest) {
   const authz = await requireAuth();
   if (!authz.session) return authz.response;
 
-  const body = createSchema.safeParse(await request.json().catch(() => null));
+  const origin = evaluateRequestOrigin({ method: request.method, headers: request.headers, appUrl: process.env.APP_URL, production: process.env.NODE_ENV === "production" });
+  if (!origin.allowed) return NextResponse.json({ error: origin.code }, { status: origin.status, headers: noStoreHeaders });
+  const raw = await request.json().catch(() => null);
+  if (raw && typeof raw.kind === "string" && isSupportKind(raw.kind)) {
+    const support = supportRequestSchema.safeParse(raw);
+    if (!support.success) return NextResponse.json({ error: "Choose a category and provide a message up to 1000 characters. Remove keys and private content.", code: "SUPPORT_REQUEST_INVALID_INPUT" }, { status: 400, headers: noStoreHeaders });
+    try { return await createSupportRequest(authz.session.user.id, support.data); }
+    catch (error) {
+      if (error instanceof Error && error.message === "IDEMPOTENCY_MISMATCH") return NextResponse.json({ error: "This retry has different content. Start a new request.", code: "SUPPORT_REQUEST_IDEMPOTENCY_MISMATCH" }, { status: 409, headers: noStoreHeaders });
+      return repositoryErrorResponse(error);
+    }
+  }
+  const body = createSchema.safeParse(raw);
   if (!body.success) {
     return NextResponse.json(
       {

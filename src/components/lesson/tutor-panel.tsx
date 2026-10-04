@@ -1,4 +1,5 @@
 "use client";
+import { ContactAdminButton } from "@/components/product/contact-admin";
 
 import { ArrowUp, Check, Minus, PanelRightClose, PanelRightOpen, PenLine, Sparkles, SquarePen } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -664,7 +665,7 @@ export function TutorLauncher() {
             if (item.role === "user") return <div className={styles.userMessage} key={item.id}>{item.content}</div>;
             const text = reveal?.id === item.id ? item.content.slice(0, reveal.shown) : item.content;
             return <div className={styles.aiMessage} data-error={item.error ? "true" : undefined} key={item.id}>
-              {item.error ? item.content : <TutorMarkdown>{text}</TutorMarkdown>}
+              {item.error ? <>{item.content}<ContactAdminButton /></> : <TutorMarkdown>{text}</TutorMarkdown>}
             </div>;
           })}
         </div>

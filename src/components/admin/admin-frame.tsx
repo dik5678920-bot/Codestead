@@ -15,7 +15,7 @@ const links = [
   { href: "/admin/appeals", label: "Appeals", icon: Scale, exact: false },
   { href: "/admin/assessment-corrections", label: "Regrading", icon: Wrench, exact: false },
   { href: "/admin/project-review-corrections", label: "Project corrections", icon: Wrench, exact: false },
-  { href: "/admin/requests", label: "Curriculum requests", icon: BookOpenCheck, exact: false },
+  { href: "/admin/requests", label: "Requests", icon: BookOpenCheck, exact: false },
   { href: "/admin/curriculum", label: "Course review", icon: BookOpenCheck, exact: false },
   { href: "/admin/module-projects", label: "Module projects", icon: FolderKanban, exact: false },
   { href: "/admin/career", label: "Career guidance", icon: BriefcaseBusiness, exact: false },

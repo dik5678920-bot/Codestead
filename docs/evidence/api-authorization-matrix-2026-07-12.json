@@ -20,6 +20,12 @@
   "identifierOwnershipContracts": 36,
   "supportingOwnershipProofs": [
     {
+      "file": "src/lib/learning-requests/support-service.ts",
+      "purpose": "session-owned support receipts and open-request dedupe",
+      "anchors": 3,
+      "sourceSha256": "1609bf43fb9c5f491454d7bd99f3d1739f6dc9afddd8017027f7b8a2a39096c0"
+    },
+    {
       "file": "src/lib/battles/service.ts",
       "purpose": "scope-visible battles, participant-bound submissions, and reviewed immutable challenge sources",
       "anchors": 4,
@@ -843,7 +849,7 @@
       "admin": "allowed",
       "objectAuthorization": "administrator-scope",
       "ownershipProof": "requireAdmin() before request parsing or data access",
-      "operationSourceSha256": "9df72f92c855e9e19163d51b0c62ec0169c06ba689c251ed0d9b9b3bc85399a9"
+      "operationSourceSha256": "4fa7a6109283b650d49c02490dbe743d59c8b77d48f92bb2aaea1dd1689ac312"
     },
     {
       "operation": "GET /api/admin/learning-requests",
@@ -856,7 +862,7 @@
       "admin": "allowed",
       "objectAuthorization": "administrator-scope",
       "ownershipProof": "requireAdmin() before request parsing or data access",
-      "operationSourceSha256": "406c317f5a2ff1803b021d686066a27224e90f387f11a25eff417c4bbecc0826"
+      "operationSourceSha256": "d89138d1cd82c44925aac5233a090d6d2b9882fc0efeeebb0c822f201bce9559"
     },
     {
       "operation": "POST /api/admin/module-projects/[templateId]/decision",
@@ -1610,7 +1616,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "4150c011ede0b4384aff61083ccbe1a8458378cedd8c4d26a7ef4804facc7fdc"
+      "operationSourceSha256": "50b1825342b8cd7350c0d13b430f00d80eb2447bda106d09586ab2601cfd5722"
     },
     {
       "operation": "POST /api/learning/attempts/[attemptId]/help",
