@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { TutorMarkdown } from "./tutor-markdown";
+import { PlatformQuotaDialog } from "./platform-quota-dialog";
 
 export function ConfirmedInterestAnalogy({ courseId, skillId }: { courseId: string; skillId: string }) {
   const [busy, setBusy] = useState(false);
   const [state, setState] = useState<"ready" | "empty" | "neutral">("ready");
   const [content, setContent] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<"quota" | "consent" | null>(null);
   const request = useRef<string | null>(null);
   const active = useRef<AbortController | null>(null);
   useEffect(() => () => active.current?.abort(), []);
@@ -44,7 +46,12 @@ export function ConfirmedInterestAnalogy({ courseId, skillId }: { courseId: stri
         body: request.current, signal: controller.signal,
       });
       const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? "The analogy could not be applied.");
+      if (!response.ok) {
+        if (body.code === "PLATFORM_AI_QUOTA_EXCEEDED") setNotice("quota");
+        if (body.code === "PLATFORM_AI_CONSENT_REQUIRED") setNotice("consent");
+        if (typeof body.code === "string" && body.code.startsWith("PLATFORM_AI_")) request.current = null;
+        throw new Error(body.error ?? "The analogy could not be applied.");
+      }
       if (typeof body.content !== "string" || !body.content.trim()) throw new Error("The tutor returned no analogy. Please retry.");
       if (!controller.signal.aborted) {
         setContent(body.content);
@@ -61,6 +68,7 @@ export function ConfirmedInterestAnalogy({ courseId, skillId }: { courseId: stri
   }
 
   return <div>
+    {notice && <PlatformQuotaDialog consent={notice === "consent"} onClose={() => setNotice(null)} />}
     <button className="button button-secondary" disabled={busy} onClick={() => void apply()} type="button">
       {busy ? "Applying analogy…" : "Use my confirmed interests"}
     </button>

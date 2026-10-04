@@ -48,7 +48,48 @@ function result(overrides: Partial<ProviderResult> = {}): ProviderResult {
 }
 
 describe("AI provider isolation and fallback policy", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => { mocks.callProvider.mockReset(); });
+
+  it("serves a keyless learner through the platform model after consuming one daily request", async () => {
+    mocks.callProvider.mockResolvedValue(result());
+    const consumePlatformQuota = vi.fn(async () => {});
+    await expect(routeTutorRequest({ learnerId: "learner-1", candidates: [candidate({ source: "platform", ownerUserId: "platform" })], allowedProviders, messages, consumePlatformQuota }))
+      .resolves.toMatchObject({ source: "platform" });
+    expect(consumePlatformQuota).toHaveBeenCalledExactlyOnceWith("learner-1");
+    expect(mocks.callProvider).toHaveBeenCalledOnce();
+  });
+
+  it("never uses the platform key for a provider with a learner key, even when that key fails", async () => {
+    mocks.callProvider.mockRejectedValue(new ProviderError("Invalid key", "AUTHENTICATION"));
+    const consumePlatformQuota = vi.fn(async () => {});
+    await expect(routeTutorRequest({ learnerId: "learner-1", candidates: [candidate({ source: "platform", ownerUserId: "platform" }), candidate()], allowedProviders, messages, consumePlatformQuota })).rejects.toThrow();
+    expect(mocks.callProvider).toHaveBeenCalledOnce();
+    expect(consumePlatformQuota).not.toHaveBeenCalled();
+  });
+
+  it("tries learner keys before platform keys without charging successful own-key requests", async () => {
+    mocks.callProvider.mockResolvedValue(result());
+    const consumePlatformQuota = vi.fn(async () => {});
+    await expect(routeTutorRequest({ learnerId: "learner-1", candidates: [candidate({ source: "platform", provider: "openrouter" }), candidate()], allowedProviders, messages, consumePlatformQuota })).resolves.toMatchObject({ source: "learner" });
+    expect(consumePlatformQuota).not.toHaveBeenCalled();
+  });
+
+  it("does not send a prompt when platform quota cannot be reserved", async () => {
+    const exhausted = Object.assign(new Error("Daily quota used up"), { code: "PLATFORM_AI_QUOTA_EXCEEDED" });
+    const consumePlatformQuota = vi.fn().mockRejectedValue(exhausted);
+    await expect(routeTutorRequest({ learnerId: "learner-1", candidates: [candidate({ source: "platform" })], allowedProviders, messages, consumePlatformQuota })).rejects.toBe(exhausted);
+    expect(mocks.callProvider).not.toHaveBeenCalled();
+  });
+
+  it("charges one request across platform provider failover and fails closed without a limiter", async () => {
+    const candidates = [candidate({ source: "platform" }), candidate({ source: "platform", provider: "openrouter" })];
+    await expect(routeTutorRequest({ learnerId: "learner-1", candidates, allowedProviders, messages })).rejects.toThrow();
+    expect(mocks.callProvider).not.toHaveBeenCalled();
+    mocks.callProvider.mockRejectedValueOnce(new ProviderError("Unavailable", "UNAVAILABLE")).mockResolvedValueOnce(result({ provider: "openrouter" }));
+    const consumePlatformQuota = vi.fn(async () => {});
+    await routeTutorRequest({ learnerId: "learner-1", candidates, allowedProviders, messages, consumePlatformQuota });
+    expect(consumePlatformQuota).toHaveBeenCalledOnce();
+  });
 
   it("reports a foreign-realm provider failure before trying the next credential", async () => {
     const foreignError = runInNewContext('Object.assign(new Error("safe failure"), { name: "ProviderError", code: "AUTHENTICATION", status: 401 })');

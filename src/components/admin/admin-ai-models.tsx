@@ -8,11 +8,12 @@ import styles from "./admin-ai-models.module.css";
 type ProviderSetting = { provider: string; label: string; baseUrl: string; version: number; hasPlatformKey: boolean; model: string; priority: number; verification: string; verifiedAt?: string | null; source: string };
 type Model = { id: string; name: string; free: boolean };
 type TestReply = { content: string; latencyMs: number; httpStatus: number; proof: string; reportedModel: string };
-async function fetchSettings(): Promise<ProviderSetting[]> {
+type PlatformUsage = { count: number; date: string; dailyLimit: number };
+async function fetchSettings(): Promise<{ providers: ProviderSetting[]; platformUsage?: PlatformUsage }> {
   const response = await fetch("/api/admin/ai-models", { cache: "no-store" });
   const body = await response.json();
   if (!response.ok || !Array.isArray(body.providers)) throw new Error("AI model settings could not be loaded.");
-  return body.providers;
+  return body;
 }
 async function post(command: Record<string, unknown>) {
   const response = await withStepUp(() => fetch("/api/admin/ai-models", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command) }));
@@ -50,9 +51,9 @@ function ProviderCard({ setting, reload }: { setting: ProviderSetting; reload: (
     <header><h2>{setting.label}</h2><small>Current default: {setting.model || "Not configured"} · {setting.verification} · {setting.source === "admin" ? "Administrator saved" : "Environment or built-in default"}</small></header>
     <fieldset disabled={busy} className={styles.fields}>
       <label>HTTPS base URL<input type="url" value={baseUrl} onChange={(event) => { setBaseUrl(event.target.value); setReply(null); setVerification("untested"); }} required /></label>
-      <label>Platform API key<PasswordInput value={platformKey} autoComplete="off" onChange={(event) => setPlatformKey(event.target.value)} placeholder={setting.hasPlatformKey ? "Stored securely; enter a replacement" : "Optional; used only to load and test models"} /></label>
+      <label>Platform API key<PasswordInput value={platformKey} autoComplete="off" onChange={(event) => setPlatformKey(event.target.value)} placeholder={setting.hasPlatformKey ? "Stored securely; enter a replacement" : "Optional; enables platform AI for learners"} /></label>
       {setting.hasPlatformKey && <label><span><input type="checkbox" checked={removeKey} onChange={(event) => setRemoveKey(event.target.checked)} /> Remove stored platform key</span></label>}
-      <small>Platform keys are never used to serve learners. Changing the endpoint requires replacing or removing its stored key. Save connection edits before loading or testing.</small>
+      <small>Learners without their own key for this provider can use the platform key within their daily allowance, with the saved default model and their routing consent. Changing the endpoint requires replacing or removing its stored key. Save connection edits before loading or testing.</small>
       <button className="button button-secondary" type="button" disabled={!dirtyConnection || !baseUrl || (removeKey && Boolean(platformKey))} onClick={() => void run(async () => {
         await post({ ...commandBase, action: "configure", baseUrl, ...(platformKey ? { platformKey } : {}), ...(removeKey ? { removeKey } : {}) });
         setPlatformKey(""); setReply(null); await reload();
@@ -93,20 +94,22 @@ function ProviderCard({ setting, reload }: { setting: ProviderSetting; reload: (
   </article>;
 }
 export function AdminAiModels() {
+  const [usage, setUsage] = useState<PlatformUsage | null>(null);
   const [settings, setSettings] = useState<ProviderSetting[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const reload = useCallback(async () => {
-    setSettings(await fetchSettings()); setError(null);
+    const body = await fetchSettings(); setSettings(body.providers); setUsage(body.platformUsage ?? null); setError(null);
   }, []);
   useEffect(() => {
     let active = true;
-    fetchSettings().then((providers) => { if (active) { setSettings(providers); setError(null); } })
+    fetchSettings().then((body) => { if (active) { setSettings(body.providers); setUsage(body.platformUsage ?? null); setError(null); } })
       .catch(() => { if (active) setError("AI model settings could not be loaded."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
-  return <div className={styles.page}><header><h1>AI models</h1><p>Choose the app-wide model and failover order for each provider. Platform keys are for model discovery and testing only.</p></header>
+  return <div className={styles.page}><header><h1>AI models</h1><p>Choose the app-wide model and failover order for each provider. Platform keys enable AI for learners without their own key.</p></header>
+    {usage && <p aria-live="polite">{usage.count} platform requests today · {usage.date} (UTC). {usage.dailyLimit} per user per UTC day. Counts admitted requests, including provider failures.</p>}
     {loading && <p role="status">Loading AI model settings…</p>}
     {error && <div role="alert"><p>{error}</p><button className="button button-secondary" onClick={() => void reload().catch(() => setError("AI model settings could not be loaded."))} type="button">Retry</button></div>}
     <div className={styles.grid}>{settings.map((setting) => <ProviderCard key={`${setting.provider}:${setting.version}:${setting.model}:${setting.priority}:${setting.verification}`} setting={setting} reload={reload} />)}</div>

@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
   recordProviderCredentialOutcome: vi.fn(),
   reserveFallbackBudget: vi.fn(),
   reconcileFallbackBudget: vi.fn(),
+  consumePlatformQuota: vi.fn(),
 }));
 
 const state = vi.hoisted(() => ({
@@ -67,6 +68,10 @@ vi.mock("@/lib/ai/provider-operation-idempotency", () => {
   };
 });
 vi.mock("@/lib/ai/router", () => ({ routeTutorRequest: mocks.routeTutorRequest }));
+vi.mock("@/lib/ai/platform-quota", async (original) => ({
+  ...(await original<typeof import("@/lib/ai/platform-quota")>()),
+  consumePlatformQuota: mocks.consumePlatformQuota,
+}));
 vi.mock("@/lib/content", () => ({
   createContentRepository: () => ({
     getCourse: mocks.getCourse,
@@ -113,6 +118,7 @@ vi.mock("@/lib/ai/fallback-budget", () => ({
 }));
 
 import { ProviderError } from "@/lib/ai/types";
+import { PlatformQuotaError } from "@/lib/ai/platform-quota";
 import { POST } from "../route";
 
 const THREAD_ID = "10000000-0000-4000-8000-000000000001";
@@ -150,6 +156,7 @@ const credential = {
   updatedAtToken: "2026-07-12T10:00:00.000000Z",
   lastFour: "WXYZ",
   isPreferred: true,
+  status: "active",
 };
 const nimPolicy = {
   id: "policy-nim",
@@ -221,7 +228,7 @@ function queueExecution(input: {
   }
 }
 
-function providerSuccess(credentialId = CREDENTIAL_ID, source: "learner" | "admin_fallback" = "learner") {
+function providerSuccess(credentialId = CREDENTIAL_ID, source: "learner" | "platform" | "admin_fallback" = "learner") {
   return {
     credentialId,
     source,
@@ -359,6 +366,49 @@ describe("tutor route durable execution coverage", () => {
     else process.env.CREDENTIAL_MASTER_KEY = originalMasterKey;
     if (originalNimModel === undefined) delete process.env.NVIDIA_NIM_TUTOR_MODEL;
     else process.env.NVIDIA_NIM_TUTOR_MODEL = originalNimModel;
+  });
+
+  it("serves a keyless learner with the admin model without persisting a policy ID as a credential FK", async () => {
+    const connection = { ...nimPolicy, id: FALLBACK_CREDENTIAL_ID, operation: "provider_configuration", baseUrl: "https://api.example.com/v1", configurationVersion: 2, platformCredential: { ciphertext: "ciphertext", wrappedDataKey: "wrapped-key", wrapIv: "wrap-iv", dataIv: "data-iv", authTag: "auth-tag", keyVersion: 1 } };
+    queueExecution({ credentials: [], policies: [{ ...nimPolicy, baseUrl: connection.baseUrl, configurationVersion: 2 }, connection] });
+    mocks.openCredential.mockReturnValueOnce("platform-secret");
+    mocks.routeTutorRequest.mockResolvedValueOnce(providerSuccess(FALLBACK_CREDENTIAL_ID, "platform"));
+    const response = await POST(tutorRequest());
+    expect(response.status).toBe(200);
+    expect(mocks.routeTutorRequest).toHaveBeenCalledWith(expect.objectContaining({
+      consumePlatformQuota: mocks.consumePlatformQuota,
+      candidates: [expect.objectContaining({ source: "platform", model: nimPolicy.model, apiKey: "platform-secret" })],
+    }));
+    expect(state.persistedValues).toContainEqual(expect.objectContaining({ credentialId: null, contextManifest: expect.objectContaining({ credentialSource: "platform", platformConnectionId: connection.id }) }));
+    expect(JSON.stringify(await response.json())).not.toMatch(/platform-secret|ciphertext/);
+  });
+
+  it("returns typed quota exhaustion rather than an indistinguishable provider outage", async () => {
+    queueExecution();
+    mocks.routeTutorRequest.mockRejectedValueOnce(new PlatformQuotaError("PLATFORM_AI_QUOTA_EXCEEDED", 429, 43200));
+    const response = await POST(tutorRequest());
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ code: "PLATFORM_AI_QUOTA_EXCEEDED" });
+    expect(mocks.transaction).not.toHaveBeenCalled();
+  });
+
+  it("keeps the platform key off for a provider whose learner key was invalidated", async () => {
+    const connection = { ...nimPolicy, id: FALLBACK_CREDENTIAL_ID, operation: "provider_configuration", baseUrl: "https://api.example.com/v1", configurationVersion: 2, platformCredential: { keyVersion: 1 } };
+    queueExecution({ credentials: [{ ...credential, status: "invalid" }], policies: [{ ...nimPolicy, baseUrl: connection.baseUrl, configurationVersion: 2 }, connection] });
+    await POST(tutorRequest());
+    expect(mocks.routeTutorRequest).toHaveBeenCalledWith(expect.objectContaining({ candidates: [] }));
+    expect(mocks.openCredential).not.toHaveBeenCalled();
+  });
+
+  it("asks keyless learners for provider consent without decrypting or sending their prompt", async () => {
+    state.acceptedPurposes.delete("provider:nvidia_nim");
+    const connection = { ...nimPolicy, operation: "provider_configuration", baseUrl: "https://api.example.com/v1", configurationVersion: 2, platformCredential: { keyVersion: 1 } };
+    queueExecution({ credentials: [], policies: [{ ...nimPolicy, baseUrl: connection.baseUrl, configurationVersion: 2 }, connection] });
+    const response = await POST(tutorRequest());
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: "PLATFORM_AI_CONSENT_REQUIRED" });
+    expect(mocks.routeTutorRequest).not.toHaveBeenCalled();
+    expect(mocks.openCredential).not.toHaveBeenCalled();
   });
 
   it.each([

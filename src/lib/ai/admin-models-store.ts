@@ -34,7 +34,8 @@ export const adminModelsStore: AdminModelsStore = {
       }).onConflictDoUpdate({ target: [providerPolicy.provider, providerPolicy.operation, providerPolicy.model], set: {
         baseUrl: change.baseUrl, platformCredential: change.platformCredential, configurationVersion: change.version + 1, updatedAt: now,
       } });
-      // Endpoint/key changes invalidate the previous verification; learner keys remain the only tutor credentials.
+      // Endpoint/key changes invalidate model verification and keep the saved
+      // policies bound to the current connection revision for tutor routing.
       await tx.update(providerPolicy).set({ baseUrl: change.baseUrl, configurationVersion: change.version + 1, verificationStatus: "untested", verifiedReportedModel: null, verifiedAt: null, updatedAt: now })
         .where(and(eq(providerPolicy.provider, change.provider), inArray(providerPolicy.operation, ["tutor", "credential_validation"])));
       await writeAuditEventInTransaction(tx, { actorUserId: actorId, action: "ai_models.configure", resourceType: "provider_policy", outcome: "success", metadata: { provider: change.provider, revision: change.version + 1, platformAccessConfigured: Boolean(change.platformCredential) } });

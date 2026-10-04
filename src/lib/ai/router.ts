@@ -15,7 +15,7 @@ export interface ProviderCandidate {
   timeoutMs?: number;
   baseUrl?: string;
   verifiedReportedModel?: string;
-  source: "learner" | "admin_fallback";
+  source: "learner" | "platform" | "admin_fallback";
   fallbackGrantId?: string;
   fallbackStartsAt?: Date;
   fallbackExpiresAt?: Date;
@@ -64,6 +64,7 @@ export async function routeTutorRequest(input: {
   candidates: ProviderCandidate[];
   allowedProviders: readonly SupportedProvider[];
   messages: TutorMessage[];
+  consumePlatformQuota?: (learnerId: string) => Promise<void>;
   now?: Date;
   onFailure?: (failure: RoutingFailure) => Promise<void> | void;
   reserveFallback?: (reservation: FallbackReservation) => Promise<boolean>;
@@ -73,11 +74,13 @@ export async function routeTutorRequest(input: {
 }): Promise<{ result: ProviderResult; credentialId: string; source: ProviderCandidate["source"] }> {
   const now = input.now ?? new Date();
   const allowedProviders = new Set(input.allowedProviders);
+  const ownProviders = new Set(input.candidates.filter((candidate) => candidate.source === "learner" && candidate.ownerUserId === input.learnerId).map((candidate) => candidate.provider));
   const candidates = input.candidates
     .map((candidate, ordinal) => ({ candidate, ordinal }))
     .filter(({ candidate }) => {
       if (!allowedProviders.has(candidate.provider)) return false;
       if (candidate.source === "learner") return candidate.ownerUserId === input.learnerId;
+      if (candidate.source === "platform") return Boolean(input.consumePlatformQuota) && !ownProviders.has(candidate.provider);
       return (
         candidate.fallbackGrantId !== undefined &&
         candidate.fallbackStartsAt !== undefined &&
@@ -93,13 +96,18 @@ export async function routeTutorRequest(input: {
     // Learner-owned enabled keys are always exhausted in their supplied order
     // before an administrator-funded destination can receive the prompt.
     .sort((left, right) =>
-      Number(left.candidate.source === "admin_fallback") -
-        Number(right.candidate.source === "admin_fallback") ||
+      Number(left.candidate.source !== "learner") -
+        Number(right.candidate.source !== "learner") ||
       left.ordinal - right.ordinal)
     .map(({ candidate }) => candidate);
   const inputTokenUpperBound = conservativeMessageTokenUpperBound(input.messages);
+  let platformQuotaConsumed = false;
 
   for (const candidate of candidates) {
+    if (candidate.source === "platform" && !platformQuotaConsumed) {
+      await input.consumePlatformQuota!(input.learnerId);
+      platformQuotaConsumed = true;
+    }
     let fallbackReservation: FallbackReservation | null = null;
     let maxOutputTokens = candidate.maxOutputTokens;
     if (candidate.source === "admin_fallback") {

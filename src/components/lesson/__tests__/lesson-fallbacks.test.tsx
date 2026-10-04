@@ -29,6 +29,21 @@ async function openAnalogy() {
 }
 
 describe("honest lesson fallbacks", () => {
+  it("opens the quota popup for analogy requests and rechecks quota with a fresh identity on retry", async () => {
+    const profile = { profile: { analogyInterests: [{ label: "cooking", confirmed: true }] } };
+    const fetchMock = vi.fn().mockResolvedValueOnce(json(profile))
+      .mockResolvedValueOnce(json({ code: "PLATFORM_AI_QUOTA_EXCEEDED", error: "Daily quota used up" }, 429))
+      .mockResolvedValueOnce(json(profile)).mockResolvedValueOnce(json({ content: "A program follows a recipe." }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = await openAnalogy();
+    await user.click(screen.getByRole("button", { name: "Use my confirmed interests" }));
+    const dialog = await screen.findByRole("dialog", { name: "Add your own free key" });
+    expect(dialog).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Continue later" }));
+    await user.click(screen.getByRole("button", { name: "Use my confirmed interests" }));
+    expect(await screen.findByText("A program follows a recipe.")).toBeInTheDocument();
+    expect(JSON.parse(fetchMock.mock.calls[1]![1].body).requestId).not.toBe(JSON.parse(fetchMock.mock.calls[3]![1].body).requestId);
+  });
   it("does not fabricate a trace when the skill has none", () => {
     render(<Visualizer />);
     expect(screen.getByText("No visual trace for this skill yet")).toBeInTheDocument();
