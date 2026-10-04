@@ -159,6 +159,18 @@ describe("credential collection API", () => {
     );
   });
 
+  it("accepts Google's AQ key format without exposing the key", async () => {
+    const googleSecret = "AQ." + "syntheticValue".repeat(3);
+    const response = await POST(new NextRequest("https://learn.test/api/credentials", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ provider: "google", label: "Google key", secret: googleSecret }),
+    }));
+    expect(response.status).toBe(201);
+    expect(mocks.validateProviderCredential).toHaveBeenCalledWith(expect.objectContaining({ provider: "google", secret: googleSecret }));
+    expect(JSON.stringify(await response.json())).not.toContain(googleSecret);
+  });
+
   it("records an invalid probe as failed without returning key material", async () => {
     mocks.validateProviderCredential.mockResolvedValueOnce({
       status: "invalid",

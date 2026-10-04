@@ -43,6 +43,7 @@ describe("audit metadata fail-closed contract", () => {
     { list: [{ credentialId: "id" }] },
     { note: "sk-this-is-a-secret-value" },
     { note: "AIza1234567890" },
+    { note: "AQ." + "syntheticValue".repeat(3) },
     { note: "ghp_1234567890" },
     { note: "xoxb-1234567890" },
   ])("rejects secret-like metadata %#", (metadata) => {

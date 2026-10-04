@@ -35,7 +35,7 @@ export interface ProviderResult {
 
 const providerErrorCodes = [
   "AUTHENTICATION", "RATE_LIMIT", "TIMEOUT", "UNAVAILABLE",
-  "BAD_RESPONSE", "POLICY", "UNKNOWN",
+  "BAD_RESPONSE", "MODEL_NOT_FOUND", "BAD_REQUEST", "POLICY", "UNKNOWN",
 ] as const;
 
 export type ProviderErrorCode = typeof providerErrorCodes[number];

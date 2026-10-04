@@ -30,18 +30,16 @@ export async function validateProviderCredential(input: {
     )
     .orderBy(asc(providerPolicy.priority))
     .limit(1);
-  const model =
-    policy?.model ??
-    (input.provider === "nvidia_nim"
-      ? process.env.NVIDIA_NIM_VALIDATION_MODEL ?? "mistralai/mistral-nemotron"
-      // custom_openai_compatible has no self-serve default: it only works
-      // with an administrator-configured base URL and policy row.
-      : input.provider === "custom_openai_compatible"
-        ? null
-        : defaultModelForProvider(input.provider as CatalogProviderId));
+  // Administrator policy wins, followed by a validation override and the tutor default.
+  const validationEnv = `${input.provider.toUpperCase()}_VALIDATION_MODEL`;
+  const model = policy?.model ?? (
+    input.provider === "custom_openai_compatible"
+      ? null
+      : process.env[validationEnv]?.trim() || defaultModelForProvider(input.provider as CatalogProviderId)
+  );
 
   if (!model) {
-    console.warn("Provider credential validation failed", { provider: input.provider, code: "POLICY" });
+    console.warn("Provider credential validation failed", { provider: input.provider, code: "POLICY", httpStatus: null });
     return {
       status: "unreachable" as const,
       failureCode: "POLICY",
@@ -69,7 +67,7 @@ export async function validateProviderCredential(input: {
         ? "invalid"
         : "unreachable";
     const failureCode = providerError?.code ?? "UNKNOWN";
-    console.warn("Provider credential validation failed", { provider: input.provider, code: failureCode });
+    console.warn("Provider credential validation failed", { provider: input.provider, code: failureCode, httpStatus: providerError?.status ?? null });
     await db.insert(modelCall).values({
       userId: input.userId,
       credentialId: input.credentialId,

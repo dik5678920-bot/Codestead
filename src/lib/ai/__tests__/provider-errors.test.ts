@@ -59,7 +59,8 @@ describe("provider protocol and response hardening", () => {
 
   it.each([
     [401, "AUTHENTICATION"], [403, "AUTHENTICATION"], [429, "RATE_LIMIT"],
-    [500, "UNAVAILABLE"], [503, "UNAVAILABLE"], [400, "UNKNOWN"],
+    [500, "UNAVAILABLE"], [503, "UNAVAILABLE"], [400, "BAD_REQUEST"], [422, "BAD_REQUEST"],
+    [404, "MODEL_NOT_FOUND"], [410, "MODEL_NOT_FOUND"], [418, "UNKNOWN"],
   ])("normalizes HTTP %s without reflecting the response body", async (status, code) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("private prompt echoed here", {
       status,
@@ -72,9 +73,41 @@ describe("provider protocol and response hardening", () => {
   });
 
   it.each([
+    ["google", "INVALID_ARGUMENT", "API key not valid. Please pass a valid API key.", "AUTHENTICATION"],
+    ["google", "INVALID_ARGUMENT", "Invalid model parameter", "BAD_REQUEST"],
+    ["google", "OTHER", "API key not valid", "BAD_REQUEST"],
+    ["openai", "INVALID_ARGUMENT", "API key not valid", "BAD_REQUEST"],
+  ] as const)("classifies %s HTTP 400 %s safely", async (provider, status, message, code) => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { status, message } }), { status: 400 })));
+    const error = await callProvider(request(provider)).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ code, status: 400 });
+    expect((error as Error).message).not.toContain(message);
+  });
+
+  it("logs only provider, code, and HTTP status on HTTP failure", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("provider-secret private body", { status: 410 })));
+      await expect(callProvider(request())).rejects.toMatchObject({ code: "MODEL_NOT_FOUND" });
+      expect(warn).toHaveBeenCalledExactlyOnceWith("Provider request failed", { provider: "nvidia_nim", code: "MODEL_NOT_FOUND", httpStatus: 410 });
+    } finally { warn.mockRestore(); }
+  });
+
+  it("accepts final content alongside private reasoning within the output budget", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      choices: [{ message: { content: "OK", reasoning_content: "private reasoning" }, finish_reason: "stop" }],
+      usage: { completion_tokens: 80 },
+    }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(callProvider({ ...request(), maxOutputTokens: 256 })).resolves.toMatchObject({ content: "OK", outputTokens: 80 });
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1].body)).max_tokens).toBe(256);
+  });
+
+  it.each([
     {},
     { choices: [] },
     { choices: [{ message: { content: null } }] },
+    { choices: [{ message: { content: null, reasoning_content: "Only reasoning, no final text" } }] },
     { choices: [{ message: { content: "   " } }] },
   ])("rejects malformed or empty OpenAI-compatible payload %#", async (payload) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));

@@ -1,5 +1,7 @@
 const validationReasons: Readonly<Record<string, string>> = {
   AUTHENTICATION: "The provider rejected this key. Replace it or check its permissions.",
+  MODEL_NOT_FOUND: "The configured model is unavailable or retired. Contact the administrator to update the model, then validate again.",
+  BAD_REQUEST: "The provider rejected the model or request settings. Contact the administrator to check the configuration, then validate again.",
   RATE_LIMIT: "The provider rate limit was reached. Try validating again later.",
   TIMEOUT: "Provider validation timed out. Try validating again.",
   UNAVAILABLE: "The provider could not be reached. Try validating again.",
