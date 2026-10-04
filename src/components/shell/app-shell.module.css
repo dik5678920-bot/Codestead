@@ -93,10 +93,20 @@
   flex: 1;
 }
 
-.searchBox[aria-disabled="true"] {
-  cursor: not-allowed;
-  opacity: 0.72;
+.searchBox input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
 }
+
+.catalogSearch { position: relative; }
+.searchResults { max-height: 320px; overflow-y: auto; font-size: 0.8rem; }
+.searchResults ul { list-style: none; padding: 0; }
+.searchResults a { display: block; padding: 8px; border-radius: 8px; }
+.searchResults a:focus-visible { outline: 2px solid var(--ink); }
 
 .sideNav {
   display: grid;

@@ -31,6 +31,23 @@ async function completeForm(user: ReturnType<typeof userEvent.setup>) {
 describe("learner curriculum request view", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("prefills a defect and preserves the skill reference when the description is replaced", async () => {
+    const fetchMock = vi.fn(async (_url, init) => init?.method === "POST"
+      ? json({ request: { ...existingRequest, ...JSON.parse(init.body) } }, { status: 201 })
+      : json({ requests: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<LearningRequestsView prefill={{ kind: "content-defect", subject: "Python: Assignment", context: "Course: Python (python)\nSkill: Assignment (python.assignment)\nLesson: /courses/python/skills/python.assignment" }} />);
+    expect(screen.getByLabelText("Request type")).toHaveValue("content-defect");
+    expect(screen.getByLabelText("Subject or topic")).toHaveValue("Python: Assignment");
+    await user.type(screen.getByLabelText("What should the course cover?"), "The checkpoint has no activity.");
+    await user.click(screen.getByRole("button", { name: "Send for review" }));
+    expect(await screen.findByText(/Request sent to the administrator/)).toBeInTheDocument();
+    const post = fetchMock.mock.calls.find((call) => call[1]?.method === "POST");
+    expect(JSON.parse(post![1]!.body)).toMatchObject({ kind: "content-defect", subject: "Python: Assignment", details: expect.stringContaining("Skill: Assignment (python.assignment)") });
+    expect(JSON.parse(post![1]!.body).details).toContain("The checkpoint has no activity.");
+  });
+
   it("loads a validated semantic request list with clear status and details", async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ requests: [existingRequest] }));
     vi.stubGlobal("fetch", fetchMock);
