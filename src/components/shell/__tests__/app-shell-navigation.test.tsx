@@ -432,6 +432,15 @@ describe("AppShell compact navigation", () => {
     expect(navigate).not.toHaveBeenCalled();
   });
 
+  it("opens the mobile drawer and focuses search with Ctrl+K", async () => {
+    const user = userEvent.setup();
+    render(<AppShell><p>Learning content</p></AppShell>);
+    await waitFor(() => expect(document.getElementById("app-sidebar")).toHaveAttribute("inert"));
+    await user.keyboard("{Control>}k{/Control}");
+    await waitFor(() => expect(screen.getByRole("searchbox")).toHaveFocus());
+    expect(document.getElementById("app-sidebar")).not.toHaveAttribute("inert");
+  });
+
   it("keeps the closed drawer inert, focuses it when opened, and restores focus after Escape", async () => {
     const user = userEvent.setup();
     render(<AppShell><p>Learning content</p></AppShell>);
@@ -441,7 +450,7 @@ describe("AppShell compact navigation", () => {
     const trigger = screen.getByRole("button", { name: "Open navigation" });
     await waitFor(() => expect(sidebar).toHaveAttribute("inert"));
     expect(sidebar).toHaveAttribute("aria-hidden", "true");
-    expect(screen.getByTitle("Course search is coming soon")).toHaveAttribute("aria-disabled", "true");
+    expect(within(sidebar as HTMLElement).getByRole("searchbox", { hidden: true })).toBeInTheDocument();
     await user.click(trigger);
     expect(screen.getByRole("button", { name: "Notifications" })).toBeEnabled();
     expect(sidebar).not.toHaveAttribute("inert");

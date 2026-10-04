@@ -90,7 +90,13 @@ function mergeRequests(
   return [...serverItems, ...visibleItems.filter((item) => !serverIds.has(item.id))];
 }
 
-export function LearningRequestsView() {
+export interface LearningRequestPrefill {
+  readonly kind: "new-subject" | "topic-extension" | "content-defect";
+  readonly subject: string;
+  readonly context?: string;
+}
+
+export function LearningRequestsView({ prefill }: { prefill?: LearningRequestPrefill }) {
   const [items, setItems] = useState<readonly LearningRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -98,8 +104,9 @@ export function LearningRequestsView() {
   const [busy, setBusy] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ tone: "error" | "success"; text: string } | null>(null);
-  const [subjectLength, setSubjectLength] = useState(0);
+  const [subjectLength, setSubjectLength] = useState(prefill?.subject.length ?? 0);
   const [detailsLength, setDetailsLength] = useState(0);
+  const detailsLimit = 2000 - (prefill?.context ? prefill.context.length + 2 : 0);
   const loadGeneration = useRef(0);
   const pendingRequest = useRef<{ readonly fingerprint: string; readonly requestId: string } | null>(null);
 
@@ -188,7 +195,12 @@ export function LearningRequestsView() {
       return;
     }
 
-    const input = { kind, subject, details };
+    const submittedDetails = prefill?.context ? `${prefill.context}\n\n${details}` : details;
+    if (submittedDetails.length > 2_000) {
+      setFeedback({ tone: "error", text: "Shorten the description so the lesson reference and report fit within 2000 characters." });
+      return;
+    }
+    const input = { kind, subject, details: submittedDetails };
     const requestId = retryIdentifier(input);
     setBusy(true);
     setFeedback(null);
@@ -212,7 +224,7 @@ export function LearningRequestsView() {
       setListError(null);
       pendingRequest.current = null;
       form.reset();
-      setSubjectLength(0);
+      setSubjectLength(prefill?.subject.length ?? 0);
       setDetailsLength(0);
       setFeedback({ tone: "success", text: "Request sent to the administrator for curriculum review." });
 
@@ -241,9 +253,10 @@ export function LearningRequestsView() {
       <section className={styles.requestLayout}>
         <form aria-labelledby="new-learning-request-title" className={`${styles.requestPanel} ${styles.requestForm} ${styles.form} card`} onSubmit={submit}>
           <div className={styles.requestPanelHead}><div><h2 id="new-learning-request-title">New request</h2><p>Tell the curriculum team what useful outcome is missing.</p></div></div>
-          <label htmlFor="learning-request-kind"><span className={styles.requestLabel}>Request type <small>Required</small></span><select aria-describedby="learning-request-kind-help" aria-label="Request type" id="learning-request-kind" name="kind" defaultValue="topic-extension" onChange={invalidatePendingRequest} required><option value="topic-extension">Extend an existing topic</option><option value="new-subject">Add a new subject</option><option value="content-defect">Report missing promised content</option></select><small id="learning-request-kind-help">Choose the closest match; an administrator can refine the scope later.</small></label>
-          <label htmlFor="learning-request-subject"><span className={styles.requestLabel}>Subject or topic <small>Required</small></span><input aria-describedby="learning-request-subject-help" aria-label="Subject or topic" id="learning-request-subject" name="subject" required minLength={2} maxLength={120} onChange={(event) => { invalidatePendingRequest(); setSubjectLength(event.currentTarget.value.length); }} placeholder="For example: High-performance computing" /><small className={styles.requestFieldMeta} id="learning-request-subject-help"><span>Use a short, specific title.</span><span>{subjectLength}/120</span></small></label>
-          <label htmlFor="learning-request-details"><span className={styles.requestLabel}>What should the course cover? <small>Required</small></span><textarea aria-describedby="learning-request-details-help" aria-label="What should the course cover?" id="learning-request-details" name="details" required minLength={10} maxLength={2000} onChange={(event) => { invalidatePendingRequest(); setDetailsLength(event.currentTarget.value.length); }} placeholder="Describe the outcome you need, what you already know, and why it belongs in this course." /><small className={styles.requestFieldMeta} id="learning-request-details-help"><span>Include the desired outcome and why it matters.</span><span>{detailsLength}/2000</span></small></label>
+          {prefill?.context && <p className={styles.requestFieldMeta} style={{ whiteSpace: "pre-line" }}>Reporting content in:{"\n"}{prefill.context}</p>}
+          <label htmlFor="learning-request-kind"><span className={styles.requestLabel}>Request type <small>Required</small></span><select aria-describedby="learning-request-kind-help" aria-label="Request type" id="learning-request-kind" name="kind" defaultValue={prefill?.kind ?? "topic-extension"} onChange={invalidatePendingRequest} required><option value="topic-extension">Extend an existing topic</option><option value="new-subject">Add a new subject</option><option value="content-defect">Report missing promised content</option></select><small id="learning-request-kind-help">Choose the closest match; an administrator can refine the scope later.</small></label>
+          <label htmlFor="learning-request-subject"><span className={styles.requestLabel}>Subject or topic <small>Required</small></span><input aria-describedby="learning-request-subject-help" aria-label="Subject or topic" id="learning-request-subject" name="subject" defaultValue={prefill?.subject ?? ""} required minLength={2} maxLength={120} onChange={(event) => { invalidatePendingRequest(); setSubjectLength(event.currentTarget.value.length); }} placeholder="For example: High-performance computing" /><small className={styles.requestFieldMeta} id="learning-request-subject-help"><span>Use a short, specific title.</span><span>{subjectLength}/120</span></small></label>
+          <label htmlFor="learning-request-details"><span className={styles.requestLabel}>What should the course cover? <small>Required</small></span><textarea aria-describedby="learning-request-details-help" aria-label="What should the course cover?" id="learning-request-details" name="details" required minLength={10} maxLength={detailsLimit} onChange={(event) => { invalidatePendingRequest(); setDetailsLength(event.currentTarget.value.length); }} placeholder="Describe the outcome you need, what you already know, and why it belongs in this course." /><small className={styles.requestFieldMeta} id="learning-request-details-help"><span>Include the desired outcome and why it matters.</span><span>{detailsLength}/{detailsLimit}</span></small></label>
           <div className={styles.requestSubmitRow}><button aria-busy={busy} className="button button-primary" disabled={busy} type="submit"><Send aria-hidden="true" size={16} /> {busy ? "Sending…" : "Send for review"}</button><small>Submitting creates a review request; it never publishes content automatically.</small></div>
           {feedback && <p className={feedback.tone === "error" ? styles.error : styles.success} role={feedback.tone === "error" ? "alert" : "status"}>{feedback.text}</p>}
         </form>
