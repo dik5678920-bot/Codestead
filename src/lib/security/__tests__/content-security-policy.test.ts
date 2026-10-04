@@ -5,6 +5,9 @@ import { config, proxy } from "../../../proxy";
 
 afterEach(() => vi.unstubAllEnvs());
 describe("nonce Content-Security-Policy", () => {
+  it.each(["/health/live", "/health/ready", "/health/runner"])("exempts JSON health route %s from the document proxy", (url) => {
+    expect(unstable_doesMiddlewareMatch({ config, url })).toBe(false);
+  });
   it("keeps origin rejection responses locked down", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("APP_URL", "https://codestead.test");
@@ -61,4 +64,3 @@ describe("nonce Content-Security-Policy", () => {
     expect(unstable_doesMiddlewareMatch({ config, url })).toBe(false);
   });
 });
-

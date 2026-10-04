@@ -143,6 +143,13 @@ network and reads `PISTON_URL=http://piston:2000` from `compose.yaml`.
    See [the image build and PR4b handoff](../../infra/piston/README.md).
 
 `docker exec` into a Kata container is not supported by this Kata release.
+
+For ongoing monitoring, configure Uptime Kuma to check
+**https://code.shivanshmishra.in/health/runner** every 60 seconds, expecting HTTP
+200 with a 10-second timeout. The app probes the internal runtime inventory,
+shares concurrent probes, caches both outcomes for 30 seconds, and returns
+generic 503 on failure. See [health endpoint semantics](logs-and-monitoring.md#health-endpoint-semantics)
+for its request limit and execution-health limitation.
 Debug with `docker logs learncoding-piston-1` instead. Later deploys with
 `infra/ops/redeploy-nuc.sh` restart `piston` with the app while the profile is
 listed; they never build or pull it, so rebuild (steps 2-3) to change it.
