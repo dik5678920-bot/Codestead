@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   process.env.BETTER_AUTH_SECRET ??= "coverage-test-secret-with-at-least-32-bytes";
-  return { select: vi.fn(), update: vi.fn(), insert: vi.fn(), transaction: vi.fn(), enqueue: vi.fn(), activation: vi.fn(), bootstrap: vi.fn(), archive: vi.fn(), resetSource: vi.fn(), resetVariables: vi.fn(), requireVariables: vi.fn(), options: undefined as unknown };
+  return { limit: vi.fn(), select: vi.fn(), update: vi.fn(), insert: vi.fn(), transaction: vi.fn(), enqueue: vi.fn(), activation: vi.fn(), bootstrap: vi.fn(), archive: vi.fn(), resetSource: vi.fn(), resetVariables: vi.fn(), requireVariables: vi.fn(), options: undefined as unknown };
 });
 vi.mock("better-auth", () => ({ betterAuth: (options: unknown) => { mocks.options = options; return { options }; } }));
 vi.mock("better-auth/api", async (original) => ({ ...await original<typeof import("better-auth/api")>(), createAuthMiddleware: (handler: unknown) => handler }));
@@ -11,6 +11,7 @@ vi.mock("better-auth/adapters/drizzle", () => ({ drizzleAdapter: () => ({}) }));
 vi.mock("better-auth/next-js", () => ({ nextCookies: () => ({}) }));
 vi.mock("better-auth/plugins", () => ({ admin: () => ({}), twoFactor: () => ({}) }));
 vi.mock("@/lib/db/client", () => ({ db: mocks, pool: {} }));
+vi.mock("@/lib/security/rate-limit", async (original) => ({ ...await original<typeof import("@/lib/security/rate-limit")>(), withRateLimit: mocks.limit }));
 vi.mock("@/lib/notifications/outbox", () => ({ enqueueEmail: mocks.enqueue }));
 vi.mock("@/lib/security/activation-context", () => ({ currentActivationAuthorization: mocks.activation, currentBootstrapAuthorization: mocks.bootstrap }));
 vi.mock("@/lib/session-controls", () => ({ archiveDeletedSession: mocks.archive, archiveExpiredSessions: vi.fn(), boundedUserAgent: (value: string) => value.slice(0, 200), describeUserAgent: () => "Firefox on Linux" }));
@@ -50,23 +51,37 @@ describe("authentication account and session lifecycle", () => {
     ["production", undefined, "database"],
     ["production", "", "database"],
     ["production", "   ", "database"],
-  ])("selects %s storage with DATABASE_URL=%s as %s", async (environment, databaseUrl, storage) => {
+  ])("requires %s atomic admission with DATABASE_URL=%s when storage is %s", async (environment, databaseUrl, storage) => {
     vi.stubEnv("NODE_ENV", environment);
     vi.stubEnv("DATABASE_URL", databaseUrl);
     vi.stubEnv("AUTH_REQUIRED", "false");
     vi.resetModules();
     const { auth } = await import("@/lib/auth");
-    expect(auth.options.rateLimit?.storage).toBe(storage);
+    expect(auth.options.rateLimit?.storage).toBe("memory");
+    mocks.limit.mockImplementation(async (_check, admitted) => admitted());
+    const plugin = auth.options.plugins?.find(plugin => plugin.id === "atomic-auth-rate-limit") as {
+      onRequest(request: Request, context: { baseURL: string }): Promise<unknown>;
+    };
+    expect(plugin).toBeDefined();
+    await plugin.onRequest(new Request("http://localhost:3000/api/auth/sign-in/email"), { baseURL: "http://localhost:3000/api/auth" });
+    expect(mocks.limit).toHaveBeenCalledTimes(storage === "database" ? 1 : 0);
+    if (storage === "database") expect(mocks.limit.mock.calls[0][0].policy.failureMode).toBe("closed");
   });
-  it("stores auth abuse budgets in the database across app instances", () => {
-    const configured = mocks.options as { rateLimit: { storage?: string } };
-    expect(configured.rateLimit.storage).toBe("database");
+  it("delegates sensitive budgets to atomic admission instead of the secondary memory limiter", () => {
+    const configured = mocks.options as { rateLimit: { customRules: Record<string, unknown> } };
+    expect(configured.rateLimit.customRules).toEqual({
+      "/sign-in/email": false, "/sign-up/email": false, "/two-factor/verify-totp": false,
+    });
   });
   it("resolves auth IP budgets only from the trusted Cloudflare header", () => {
     const configured = mocks.options as { advanced: { ipAddress?: { ipAddressHeaders?: string[] } } };
     expect(configured.advanced.ipAddress?.ipAddressHeaders).toEqual(["cf-connecting-ip"]);
   });
-  it("preserves every existing auth custom budget and window", () => {
+  it("preserves every database-free auth custom budget and window", async () => {
+    vi.stubEnv("NODE_ENV", "development");
+    vi.stubEnv("DATABASE_URL", undefined);
+    vi.resetModules();
+    await import("@/lib/auth");
     const configured = mocks.options as { rateLimit: unknown };
     expect(configured.rateLimit).toMatchObject({
       enabled: true, window: 60, max: 100,

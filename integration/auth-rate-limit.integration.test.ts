@@ -1,12 +1,24 @@
 import { betterAuth } from "better-auth";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { auth } from "@/lib/auth";
 import { pool } from "@/lib/db/client";
+import { hashRateLimitIdentity } from "@/lib/security/rate-limit";
 import { resetDisposableIntegrationDatabase } from "./support/reset-disposable-database";
 
 const CLIENT_IP = "198.51.100.41";
 const newAuthInstance = () => betterAuth(auth.options);
+const budgets = [
+  ["/sign-in/email", 8, 60, "auth_sign_in_ip"],
+  ["/sign-up/email", 3, 600, "auth_sign_up_ip"],
+  ["/two-factor/verify-totp", 6, 60, "auth_totp_ip"],
+] as const;
+
+async function counters(scope: string, ip = CLIENT_IP) {
+  const prefix = `${scope}:${hashRateLimitIdentity(scope, "ip", ip)}:`;
+  const result = await pool.query("select key, points, expire::text as expire from api_rate_limit where key like $1 order by key", [`${prefix}%`]);
+  return { rows: result.rows, key: expect.stringMatching(new RegExp(`^${prefix}\\d+$`)) };
+}
 
 function request(path: string, headers: Record<string, string> = {}) {
   return new Request(`${auth.options.baseURL}/api/auth${path}`, {
@@ -37,18 +49,13 @@ describe("durable Better Auth rate limits", () => {
     ]);
   });
 
-  it.each([
-    ["/sign-in/email", 8, 60],
-    ["/sign-up/email", 3, 600],
-    ["/two-factor/verify-totp", 6, 60],
-  ] as const)("preserves %s's custom budget across a new auth instance", async (path, max, window) => {
+  it.each(budgets)("preserves %s's custom budget across a new auth instance", async (path, max, window, scope) => {
     const first = newAuthInstance();
     for (let count = 0; count < max; count++) {
       expect((await first.handler(request(path))).status).toBe(400);
     }
-    const key = `${CLIENT_IP}|${path}`;
-    const before = await pool.query("select key, count, last_request from auth_rate_limit where key = $1", [key]);
-    expect(before.rows).toEqual([{ key, count: max, last_request: expect.any(String) }]);
+    const before = await counters(scope);
+    expect(before.rows).toEqual([{ key: before.key, points: max, expire: expect.any(String) }]);
     const restarted = newAuthInstance();
     expect(restarted).not.toBe(first);
     const denied = await restarted.handler(request(path));
@@ -56,8 +63,9 @@ describe("durable Better Auth rate limits", () => {
     expect(await denied.json()).toEqual({ message: "Too many requests. Please try again later." });
     expect(Number(denied.headers.get("X-Retry-After"))).toBeGreaterThan(0);
     expect(Number(denied.headers.get("X-Retry-After"))).toBeLessThanOrEqual(window);
-    expect((await pool.query("select key, count, last_request from auth_rate_limit where key = $1", [key])).rows)
-      .toEqual(before.rows);
+    // The atomic library counts every attempt, including denials. The bucket
+    // identity/expiry survive a new instance; a denial never grants admission.
+    expect((await counters(scope)).rows).toEqual([{ ...before.rows[0], points: max + 1 }]);
   });
 
   it("uses only cf-connecting-ip, ignoring spoofed forwarding headers", async () => {
@@ -71,10 +79,10 @@ describe("durable Better Auth rate limits", () => {
       .toBe(429);
     expect((await newAuthInstance().handler(request("/sign-in/email", { "cf-connecting-ip": "198.51.100.42" }))).status)
       .toBe(400);
-    expect((await pool.query("select key, count from auth_rate_limit order by key")).rows).toEqual([
-      { key: "198.51.100.41|/sign-in/email", count: 8 },
-      { key: "198.51.100.42|/sign-in/email", count: 1 },
-    ]);
+    const primary = await counters("auth_sign_in_ip");
+    expect(primary.rows).toEqual([{ key: primary.key, points: 9, expire: expect.any(String) }]);
+    const other = await counters("auth_sign_in_ip", "198.51.100.42");
+    expect(other.rows).toEqual([{ key: other.key, points: 1, expire: expect.any(String) }]);
   });
 
   it("shares its dev/test fallback budget when the trusted header is missing", async () => {
@@ -87,8 +95,8 @@ describe("durable Better Auth rate limits", () => {
     expect((await newAuthInstance().handler(request("/sign-in/email", {
       "cf-connecting-ip": "not-an-ip", "x-forwarded-for": "203.0.113.99",
     }))).status).toBe(429);
-    expect((await pool.query("select key, count from auth_rate_limit")).rows)
-      .toEqual([{ key: "127.0.0.1|/sign-in/email", count: 8 }]);
+    const fallback = await counters("auth_sign_in_ip", "unavailable");
+    expect(fallback.rows).toEqual([{ key: fallback.key, points: 9, expire: expect.any(String) }]);
   });
 
   it("shares atomic admission across concurrent auth instances", async () => {
@@ -98,6 +106,31 @@ describe("durable Better Auth rate limits", () => {
       (index % 2 ? first : second).handler(request("/sign-in/email"))));
     expect(responses.filter(response => response.status === 400)).toHaveLength(8);
     expect(responses.filter(response => response.status === 429)).toHaveLength(8);
-    expect((await pool.query("select count from auth_rate_limit")).rows).toEqual([{ count: 8 }]);
+    const stored = await counters("auth_sign_in_ip");
+    expect(stored.rows).toEqual([{ key: stored.key, points: 16, expire: expect.any(String) }]);
+  });
+
+  it.each(budgets)("admits exactly %s's budget under concurrent requests across instances", async (path, max, _window, scope) => {
+    const first = newAuthInstance();
+    const second = newAuthInstance();
+    const responses = await Promise.all(Array.from({ length: max * 2 }, (_, index) =>
+      (index % 2 ? first : second).handler(request(path))));
+    expect(responses.filter(response => response.status === 400)).toHaveLength(max);
+    expect(responses.filter(response => response.status === 429)).toHaveLength(max);
+    const stored = await counters(scope);
+    expect(stored.rows).toEqual([{ key: stored.key, points: max * 2, expire: expect.any(String) }]);
+    expect((await pool.query("select count(*)::int as count from auth_rate_limit")).rows).toEqual([{ count: 0 }]);
+  });
+
+  it("refuses admission when the atomic database write fails", async () => {
+    const query = vi.spyOn(pool, "query").mockRejectedValue(new Error("simulated persistence outage"));
+    try {
+      const response = await newAuthInstance().handler(request("/sign-in/email"));
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ code: "RATE_LIMIT_UNAVAILABLE" });
+    } finally {
+      query.mockRestore();
+    }
+    expect((await counters("auth_sign_in_ip")).rows).toEqual([]);
   });
 });
