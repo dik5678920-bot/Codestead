@@ -1,18 +1,18 @@
 {
   "schemaVersion": 1,
-  "files": 127,
-  "operations": 165,
-  "matrixRows": 165,
+  "files": 129,
+  "operations": 167,
+  "matrixRows": 167,
   "boundaryCounts": {
     "public": 6,
     "auth-handler": 2,
-    "authenticated": 92,
+    "authenticated": 94,
     "admin": 65
   },
   "objectAuthorizationCounts": {
     "public-input": 6,
     "administrator-scope": 65,
-    "session-user": 86,
+    "session-user": 88,
     "auth-provider": 2,
     "no-user-object": 4,
     "consent-projected-cohort": 2
@@ -2120,6 +2120,19 @@
       "operationSourceSha256": "99c92ae437b3ba672f912de208aa2f440115e350f448c9f9f418fc35f060e100"
     },
     {
+      "operation": "POST /api/security/change-password",
+      "file": "src/app/api/security/change-password/route.ts",
+      "route": "/api/security/change-password",
+      "method": "POST",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "session-user",
+      "ownershipProof": "all user context is derived from authz.session.user.id",
+      "operationSourceSha256": "114a0dd417fe0978e7ff064b6007715b4c2fcc2cb233cb2c3a2057402a02abae"
+    },
+    {
       "operation": "POST /api/security/forced-password-change",
       "file": "src/app/api/security/forced-password-change/route.ts",
       "route": "/api/security/forced-password-change",
@@ -2144,6 +2157,19 @@
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
       "operationSourceSha256": "c4faf80ed50db877777176229c198d60037becb466dc8c13372d0dd71c8dd4e5"
+    },
+    {
+      "operation": "GET /api/security/password-status",
+      "file": "src/app/api/security/password-status/route.ts",
+      "route": "/api/security/password-status",
+      "method": "GET",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "session-user",
+      "ownershipProof": "all user context is derived from authz.session.user.id",
+      "operationSourceSha256": "7a2d803ca5e9cc29144ddb0d3b6364019c970dba16264a0e8af43965c1058bde"
     },
     {
       "operation": "POST /api/security/session-takeover",
@@ -2282,7 +2308,7 @@
     "guardDecisionTest": "src/lib/http/__tests__/authz.test.ts",
     "representativeObjectAuthorizationTest": "integration/runtime-authorization.integration.test.ts",
     "protectedOperationInvocations": {
-      "anonymousAuthenticated": 92,
+      "anonymousAuthenticated": 94,
       "anonymousAdmin": 65,
       "learnerAdmin": 65
     },

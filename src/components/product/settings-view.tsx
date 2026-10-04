@@ -22,6 +22,7 @@ import { ModalDialog } from "@/components/ui/modal-dialog";
 import { PasswordInput } from "@/components/ui/password-input";
 
 import styles from "./product-pages.module.css";
+import { SecuritySettingsPanel } from "./security-settings-panel";
 import { ProfileSettingsPanel } from "./profile-settings-panel";
 import { DeviceSessionsPanel } from "./device-sessions-panel";
 import { PrivacyConsentPanel } from "./privacy-consent-panel";
@@ -458,7 +459,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
   function content() {
     if (tab === "ai") return aiProvidersPanel();
     if (tab === "accessibility") return accessibilityPanel();
-    if (tab === "security") return <><h2>Security</h2><p>Multi-factor authentication is required for every account.</p><div className={styles.sideCard}><h3>Authenticator</h3><p>Enabled. Fresh verification is required before sensitive administrator actions.</p><button aria-describedby="recovery-guidance-status" className="button button-secondary" disabled>View recovery guidance</button><small id="recovery-guidance-status">Coming soon. Contact the administrator if recovery help is needed now.</small></div><div className={styles.sideCard}><h3>Password</h3><p>Changing your password revokes other sessions and keeps the current approved-device policy.</p><button aria-describedby="password-change-status" className="button button-secondary" disabled>Change password</button><small id="password-change-status">Coming soon. Password changes are currently handled by the administrator.</small></div></>;
+    if (tab === "security") return <SecuritySettingsPanel />;
     if (tab === "privacy") return <PrivacyConsentPanel />;
     if (tab === "device") return <DeviceSessionsPanel />;
     if (tab === "notifications") return <NotificationPreferencesPanel />;

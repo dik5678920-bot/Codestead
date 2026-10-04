@@ -67,6 +67,8 @@ const NO_USER_OBJECT_OPERATIONS = new Map<string, Readonly<{ ownershipProof: str
  * its object-authorization contract has been reviewed.
  */
 const SESSION_USER_OPERATIONS = new Set([
+  "GET /api/security/password-status",
+  "POST /api/security/change-password",
   "POST /api/ai/reports",
   "POST /api/ai/tutor",
   "GET /api/ai/threads",
