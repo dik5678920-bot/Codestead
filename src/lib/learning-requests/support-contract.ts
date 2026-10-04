@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { containsCredentialOrHiddenEvidence } from "@/lib/security/sensitive-text";
 
+// Zod's JIT capability probe itself triggers a CSP violation, even when caught.
+// Configure the browser runtime before constructing any object schemas.
+if (typeof window !== "undefined") z.config({ jitless: true });
+
 export const supportKinds = ["support-ai", "support-other"] as const;
 export function isSupportKind(kind: string) { return supportKinds.some((value) => value === kind); }
 export const supportProviderSchema = z.enum(["google", "openai", "anthropic", "openrouter", "deepseek", "nvidia_nim", "custom_openai_compatible"]);
