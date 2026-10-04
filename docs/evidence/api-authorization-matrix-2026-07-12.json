@@ -193,7 +193,7 @@
       "admin": "allowed",
       "objectAuthorization": "administrator-scope",
       "ownershipProof": "requireAdmin() before request parsing or data access",
-      "operationSourceSha256": "af779196c8768e0fdc7e52dfe331e0648db7bb7c2602d94568c0dfede8452500"
+      "operationSourceSha256": "2786e86c0edb785cedb0ddc625a349604538754169979c9c6b0ea3c7ba100541"
     },
     {
       "operation": "POST /api/admin/ai-models",
@@ -1051,7 +1051,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by eq(chatThread.userId, authz.session.user.id)",
-      "operationSourceSha256": "a46c9a2de17dd16b2468ba89ae0b51fdeecea4ac05a890fa9148c708f7f6b764"
+      "operationSourceSha256": "4202cf5ba341108cf710480a711828071556eef814048dd77c101e653a4e1fb1"
     },
     {
       "operation": "GET /api/auth/[...all]",

@@ -4,7 +4,7 @@ The operator requested a single-advisory development exception only after
 proving `braces` is absent from production dependencies and shipped images.
 The [reviewed advisory](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm)
 reports stack-exhaustion denial of service in braces through 3.0.3 and no
-patched release. The exception expires **2026-10-17 at 00:00 UTC**.
+patched release. The exception expires **2026-10-31 at 00:00 UTC**.
 
 Production remains a strict, unfiltered
 `npm audit --omit=dev --audit-level=moderate` gate. The separate development
@@ -50,3 +50,30 @@ instead of invoking a package manager inside shipped images.
 These identify the local validation builds, not deployed image attestations.
 Image scans still apply normally in CI. The exception is narrowly limited to
 the dev dependency audit and does not waive an image vulnerability finding.
+
+## Upstream recheck and bounded extension (2026-10-04)
+
+Rechecked from origin/main `cf40e6302bb58cbcd34e49563e4b866f89f772fc`.
+`npm view braces versions --json` still ends at 3.0.3, and the reviewed
+advisory still lists no patched version. `npm ls braces` confirms the only
+installed path is development-only:
+
+```text
+eslint-config-next@16.3.6 -> @next/eslint-plugin-next@16.3.6
+  -> fast-glob@3.3.1 -> micromatch@4.0.8 -> braces@3.0.3
+```
+
+The latest `eslint-config-next@16.3.8` still uses
+`@next/eslint-plugin-next@16.3.8`, which still pins fast-glob 3.3.1.
+The latest fast-glob 3.3.3 still depends on micromatch ^4.0.8, and the
+latest micromatch 4.0.8 still depends on braces ^3.0.3. Chokidar is not
+in the installed chain. Updating these parents cannot remove the advisory,
+and no patched braces release exists for a compatible npm override.
+
+Extend the previous October 17 deadline by only 14 days, to October 31 at
+00:00 UTC, to allow another upstream recheck without disabling PR audits.
+This remains a temporary acceptance of the dev-only denial-of-service risk;
+it does not fix braces. Remove the exception when a compatible patched
+release or braces-free parent becomes available. Production, unrelated
+advisory, malformed-report and exact-expiry rejection remain unchanged.
+No dependency manifest, lockfile or executable evidence was changed.

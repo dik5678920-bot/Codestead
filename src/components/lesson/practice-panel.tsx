@@ -269,7 +269,7 @@ function PracticePanelState({
             {error && <p>{error}</p>}
             <div className={styles.practiceActions}>
               <button className="button button-secondary" onClick={() => void createAttempt(false)}><RefreshCw size={15} /> Retry safely</button>
-              <Link className="button button-secondary" href={`/requests?kind=missing_topic&skillId=${encodeURIComponent(skillId)}`}>Report a content problem</Link>
+              <Link className="button button-secondary" href={`/requests?kind=content-defect&skillId=${encodeURIComponent(skillId)}`}>Report a content problem</Link>
             </div>
           </div>
         </div>
@@ -347,7 +347,7 @@ function PracticePanelState({
                 {state === "submitting" ? <LoaderCircle className={styles.spin} size={16} /> : <CheckCircle2 size={16} />} Check answer
               </button>
               <button className="button button-secondary" disabled={state !== "ready"} onClick={() => void submit({ unknown: true })}>I don’t know</button>
-              <Link href={`/requests?kind=missing_topic&skillId=${encodeURIComponent(skillId)}`}>Report a content problem</Link>
+              <Link href={`/requests?kind=content-defect&skillId=${encodeURIComponent(skillId)}`}>Report a content problem</Link>
             </div>
           )}
 
@@ -374,7 +374,7 @@ function PracticePanelState({
                 </> : <p>The server saved the response but could not produce safe deterministic feedback. Start a fresh attempt after the activity is repaired.</p>}
                 <div className={styles.practiceActions}>
                   <button className="button button-primary" onClick={() => void createAttempt(true)}><RotateCcw size={15} /> {checkpoint ? "Try another checkpoint" : "Try a fresh question"}</button>
-                  <Link className="button button-secondary" href={`/requests?kind=missing_topic&skillId=${encodeURIComponent(skillId)}`}>Report feedback mismatch</Link>
+                  <Link className="button button-secondary" href={`/requests?kind=content-defect&skillId=${encodeURIComponent(skillId)}`}>Report feedback mismatch</Link>
                 </div>
               </div>
             </div>
