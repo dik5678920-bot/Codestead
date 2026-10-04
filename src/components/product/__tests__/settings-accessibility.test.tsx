@@ -104,16 +104,21 @@ describe("accessibility settings", () => {
     });
   });
 
-  it("marks unfinished security actions as disabled and explains their status", async () => {
+  it("exposes working security actions with accessible panel state", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ hasPassword: true }))));
+    const user = userEvent.setup();
     render(<SettingsView initialTab="security" />);
-
     const recovery = screen.getByRole("button", { name: "View recovery guidance" });
-    const password = screen.getByRole("button", { name: "Change password" });
-    expect(recovery).toBeDisabled();
-    expect(password).toBeDisabled();
-    expect(recovery).toHaveAccessibleDescription(/coming soon/i);
-    expect(password).toHaveAccessibleDescription(/coming soon/i);
-    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    expect(recovery).toBeEnabled();
+    expect(recovery).toHaveAttribute("aria-expanded", "false");
+    await user.click(recovery);
+    expect(recovery).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(/Use one of the backup codes/)).toBeInTheDocument();
+    const password = await screen.findByRole("button", { name: "Change password" });
+    expect(password).toBeEnabled();
+    await user.click(password);
+    expect(screen.getByLabelText("Current password")).toBeInTheDocument();
+    expect(screen.getByLabelText("New password")).toBeInTheDocument();
   });
 
   it("implements an arrow-key tab pattern for settings sections", async () => {
