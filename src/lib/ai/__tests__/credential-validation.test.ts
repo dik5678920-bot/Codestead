@@ -43,7 +43,7 @@ describe("provider credential validation", () => {
     });
   });
 
-  afterEach(() => vi.restoreAllMocks());
+  afterEach(() => { vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 
   it("uses the safe default NIM probe and records hashes, never the secret", async () => {
     await expect(validateProviderCredential(base)).resolves.toMatchObject({
@@ -55,6 +55,7 @@ describe("provider credential validation", () => {
       provider: "nvidia_nim",
       apiKey: base.secret,
       maxOutputTokens: 256,
+      model: "nvidia/nemotron-3.5-lightning-30b-a3b",
     }));
     expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({
       credentialId: "credential-1",
@@ -67,6 +68,28 @@ describe("provider credential validation", () => {
     expect(JSON.stringify(mocks.values.mock.calls)).not.toContain(base.secret);
   });
 
+  it.each(["nvidia_nim", "google"] as const)("uses %s tutor default, validation override, then policy precedence", async (provider) => {
+    const prefix = provider === "google" ? "GOOGLE" : "NVIDIA_NIM";
+    vi.stubEnv(`${prefix}_TUTOR_MODEL`, "test/tutor");
+    await validateProviderCredential({ ...base, provider });
+    expect(mocks.callProvider).toHaveBeenLastCalledWith(expect.objectContaining({ model: "test/tutor" }));
+    vi.stubEnv(`${prefix}_VALIDATION_MODEL`, "test/probe");
+    await validateProviderCredential({ ...base, provider });
+    expect(mocks.callProvider).toHaveBeenLastCalledWith(expect.objectContaining({ model: "test/probe" }));
+    mocks.limit.mockResolvedValueOnce([{ model: "test/policy" }]);
+    await validateProviderCredential({ ...base, provider });
+    expect(mocks.callProvider).toHaveBeenLastCalledWith(expect.objectContaining({ model: "test/policy" }));
+    vi.stubEnv(`${prefix}_VALIDATION_MODEL`, "  ");
+    await validateProviderCredential({ ...base, provider });
+    expect(mocks.callProvider).toHaveBeenLastCalledWith(expect.objectContaining({ model: "test/tutor" }));
+  });
+
+  it("logs HTTP status with code and provider without the error body", async () => {
+    mocks.callProvider.mockRejectedValueOnce(new ProviderError(base.secret, "MODEL_NOT_FOUND", 410));
+    await expect(validateProviderCredential(base)).resolves.toMatchObject({ status: "unreachable", failureCode: "MODEL_NOT_FOUND" });
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith("Provider credential validation failed", { provider: base.provider, code: "MODEL_NOT_FOUND", httpStatus: 410 });
+  });
+
   it("finishes as unreachable without transmitting an unconfigured custom provider key", async () => {
     const result = await validateProviderCredential({ ...base, provider: "custom_openai_compatible" });
     expect(result).toEqual({ status: "unreachable", failureCode: "POLICY", model: null });
@@ -77,17 +100,17 @@ describe("provider credential validation", () => {
   it("validates a self-serve provider with no admin policy row using its built-in default model", async () => {
     mocks.callProvider.mockResolvedValueOnce({
       provider: "google",
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
       content: "OK",
       inputTokens: 2,
       outputTokens: 1,
       latencyMs: 5,
     });
     const result = await validateProviderCredential({ ...base, provider: "google" });
-    expect(result).toMatchObject({ status: "active", model: "gemini-2.5-flash" });
+    expect(result).toMatchObject({ status: "active", model: "gemini-flash-latest" });
     expect(mocks.callProvider).toHaveBeenCalledWith(expect.objectContaining({
       provider: "google",
-      model: "gemini-2.5-flash",
+      model: "gemini-flash-latest",
       apiKey: base.secret,
     }));
   });
@@ -107,7 +130,7 @@ describe("provider credential validation", () => {
     expect(JSON.stringify(mocks.values.mock.calls)).not.toContain(base.secret);
   });
 
-  it.each(["UNAVAILABLE", "TIMEOUT", "BAD_RESPONSE", "POLICY", "UNKNOWN"] as const)("finishes %s as unreachable with a reason", async (code) => {
+  it.each(["MODEL_NOT_FOUND", "BAD_REQUEST", "UNAVAILABLE", "TIMEOUT", "BAD_RESPONSE", "POLICY", "UNKNOWN"] as const)("finishes %s as unreachable with a reason", async (code) => {
     mocks.callProvider.mockRejectedValueOnce(
       new ProviderError("Synthetic provider failure", code),
     );
@@ -129,7 +152,7 @@ describe("provider credential validation", () => {
       failureCode: code,
     });
     expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ status: "failed", errorCode: code }));
-    expect(console.warn).toHaveBeenCalledExactlyOnceWith("Provider credential validation failed", { provider: base.provider, code });
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith("Provider credential validation failed", { provider: base.provider, code, httpStatus: null });
     expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain(base.secret);
     expect(JSON.stringify(vi.mocked(console.warn).mock.calls)).not.toContain("private provider body");
   });
@@ -137,13 +160,13 @@ describe("provider credential validation", () => {
   it("logs only UNKNOWN for an unrecognized error marker", async () => {
     mocks.callProvider.mockRejectedValueOnce({ name: "ProviderError", code: "private provider body", message: base.secret });
     await expect(validateProviderCredential(base)).resolves.toMatchObject({ status: "unreachable", failureCode: "UNKNOWN" });
-    expect(console.warn).toHaveBeenCalledExactlyOnceWith("Provider credential validation failed", { provider: base.provider, code: "UNKNOWN" });
+    expect(console.warn).toHaveBeenCalledExactlyOnceWith("Provider credential validation failed", { provider: base.provider, code: "UNKNOWN", httpStatus: null });
     expect(mocks.values).toHaveBeenCalledWith(expect.objectContaining({ errorCode: "UNKNOWN" }));
   });
 
-  it("marks only an explicit provider authentication rejection as invalid", async () => {
+  it.each([401, 400])("marks an explicit HTTP %s authentication rejection as invalid", async (httpStatus) => {
     mocks.callProvider.mockRejectedValueOnce(
-      new ProviderError("Unauthorized", "AUTHENTICATION", 401),
+      new ProviderError("Unauthorized", "AUTHENTICATION", httpStatus),
     );
     await expect(validateProviderCredential(base)).resolves.toMatchObject({
       status: "invalid",

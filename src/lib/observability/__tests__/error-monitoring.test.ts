@@ -30,6 +30,9 @@ describe("errorMonitoringOptions", () => {
 });
 
 describe("scrubText", () => {
+  it("redacts Google AQ keys", () => {
+    expect(scrubText("AQ." + "syntheticValue".repeat(3))).toBe("[key]");
+  });
   it.each([
     ["learner ada@example.com failed", "learner [email] failed"],
     ["Authorization: Bearer abc.def.ghi", "Authorization: [redacted] [redacted]"],

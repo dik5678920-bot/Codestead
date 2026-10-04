@@ -45,12 +45,12 @@ const DEFAULT_MODEL_ENV: Record<CatalogProviderId, string> = {
 };
 
 const DEFAULT_MODEL_FALLBACK: Record<CatalogProviderId, string> = {
-  google: "gemini-2.5-flash",
+  google: "gemini-flash-latest",
   openai: "gpt-4o-mini",
   anthropic: "claude-haiku-4-5-20251001",
-  openrouter: "openai/gpt-4o-mini",
+  openrouter: "qwen/qwen3.8-27b:free",
   deepseek: "deepseek-chat",
-  nvidia_nim: "openai/gpt-oss-20b",
+  nvidia_nim: "nvidia/nemotron-3.5-lightning-30b-a3b",
 };
 
 export function defaultModelForProvider(provider: CatalogProviderId): string {
