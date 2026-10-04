@@ -8,13 +8,17 @@ import { adminModelMfaIsFresh } from "@/lib/ai/admin-models-authorization";
 import { modelCommandSchema } from "@/lib/ai/admin-models-domain";
 import { executeAdminModelCommand, listAdminModels } from "@/lib/ai/admin-models-service";
 import { isProviderError } from "@/lib/ai/types";
+import { todayPlatformUsage } from "@/lib/ai/platform-quota";
 
 export const runtime = "nodejs";
 export async function GET() {
   const authz = await requireAdmin();
   if (!authz.session) return secureAdminResponse(authz.response);
   return withRateLimit({ policy: "admin_ai_models_read", identity: { kind: "user", value: authz.session.user.id } }, async () => {
-    try { return adminJson({ providers: await listAdminModels() }); }
+    try {
+      const [providers, platformUsage] = await Promise.all([listAdminModels(), todayPlatformUsage()]);
+      return adminJson({ providers, platformUsage });
+    }
     catch { return adminJson({ error: "AI model settings are temporarily unavailable." }, 503); }
   });
 }

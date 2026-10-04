@@ -3,6 +3,7 @@
 import { ArrowUp, Check, Minus, PanelRightClose, PanelRightOpen, PenLine, Sparkles, SquarePen } from "lucide-react";
 import { type PointerEvent as ReactPointerEvent, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
+import { PlatformQuotaDialog } from "./platform-quota-dialog";
 
 import { useTutorLesson } from "./tutor-context";
 import { TutorMarkdown } from "./tutor-markdown";
@@ -286,6 +287,8 @@ export function TutorLauncher() {
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [busy, setBusy] = useState(false);
+  const [quotaPopup, setQuotaPopup] = useState(false);
+  const [consentPopup, setConsentPopup] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [reveal, setReveal] = useState<{ id: string; shown: number } | null>(null);
   const [initial] = useState(loadSaved);
@@ -417,9 +420,12 @@ export function TutorLauncher() {
         callId?: string;
         content?: string;
         error?: string;
+        code?: string;
         threadId?: string;
       };
       if (!response.ok || !body.content || !body.threadId) {
+        if (body.code === "PLATFORM_AI_QUOTA_EXCEEDED") setQuotaPopup(true);
+        if (body.code === "PLATFORM_AI_CONSENT_REQUIRED") { setConsentPopup(true); setMessage(text); }
         throw new Error(body.error ?? "Codestead is unavailable; the authored lesson and practice still work.");
       }
       const assistantContent = body.content;
@@ -614,6 +620,8 @@ export function TutorLauncher() {
   const title = lesson?.skillTitle;
 
   return createPortal(<>
+    {quotaPopup && <PlatformQuotaDialog onClose={() => setQuotaPopup(false)} />}
+    {consentPopup && <PlatformQuotaDialog consent onClose={() => setConsentPopup(false)} />}
     {dockHint && <div aria-hidden="true" className={styles.dockHint} style={{ width: rect.w }} />}
     <div
       aria-labelledby="lesson-buddy-title"

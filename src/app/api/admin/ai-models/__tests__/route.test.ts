@@ -1,7 +1,8 @@
 // @vitest-environment node
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), mfa: vi.fn(), execute: vi.fn(), list: vi.fn(), audit: vi.fn(), rate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), mfa: vi.fn(), execute: vi.fn(), list: vi.fn(), audit: vi.fn(), rate: vi.fn(), usage: vi.fn() }));
+vi.mock("@/lib/ai/platform-quota", () => ({ todayPlatformUsage: mocks.usage }));
 vi.mock("@/lib/http/authz", () => ({ requireAdmin: mocks.auth }));
 vi.mock("@/lib/ai/admin-models-authorization", () => ({ adminModelMfaIsFresh: mocks.mfa }));
 vi.mock("@/lib/ai/admin-models-service", () => ({ executeAdminModelCommand: mocks.execute, listAdminModels: mocks.list }));
@@ -17,6 +18,13 @@ beforeEach(() => {
  mocks.mfa.mockResolvedValue(true); mocks.rate.mockImplementation(async (_options, fn) => fn()); mocks.audit.mockResolvedValue(undefined); mocks.execute.mockResolvedValue({ content: "hello" });
 });
 afterEach(() => vi.unstubAllEnvs());
+it("returns today's usage only after admin authorization, without credential material", async () => {
+ mocks.list.mockResolvedValue([{ provider: "openai", hasPlatformKey: true }]);
+ mocks.usage.mockResolvedValue({ count: 17, date: "2026-10-05", dailyLimit: 25 });
+ expect(await (await GET()).json()).toMatchObject({ platformUsage: { count: 17, dailyLimit: 25 } });
+ mocks.auth.mockResolvedValue({ session: null, response: NextResponse.json({}, { status: 403 }) });
+ await GET(); expect(mocks.usage).toHaveBeenCalledOnce();
+});
 it("requires admin authorization before reads or writes", async () => {
  mocks.auth.mockResolvedValue({ session: null, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) });
  expect((await GET()).status).toBe(403); expect((await POST(request())).status).toBe(403);
