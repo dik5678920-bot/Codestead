@@ -376,22 +376,6 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
-export const rateLimit = pgTable(
-  "auth_rate_limit",
-  {
-    id: text("id").primaryKey(),
-    key: text("key").notNull(),
-    count: integer("count").notNull(),
-    lastRequest: bigint("last_request", { mode: "number" }).notNull(),
-  },
-  (table) => [
-    uniqueIndex("auth_rate_limit_key_unique").on(table.key),
-    index("auth_rate_limit_last_request_idx").on(table.lastRequest),
-    check("auth_rate_limit_count_check", sql`${table.count} >= 0`),
-    check("auth_rate_limit_last_request_check", sql`${table.lastRequest} >= 0`),
-  ],
-);
-
 export const twoFactor = pgTable(
   "two_factor",
   {

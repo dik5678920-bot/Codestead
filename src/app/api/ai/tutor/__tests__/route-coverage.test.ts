@@ -480,7 +480,7 @@ describe("tutor route durable execution coverage", () => {
       expect(input.candidates).toHaveLength(1);
       expect(input.candidates[0]).toMatchObject({
         provider: "google",
-        model: "gemini-2.5-flash",
+        model: "gemini-flash-latest",
         credentialId: "google-credential",
         source: "learner",
       });

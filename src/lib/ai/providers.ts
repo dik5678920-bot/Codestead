@@ -65,6 +65,12 @@ function providerError(status: number, retryAfter: string | null) {
   if (status === 401 || status === 403) {
     return new ProviderError("Provider rejected the credential.", "AUTHENTICATION", status);
   }
+  if (status === 404 || status === 410) {
+    return new ProviderError("Provider model is unavailable or retired.", "MODEL_NOT_FOUND", status);
+  }
+  if (status === 400 || status === 422) {
+    return new ProviderError("Provider rejected the request settings.", "BAD_REQUEST", status);
+  }
   if (status === 429) {
     const seconds = retryAfter ? Number.parseInt(retryAfter, 10) : undefined;
     return new ProviderError(
@@ -176,8 +182,16 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
       });
 
       if (!response.ok) {
-        // Do not include provider response bodies: they can reflect submitted content.
-        throw providerError(response.status, response.headers.get("retry-after"));
+        let error = providerError(response.status, response.headers.get("retry-after"));
+        if (request.provider === "google" && response.status === 400) {
+          // Inspect only this documented authentication marker. Never retain or log the body.
+          const payload: unknown = await response.json().catch(() => null);
+          const parsed = z.object({ error: z.object({ status: z.literal("INVALID_ARGUMENT"), message: z.string() }) }).safeParse(payload);
+          if (parsed.success && /API key not valid/i.test(parsed.data.error.message)) {
+            error = new ProviderError("Provider rejected the credential.", "AUTHENTICATION", response.status);
+          }
+        }
+        throw error;
       }
 
       const raw: unknown = await response.json();
@@ -220,11 +234,17 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
     };
     return await Promise.race([invoke(), deadline]);
   } catch (error) {
-    if (isProviderError(error)) throw error;
-    if (error instanceof DOMException && error.name === "AbortError") {
-      throw new ProviderError("Provider request timed out.", "TIMEOUT");
-    }
-    throw new ProviderError("Provider request failed.", "UNAVAILABLE");
+    const normalized = isProviderError(error)
+      ? error
+      : error instanceof DOMException && error.name === "AbortError"
+        ? new ProviderError("Provider request timed out.", "TIMEOUT")
+        : new ProviderError("Provider request failed.", "UNAVAILABLE");
+    console.warn("Provider request failed", {
+      provider: request.provider,
+      code: normalized.code,
+      httpStatus: normalized.status ?? null,
+    });
+    throw normalized;
   } finally {
     clearTimeout(timeout!);
   }

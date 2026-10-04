@@ -34,18 +34,20 @@ beforeEach(async () => { await resetDisposableIntegrationDatabase(pool); });
 afterAll(async () => { await pool.end(); });
 
 describe("durable Better Auth rate limits", () => {
-  it("restricts the counter to application admission and operations cleanup", async () => {
+  it("uses the existing counter grants without adding an auth table", async () => {
+    expect((await pool.query("select to_regclass('public.auth_rate_limit') as removed")).rows)
+      .toEqual([{ removed: null }]);
     const result = await pool.query(`
       select role_name, privilege,
-             has_table_privilege(role_name, 'public.auth_rate_limit', privilege) allowed
+             has_table_privilege(role_name, 'public.api_rate_limit', privilege) allowed
         from (values ('learncoding_app'), ('learncoding_worker'), ('learncoding_ops')) roles(role_name)
        cross join (values ('SELECT'), ('INSERT'), ('UPDATE'), ('DELETE')) privileges(privilege)
        order by role_name, privilege
     `);
     expect(result.rows).toEqual([
       ...["DELETE", "INSERT", "SELECT", "UPDATE"].map(privilege => ({ role_name: "learncoding_app", privilege, allowed: true })),
-      ...["DELETE", "INSERT", "SELECT", "UPDATE"].map(privilege => ({ role_name: "learncoding_ops", privilege, allowed: ["DELETE", "SELECT"].includes(privilege) })),
-      ...["DELETE", "INSERT", "SELECT", "UPDATE"].map(privilege => ({ role_name: "learncoding_worker", privilege, allowed: false })),
+      ...["DELETE", "INSERT", "SELECT", "UPDATE"].map(privilege => ({ role_name: "learncoding_ops", privilege, allowed: true })),
+      ...["DELETE", "INSERT", "SELECT", "UPDATE"].map(privilege => ({ role_name: "learncoding_worker", privilege, allowed: true })),
     ]);
   });
 
@@ -119,7 +121,7 @@ describe("durable Better Auth rate limits", () => {
     expect(responses.filter(response => response.status === 429)).toHaveLength(max);
     const stored = await counters(scope);
     expect(stored.rows).toEqual([{ key: stored.key, points: max * 2, expire: expect.any(String) }]);
-    expect((await pool.query("select count(*)::int as count from auth_rate_limit")).rows).toEqual([{ count: 0 }]);
+    expect((await pool.query("select to_regclass('public.auth_rate_limit') as removed")).rows).toEqual([{ removed: null }]);
   });
 
   it("refuses admission when the atomic database write fails", async () => {

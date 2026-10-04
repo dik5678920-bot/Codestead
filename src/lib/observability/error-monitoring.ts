@@ -29,6 +29,7 @@ const TEXT_REDACTIONS: ReadonlyArray<readonly [RegExp, string]> = [
   [/\b(api[_-]?key|token|secret|password|passwd|authorization|cookie|session|dsn|code|otp|totp)(["']?\s*[:=]\s*["']?)[^\s"',;&]+/gi, "$1$2[redacted]"],
   // URLs keep only scheme, host and path (query strings and fragments go).
   [/(https?:\/\/[^\s?#"']+)[?#][^\s"']*/gi, "$1"],
+  [/\bAQ\.[A-Za-z0-9_-]{8,}/g, "[key]"],
   // Provider-style keys (sk-..., ghp_..., AIza..., xox...).
   [/\b(sk|pk|rk|ghp|gho|ghu|ghs|github_pat|xox[abprs]|AIza)[-_][A-Za-z0-9_-]{8,}/g, "[key]"],
   // Long opaque tokens (hex/base64url) and one-time codes.

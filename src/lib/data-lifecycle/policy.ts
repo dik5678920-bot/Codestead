@@ -1,4 +1,4 @@
-export const RETENTION_POLICY_VERSION = "2026-10-04.v6" as const;
+export const RETENTION_POLICY_VERSION = "2026-07-25.v5" as const;
 
 export type RetentionDuration =
   | Readonly<{ unit: "days"; value: number }>
@@ -10,7 +10,6 @@ export const RETENTION_POLICY = Object.freeze({
   version: RETENTION_POLICY_VERSION,
   timezone: "UTC",
   categories: Object.freeze({
-    authRateLimits: Object.freeze({ duration: { unit: "days", value: 1 } as const, action: "delete" as const }),
     rawChat: Object.freeze({ duration: { unit: "months", value: 12 } as const, action: "delete" as const }),
     rawCode: Object.freeze({ duration: { unit: "months", value: 12 } as const, action: "delete" as const }),
     aiRequestMetadataAndAttachments: Object.freeze({ duration: { unit: "months", value: 12 } as const, action: "delete" as const }),
@@ -112,7 +111,6 @@ export function retentionCutoff(now: Date, duration: RetentionDuration) {
 export function retentionCutoffManifest(now: Date) {
   const categories = RETENTION_POLICY.categories;
   return {
-    authRateLimits: retentionCutoff(now, categories.authRateLimits.duration)!.toISOString(),
     rawChat: retentionCutoff(now, categories.rawChat.duration)!.toISOString(),
     rawCode: retentionCutoff(now, categories.rawCode.duration)!.toISOString(),
     aiRequestMetadataAndAttachments: retentionCutoff(

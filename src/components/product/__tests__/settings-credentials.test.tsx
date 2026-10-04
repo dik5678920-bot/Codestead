@@ -48,6 +48,15 @@ describe("provider credential settings", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(`/api/credentials/${credential.id}`, expect.objectContaining({ method: "PATCH", body: expect.stringContaining('"action":"test"') })));
   });
 
+  it.each([
+    ["MODEL_NOT_FOUND", /configured model is unavailable or retired/],
+    ["BAD_REQUEST", /rejected the model or request settings/],
+  ])("shows actionable %s validation guidance", async (failureCode, message) => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ credentials: [{ ...credential, status: "unreachable", failureCode }], mfaFresh: true })));
+    render(<SettingsView />);
+    expect(await screen.findByText(message)).toBeInTheDocument();
+  });
+
   it("shows a safe reason for an unreachable provider", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ credentials: [{ ...credential, status: "unreachable", failureCode: "TIMEOUT" }], mfaFresh: true })));
     render(<SettingsView />);

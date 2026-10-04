@@ -127,23 +127,10 @@ describe("retention ops-session integration", () => {
             current_database: "learncoding_integration",
           });
 
-          const evaluatedAt = new Date("2026-07-12T00:00:00.000Z");
-          const cutoff = evaluatedAt.getTime() - 86_400_000;
-          await pool.query(`insert into auth_rate_limit (id, key, count, last_request) values
-            ('b7-expired', '198.51.100.51|/sign-in/email', 8, $1),
-            ('b7-boundary', '198.51.100.52|/sign-in/email', 8, $2),
-            ('b7-fresh', '198.51.100.53|/sign-in/email', 1, $3)`,
-          [cutoff - 1, cutoff, evaluatedAt.getTime()]);
-          const dryRun = await runRetention({
-            idempotencyKey: "retention:integration:auth-ip-dry-run",
-            dryRun: true, now: evaluatedAt,
-          }, integrationRetentionDependencies);
-          expect(dryRun.categories.authRateLimits).toMatchObject({ eligible: 1, deleted: 0, retained: 1 });
-          expect((await pool.query("select id from auth_rate_limit")).rowCount).toBe(3);
           const report = await runRetention({
             idempotencyKey: "retention:integration:ops-session",
             dryRun: false,
-            now: evaluatedAt,
+            now: new Date("2026-07-12T00:00:00.000Z"),
           }, integrationRetentionDependencies);
           expect(report).toMatchObject({
             dryRun: false,
@@ -153,10 +140,6 @@ describe("retention ops-session integration", () => {
             eligible: 0,
             transitioned: 0,
           });
-          expect(report.categories.authRateLimits).toMatchObject({ eligible: 1, deleted: 1, retained: 0 });
-          expect((await pool.query("select id, count from auth_rate_limit order by id")).rows).toEqual([
-            { id: "b7-boundary", count: 8 }, { id: "b7-fresh", count: 1 },
-          ]);
         } finally {
           await Promise.all([
             pool.end(),

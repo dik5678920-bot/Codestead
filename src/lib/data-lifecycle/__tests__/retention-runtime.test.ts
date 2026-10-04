@@ -78,7 +78,7 @@ const mocks = vi.hoisted(() => {
         rows: [{
           id: "existing-run",
           operation: state.claim === "mismatch" ? "export" : "retention",
-          policy_version: "2026-10-04.v6",
+          policy_version: "2026-07-25.v5",
           dry_run: resume
             || state.claim === "replay_degraded"
             || state.claim === "replay_with_unrelated_checkpoint" ? false : true,
@@ -121,7 +121,7 @@ const mocks = vi.hoisted(() => {
             },
           } : {
             runId: "existing-run",
-            policyVersion: "2026-10-04.v6",
+            policyVersion: "2026-07-25.v5",
             dryRun: state.claim === "replay_degraded"
               || state.claim === "replay_with_unrelated_checkpoint"
               ? false : true,
@@ -155,7 +155,7 @@ const mocks = vi.hoisted(() => {
         rows: [{
           id: "existing-run",
           operation: "retention",
-          policy_version: "2026-10-04.v6",
+          policy_version: "2026-07-25.v5",
           dry_run: false,
           cutoff_manifest: { rawChat: "2025-07-11T00:00:00.000Z" },
           status: "failed",
@@ -312,25 +312,6 @@ describe("retention runtime orchestration", () => {
     mocks.enqueueFileErasures.mockResolvedValue(2);
     mocks.processFileErasures.mockResolvedValue({ total: 2, removed: 1, alreadyAbsent: 1, failed: 0, pending: 0, complete: true });
     mocks.purgeCompletedFileErasureJobs.mockResolvedValue(2);
-  });
-
-  it("counts inactive auth-IP rows without deleting them during dry-run", async () => {
-    const report = await runRetention({ idempotencyKey: "retention:auth:dry-run", dryRun: true, now });
-    expect(report.categories.authRateLimits).toMatchObject({ eligible: 2, deleted: 0, retained: 2, note: "dry-run" });
-    expect(mocks.query).toHaveBeenCalledWith(
-      "select count(*)::text as count from auth_rate_limit where last_request < $1",
-      [now.getTime() - 86_400_000],
-    );
-    expect(mocks.query.mock.calls.some(([query]) => query.startsWith("delete from auth_rate_limit"))).toBe(false);
-  });
-
-  it("bounds auth-IP cleanup and rechecks refreshed timestamps outside the candidate subquery", async () => {
-    const report = await runRetention({ idempotencyKey: "retention:auth:apply", dryRun: false, batchSize: 3, now });
-    expect(report.categories.authRateLimits).toMatchObject({ eligible: 2, deleted: 1, retained: 1, hasMore: true });
-    const deletion = mocks.query.mock.calls.find(([query]) => query.startsWith("delete from auth_rate_limit"));
-    expect(deletion?.[0]).toContain("where last_request < $1 and id in (");
-    expect(deletion?.[0]).toContain("order by last_request asc, id asc limit $2");
-    expect(deletion?.[1]).toEqual([now.getTime() - 86_400_000, 3]);
   });
 
   it("builds a non-mutating dry-run report with retained counts and releases the global lock", async () => {

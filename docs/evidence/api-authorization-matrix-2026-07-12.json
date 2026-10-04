@@ -1064,7 +1064,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by getBattle({ actorUserId: authz.session!.user.id, battleId })",
-      "operationSourceSha256": "3805cb8a499b02d91ba3c326a3a9ba9270ac06db93e1d2b8580266335770ba4f"
+      "operationSourceSha256": "c1418b982064a34205bb1bf5c61693d88dcee09b34134ace9e30708e91798f8f"
     },
     {
       "operation": "POST /api/battles/[battleId]",
@@ -1077,7 +1077,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by actorUserId: authz.session!.user.id, battleId",
-      "operationSourceSha256": "9cfe51f90c6afd671f65497ecf27904e1f6d50d633d99321981558d8c4715d0c"
+      "operationSourceSha256": "ae5a7cbd9f30422a72550935abab477694c5b1ed4ea4ce248d9242ffc3daa026"
     },
     {
       "operation": "GET /api/battles",
@@ -1090,7 +1090,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "04d633df64916973882566ae8c9af82fb1145b751ed9303977ee3e4bb9874dc7"
+      "operationSourceSha256": "3c8bce67847ed0e443262e92541f43d4ca61aee48678e0f8abf8e8331582a46d"
     },
     {
       "operation": "POST /api/battles",
@@ -1103,7 +1103,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "a588d15e4da35818fa51eb2052be233b2872d71a34bd1efacffd295fc388604c"
+      "operationSourceSha256": "2d606097c9aa1b7c7abd638c294dd1f4fd1290e7b1619c2de92b74d4faff31aa"
     },
     {
       "operation": "GET /api/career",
@@ -1181,7 +1181,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by actorUserId: authz.session.user.id",
-      "operationSourceSha256": "e4fb0169adf045c86ea2c3ee83650c39cfdedbc46a5cc8ab6fa8b7d5e2ca845a"
+      "operationSourceSha256": "2b88d8d676f047789580888d2ace3bb5f6c91d66ff3cf982bcd16effc57fb93b"
     },
     {
       "operation": "POST /api/community/discussions",
@@ -1194,7 +1194,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by actorUserId: authz.session.user.id",
-      "operationSourceSha256": "f070b75a526b316a4082dd09c3121f9a79b94fc45d42c400a1dcd425ad8578ea"
+      "operationSourceSha256": "ba759eb9ce11147d18c3a3032878b741f2336fb30a8b0aba4a566f41b4c7046b"
     },
     {
       "operation": "GET /api/community/profile",
@@ -1207,7 +1207,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "6b5e95fe9ed00090942bce313bf2646e50ef4ea46e4422dd86426030a53d8586"
+      "operationSourceSha256": "cbf29c65f19fe27a301372dfaaef69e0da5c2e48fe50ac942ac30d5391972536"
     },
     {
       "operation": "PATCH /api/community/profile",
@@ -1220,7 +1220,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "4cdbe4c79ab3b1c863abf0cf967f89e3cb49bbf036fe3f5d3e8cfe0b4130c71e"
+      "operationSourceSha256": "cde27daece3762446ae10ff1b773e3c9f5d9afac9bb2f2ee5dde06b0517247a7"
     },
     {
       "operation": "GET /api/community/profiles/[publicId]",
@@ -1233,7 +1233,7 @@
       "admin": "allowed",
       "objectAuthorization": "consent-projected-cohort",
       "ownershipProof": "loadVisibleCohortProfile(publicId) consent projection",
-      "operationSourceSha256": "ff9147e4148a2544aa9ec8fc59ccf221b848e9ee6009178b49609b904d611ebd"
+      "operationSourceSha256": "9d878a0c8a9f875b03a4aa5a9fbb7c68dca61accc0ad8e2e8300c2d420d6b1f3"
     },
     {
       "operation": "GET /api/community",
@@ -1246,7 +1246,7 @@
       "admin": "allowed",
       "objectAuthorization": "consent-projected-cohort",
       "ownershipProof": "listVisibleProfileOwners() + loadVisibleCohortProfile() consent projection",
-      "operationSourceSha256": "2ed5da6dfa3f69a7d56fcd06e8598a03c02764923ad606be9683b7637d0c437d"
+      "operationSourceSha256": "bf0a516833e9249fd31676c0c46570ae68cf9ff8234f11ca95bf80f4ab965cd6"
     },
     {
       "operation": "DELETE /api/credentials/[id]",

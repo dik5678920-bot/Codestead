@@ -29,8 +29,8 @@ export const CREDENTIAL_VALUE_PATTERNS: readonly CredentialPattern[] = [
   },
   {
     detector: "google-api-key",
-    expression: /\bAIza[A-Za-z0-9_-]{20,}\b/g,
-    scanExpression: /\bAIza[A-Za-z0-9_-]{32,}\b/g,
+    expression: /\b(?:AIza|AQ\.)[A-Za-z0-9_-]{20,}\b/g,
+    scanExpression: /\b(?:AIza|AQ\.)[A-Za-z0-9_-]{32,}\b/g,
   },
   {
     detector: "github-token",

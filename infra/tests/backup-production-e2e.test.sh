@@ -1185,10 +1185,10 @@ journal = json.loads(journal_path.read_text(encoding="utf-8"))
 entries = journal.get("entries")
 if not isinstance(entries, list) or len(entries) != 72:
     raise SystemExit("reviewed migration journal must contain exactly 72 entries")
-if entries[-1].get("idx") != 72:
+if entries[-1].get("idx") != 71:
     raise SystemExit("reviewed migration journal tail index is not 71")
-if entries[-1].get("tag") != "0072_auth_database_rate_limit":
-    raise SystemExit("reviewed migration journal tail is not 0072")
+if entries[-1].get("tag") != "0071_rate_limiter_flexible":
+    raise SystemExit("reviewed migration journal tail is not 0071")
 
 rows = []
 previous_when = -1
@@ -1224,8 +1224,8 @@ PY
   migration_last_id="${migration_fixture_metadata[1]}"
   migration_created_at="${migration_fixture_metadata[2]}"
   migration_state_hash="${migration_fixture_metadata[3]}"
-  [[ "$migration_count" == 73 && "$migration_last_id" == 72 \
-    && "$migration_created_at" == 1791057232348 \
+  [[ "$migration_count" == 72 && "$migration_last_id" == 72 \
+    && "$migration_created_at" == 1791034812537 \
     && "$migration_state_hash" =~ ^[0-9a-f]{64}$ ]] \
     || fail "migration fixture metadata is invalid"
   original_value="$(docker exec "$postgres_id" psql --username=learncoding \
@@ -1401,7 +1401,7 @@ PY
     "$manifest" || fail "manifest PostgreSQL version is invalid"
   grep -Fxq "git_commit=$git_commit" "$manifest" \
     || fail "manifest Git commit does not match the real release commit"
-  grep -Fxq 'migration_count=73' "$manifest" \
+  grep -Fxq 'migration_count=72' "$manifest" \
     || fail "manifest migration count is invalid"
   grep -Fxq 'migration_last_id=72' "$manifest" \
     || fail "manifest migration last id is invalid"

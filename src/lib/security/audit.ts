@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 
 const SECRET_KEY_PATTERN = /(api[_-]?key|secret|token|password|credential|authorization)/i;
-const SECRET_VALUE_PATTERN = /\b(?:nvapi-|sk-|AIza|xox[baprs]-|gh[pousr]_)[A-Za-z0-9_\-]{8,}/;
+const SECRET_VALUE_PATTERN = /\b(?:nvapi-|sk-|AIza|AQ\.|xox[baprs]-|gh[pousr]_)[A-Za-z0-9_\-]{8,}/;
 
 function canonicalize(value: unknown): string {
   if (value === null || typeof value !== "object") return JSON.stringify(value);

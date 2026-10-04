@@ -35,7 +35,7 @@ function battleError(error: unknown) {
 }
 
 export async function GET() {
-  const authz = await requireAuth();
+  const authz = await requireAuth({ closedBookCapability: "battles" });
   if (!authz.session) return authz.response;
   return withRateLimit(
     { policy: "battle_read_user", identity: { kind: "user", value: authz.session.user.id } },
@@ -47,7 +47,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const authz = await requireAuth();
+  const authz = await requireAuth({ closedBookCapability: "battles" });
   if (!authz.session) return authz.response;
   const body = schema.safeParse(await request.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: "Choose a reviewed activity, scope, and valid time window." }, { status: 400, headers });

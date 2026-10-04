@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { isProviderError, ProviderError } from "../types";
 
 describe("stable provider error classification", () => {
-  it.each(["AUTHENTICATION", "RATE_LIMIT", "TIMEOUT", "UNAVAILABLE", "BAD_RESPONSE", "POLICY", "UNKNOWN"] as const)("accepts local and foreign %s errors", (code) => {
+  it.each(["AUTHENTICATION", "RATE_LIMIT", "TIMEOUT", "UNAVAILABLE", "BAD_RESPONSE", "MODEL_NOT_FOUND", "BAD_REQUEST", "POLICY", "UNKNOWN"] as const)("accepts local and foreign %s errors", (code) => {
     expect(isProviderError(new ProviderError("safe", code))).toBe(true);
     const foreign = runInNewContext('Object.assign(new Error("safe"), { name: "ProviderError", code })', { code });
     expect(foreign).not.toBeInstanceOf(ProviderError);

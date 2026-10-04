@@ -49,7 +49,7 @@ function errorResponse(error: unknown) {
 }
 
 export async function GET(request: NextRequest) {
-  const authz = await requireAuth();
+  const authz = await requireAuth({ closedBookCapability: "community_read" });
   if (!authz.session) return authz.response;
   return withRateLimit(
     { policy: "community_read_user", identity: { kind: "user", value: authz.session.user.id } },
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const authz = await requireAuth();
+  const authz = await requireAuth({ closedBookCapability: "community_write" });
   if (!authz.session) return authz.response;
   const body = bodySchema.safeParse(await request.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: "Choose a valid community action." }, { status: 400, headers });

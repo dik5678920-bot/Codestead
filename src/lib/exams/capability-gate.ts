@@ -9,7 +9,10 @@ export type ClosedBookCapability =
   | "practice_game"
   | "learner_files"
   | "project_workspace"
-  | "learning_workspace";
+  | "learning_workspace"
+  | "community_read"
+  | "community_write"
+  | "battles";
 
 export type ExamCapabilityDecision =
   | { readonly allowed: true }

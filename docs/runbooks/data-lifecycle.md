@@ -1,12 +1,11 @@
 # Data lifecycle, export, and account deletion
 
-Policy version `2026-10-04.v6` is authoritative in `src/lib/data-lifecycle/policy.ts`. All cutoffs are calculated from one injected UTC timestamp. Changing a duration requires a new policy version, review of this runbook, a migration if storage classification changes, and updated tests. Version v6 adds one-day cleanup of inactive IP-bearing Better Auth counters, without changing any existing retention duration; version v5 adds independent 30-day terminal-email, unresolved-delivery-authority, and non-external-console cutoffs with the 0068 redaction authority; version v4 added account-lifetime certificate and public-portfolio records; version v3 added account-lifetime append-only project revision history and file metadata snapshots; version v2 added authoritative learner drafts and their idempotency receipts. Browser session cache remains outside retention authority and is never a backup.
+Policy version `2026-07-25.v5` is authoritative in `src/lib/data-lifecycle/policy.ts`. All cutoffs are calculated from one injected UTC timestamp. Changing a duration requires a new policy version, review of this runbook, a migration if storage classification changes, and updated tests. Version v5 adds independent 30-day terminal-email, unresolved-delivery-authority, and non-external-console cutoffs with the 0068 redaction authority; version v4 added account-lifetime certificate and public-portfolio records; version v3 added account-lifetime append-only project revision history and file metadata snapshots; version v2 added authoritative learner drafts and their idempotency receipts. Browser session cache remains outside retention authority and is never a backup.
 
 ## Retention categories
 
 | Category | Launch retention | Automated action |
 |---|---:|---|
-| Better Auth IP-bearing abuse counters (`auth_rate_limit`) | Inactive for more than 1 UTC day | Count in dry-run; delete bounded oldest rows in apply, rechecking the mutable timestamp to retain concurrent refreshes and exact-cutoff rows |
 | Raw tutor messages | 12 calendar months | Hard-delete in bounded batches; remove empty old threads |
 | Completed/indeterminate `tutor.post` replay receipts | 12 calendar months | Hard-delete safe-response copies in bounded batches with the raw-chat cutoff; credential test/replace receipts remain administrator/security records |
 | Raw code submissions and runner results | 12 calendar months | Hard-delete submission; runner jobs cascade |
@@ -34,7 +33,7 @@ cd /opt/learncoding
 docker compose --env-file /etc/learncoding/compose.env \
   -f /opt/learncoding/compose.yaml --profile operations run --rm --no-deps lifecycle \
   node --import tsx /app/scripts/data-lifecycle.ts retention --dry-run \
-  --idempotency-key retention:2026-10-04.v6:YYYY-MM-DD:dry-run
+  --idempotency-key retention:2026-07-25.v5:YYYY-MM-DD:dry-run
 ```
 
 Apply requires the exact reviewed policy version:
@@ -43,8 +42,8 @@ Apply requires the exact reviewed policy version:
 docker compose --env-file /etc/learncoding/compose.env \
   -f /opt/learncoding/compose.yaml --profile operations run --rm --no-deps lifecycle \
   node --import tsx /app/scripts/data-lifecycle.ts retention --apply \
-  --confirm 2026-10-04.v6 \
-  --idempotency-key retention:2026-10-04.v6:YYYY-MM-DD:apply
+  --confirm 2026-07-25.v5 \
+  --idempotency-key retention:2026-07-25.v5:YYYY-MM-DD:apply
 ```
 
 The default key is policy/version/date/mode. Reusing a successful key returns the recorded report without deleting again. A running key fails closed; a failed key requires a new reviewed key. Every category reports eligible, physically deleted, retained, and `hasMore`; state-only changes such as expiring a request or marking a backup tombstone eligible for operator review use `transitioned` and keep `deleted=0`. Rerun with a new key when a bounded batch reports more. Failed object-file removal leaves metadata in place for retry.

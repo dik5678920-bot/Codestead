@@ -505,13 +505,6 @@
       "when": 1791034812537,
       "tag": "0071_rate_limiter_flexible",
       "breakpoints": true
-    },
-    {
-      "idx": 72,
-      "version": "7",
-      "when": 1791057232348,
-      "tag": "0072_auth_database_rate_limit",
-      "breakpoints": true
     }
   ]
 }
