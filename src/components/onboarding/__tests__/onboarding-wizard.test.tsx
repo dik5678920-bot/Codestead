@@ -58,6 +58,15 @@ describe("resumable disclosed onboarding", () => {
   beforeEach(() => vi.clearAllMocks());
   afterEach(() => vi.unstubAllGlobals());
 
+  it("uses a neutral name prompt when the account has no display name", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ ...emptyStatus, account: { name: "" } })));
+    render(<OnboardingWizard />);
+
+    const name = await screen.findByRole("textbox", { name: "Your name" });
+    expect(name).toHaveValue("");
+    expect(name).toHaveAttribute("placeholder", "Your name");
+  });
+
   it("requires disclosure, asks the learner to confirm inferred interests, then persists confirmed categories", async () => {
     const calls: Array<{ url: string; body?: Record<string, unknown> }> = [];
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
