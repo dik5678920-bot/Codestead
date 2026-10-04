@@ -76,6 +76,8 @@ Stop all app processes before applying `0071_rate_limiter_flexible`, then restar
 
 ## Better Auth database limiter and migration 0072
 
+Production always selects database storage, even if `DATABASE_URL` is missing; database failures never trigger a memory fallback. Development/test processes also select database storage when `DATABASE_URL` is nonblank. Only database-free development/test processes use memory storage so public auth pages can render in the E2E server.
+
 Better Auth stores its native budgets in `auth_rate_limit`, shared across app instances and process restarts. Its existing custom rules remain sign-in 8/minute, sign-up 3/10 minutes and TOTP verification 6/minute; the base policy remains 100/minute and other built-in/plugin rules are unchanged. The Drizzle schema exports the library model as `rateLimit`; keys are unique and `last_request` stores Unix milliseconds. The library uses conditional atomic increments rather than an in-memory budget or fallback. Native denied requests retain Better Auth's 429 JSON and `X-Retry-After` header.
 
 Auth IP resolution trusts only `cf-connecting-ip`, matching the API limiter's default header. Forwarding headers do not split an auth budget. In production, missing or invalid Cloudflare addresses use Better Auth's restrictive shared per-path bucket; dev/test uses the library's localhost fallback bucket. Keep the Cloudflare Tunnel as the only route to the origin.

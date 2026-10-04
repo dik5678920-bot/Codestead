@@ -28,7 +28,10 @@ const session = { id: "session-1", userId: "owner", userAgent: "Firefox", create
 const write = { set: vi.fn(), where: vi.fn(), values: vi.fn(), onConflictDoNothing: vi.fn() };
 const select = { from: vi.fn(), where: vi.fn(), limit: vi.fn() };
 
-beforeEach(() => {
+beforeEach(async () => {
+  vi.stubEnv("DATABASE_URL", "postgresql://app:password@localhost/codestead");
+  vi.resetModules();
+  await import("@/lib/auth");
   vi.resetAllMocks();
   for (const method of [write.set, write.values, select.from, select.where]) method.mockReturnValue(method === select.from || method === select.where ? select : write);
   select.limit.mockResolvedValue([]); mocks.select.mockReturnValue(select); mocks.update.mockReturnValue(write); mocks.insert.mockReturnValue(write);
@@ -37,6 +40,24 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe("authentication account and session lifecycle", () => {
+  it.each([
+    ["development", undefined, "memory"],
+    ["test", "", "memory"],
+    ["development", "   ", "memory"],
+    ["development", "postgresql://app:password@localhost/codestead", "database"],
+    ["test", "postgresql://app:password@localhost/codestead", "database"],
+    ["production", "postgresql://app:password@localhost/codestead", "database"],
+    ["production", undefined, "database"],
+    ["production", "", "database"],
+    ["production", "   ", "database"],
+  ])("selects %s storage with DATABASE_URL=%s as %s", async (environment, databaseUrl, storage) => {
+    vi.stubEnv("NODE_ENV", environment);
+    vi.stubEnv("DATABASE_URL", databaseUrl);
+    vi.stubEnv("AUTH_REQUIRED", "false");
+    vi.resetModules();
+    const { auth } = await import("@/lib/auth");
+    expect(auth.options.rateLimit?.storage).toBe(storage);
+  });
   it("stores auth abuse budgets in the database across app instances", () => {
     const configured = mocks.options as { rateLimit: { storage?: string } };
     expect(configured.rateLimit.storage).toBe("database");

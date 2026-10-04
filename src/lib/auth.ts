@@ -180,7 +180,11 @@ export const auth = betterAuth({
   },
   rateLimit: {
     enabled: true,
-    storage: "database",
+    // Production must never fall back to process-local abuse budgets. The
+    // database-free dev/E2E server still needs to render public auth pages.
+    storage: process.env.NODE_ENV === "production" || process.env.DATABASE_URL?.trim()
+      ? "database"
+      : "memory",
     window: 60,
     max: 100,
     customRules: {
