@@ -20,6 +20,8 @@ export interface ProviderRequest {
   temperature?: number;
   maxOutputTokens?: number;
   timeoutMs?: number;
+  baseUrl?: string;
+  transport?: (url: string, init: RequestInit) => Promise<Response>;
 }
 
 export interface ProviderResult {
@@ -31,6 +33,7 @@ export interface ProviderResult {
   outputTokens: number | null;
   latencyMs: number;
   requestId: string | null;
+  httpStatus?: number;
 }
 
 const providerErrorCodes = [

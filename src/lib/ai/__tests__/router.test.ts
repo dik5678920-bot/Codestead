@@ -381,6 +381,13 @@ describe("AI provider isolation and fallback policy", () => {
     expect(onFailure).toHaveBeenCalledWith(expect.objectContaining({ code: "BAD_RESPONSE" }));
   });
 
+  it("accepts only the exact response model recorded by an administrator test", async () => {
+    mocks.callProvider.mockResolvedValueOnce(result({ model: "resolved-version" }));
+    await expect(routeTutorRequest({ learnerId: "learner-1", candidates: [candidate({ model: "rolling-alias", verifiedReportedModel: "resolved-version" })], allowedProviders, messages })).resolves.toMatchObject({ result: { model: "resolved-version" } });
+    mocks.callProvider.mockResolvedValueOnce(result({ model: "unverified-version" }));
+    await expect(routeTutorRequest({ learnerId: "learner-1", candidates: [candidate({ model: "rolling-alias", verifiedReportedModel: "resolved-version" })], allowedProviders, messages })).rejects.toMatchObject({ code: "UNAVAILABLE" });
+  });
+
   it("accepts Google's documented models/ alias and rejects malformed aliases", async () => {
     mocks.callProvider.mockResolvedValueOnce(result({
       provider: "google",

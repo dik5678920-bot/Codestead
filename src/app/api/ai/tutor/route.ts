@@ -267,7 +267,13 @@ export async function POST(request: NextRequest) {
       provider: provider.id,
       operation: "tutor",
       model: defaultModelForProvider(provider.id),
-      priority: 1,
+      priority: 100,
+      baseUrl: null,
+      platformCredential: null,
+      configurationVersion: 0,
+      verificationStatus: "untested",
+      verifiedAt: null,
+      verifiedReportedModel: null,
       enabled: true,
       maxInputTokens: 16_000,
       maxOutputTokens: 1_500,
@@ -385,6 +391,8 @@ export async function POST(request: NextRequest) {
         model: policy.model,
         maxOutputTokens: policy.maxOutputTokens,
         timeoutMs: policy.timeoutMs,
+        ...(policy.baseUrl ? { baseUrl: policy.baseUrl } : {}),
+        ...(policy.verificationStatus === "verified" && policy.verifiedReportedModel ? { verifiedReportedModel: policy.verifiedReportedModel } : {}),
         source: "learner",
       });
     }
@@ -406,6 +414,8 @@ export async function POST(request: NextRequest) {
         model: row.model,
         maxOutputTokens: policy.maxOutputTokens,
         timeoutMs: policy.timeoutMs,
+        ...(policy.baseUrl ? { baseUrl: policy.baseUrl } : {}),
+        ...(policy.verificationStatus === "verified" && policy.verifiedReportedModel ? { verifiedReportedModel: policy.verifiedReportedModel } : {}),
         source: "admin_fallback",
         fallbackGrantId: row.grantId,
         fallbackStartsAt: row.startsAt,
@@ -423,15 +433,13 @@ export async function POST(request: NextRequest) {
       const sourceOrder = Number(left.source === "admin_fallback") -
         Number(right.source === "admin_fallback");
       if (sourceOrder !== 0) return sourceOrder;
-      // Among eligible learner keys, "Prefer this provider when healthy" wins
-      // over admin policy priority; priority only breaks the remaining ties.
-      if (left.source === "learner") {
-        const preferredOrder = Number(preferredCredentialIds.has(right.credentialId)) -
-          Number(preferredCredentialIds.has(left.credentialId));
-        if (preferredOrder !== 0) return preferredOrder;
-      }
       const leftPriority = policyByProviderModel.get(`${left.provider}\u0000${left.model}`)?.priority ?? 999;
       const rightPriority = policyByProviderModel.get(`${right.provider}\u0000${right.model}`)?.priority ?? 999;
+      // The administrator chooses app-wide failover order. Learner preference breaks ties.
+      if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+      if (left.source === "learner") {
+        return Number(preferredCredentialIds.has(right.credentialId)) - Number(preferredCredentialIds.has(left.credentialId));
+      }
       return leftPriority - rightPriority;
     });
 

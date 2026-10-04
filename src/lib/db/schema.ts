@@ -684,6 +684,16 @@ export const providerPolicy = pgTable(
     operation: text("operation").notNull(),
     model: text("model").notNull(),
     priority: integer("priority").notNull(),
+    baseUrl: text("base_url"),
+    // Only operation=provider_configuration rows may carry platform envelopes.
+    platformCredential: jsonb("platform_credential").$type<{
+      ciphertext: string; wrappedDataKey: string; wrapIv: string; dataIv: string;
+      authTag: string; keyVersion: number; lastFour: string;
+    }>(),
+    configurationVersion: integer("configuration_version").default(0).notNull(),
+    verificationStatus: text("verification_status").default("untested").notNull(),
+    verifiedReportedModel: text("verified_reported_model"),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
     enabled: boolean("enabled").default(true).notNull(),
     maxInputTokens: integer("max_input_tokens").default(16_000).notNull(),
     maxOutputTokens: integer("max_output_tokens").default(2_000).notNull(),
@@ -696,6 +706,8 @@ export const providerPolicy = pgTable(
       table.operation,
       table.model,
     ),
+    check("provider_policy_connection_check", sql`${table.configurationVersion} >= 0 AND (${table.baseUrl} IS NULL OR ${table.baseUrl} LIKE 'https://%') AND (${table.platformCredential} IS NULL OR (${table.operation} = 'provider_configuration' AND jsonb_typeof(${table.platformCredential}) = 'object'))`),
+    check("provider_policy_verification_check", sql`(${table.verificationStatus} = 'untested' AND ${table.verifiedAt} IS NULL) OR (${table.verificationStatus} = 'verified' AND ${table.verifiedAt} IS NOT NULL)`),
     index("provider_policy_priority_idx").on(table.operation, table.enabled, table.priority),
   ],
 );
