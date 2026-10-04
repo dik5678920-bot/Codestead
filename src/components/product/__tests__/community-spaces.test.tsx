@@ -106,6 +106,29 @@ function installFetch() {
 }
 
 describe("community spaces UI boundaries", () => {
+  it("hides loaded discussions when a report is blocked during a newly active exam", async () => {
+    const user = userEvent.setup();
+    render(<CommunitySpaces people={[]} />);
+    await screen.findByRole("heading", { name: "Community spaces & coding battles" });
+    vi.mocked(fetch).mockImplementation(async () => Response.json({ code: "EXAM_CLOSED_BOOK", error: "Return to the exam workspace." }, { status: 423 }));
+    await user.click(screen.getByText("Report"));
+    await user.click(screen.getByRole("button", { name: "Send report" }));
+    expect(await screen.findByRole("heading", { name: /Community and battles are unavailable during your exam/i })).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Battles" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Why does assignment point left?")).not.toBeInTheDocument();
+  });
+  it.each(["/api/community/discussions", "/api/battles"])("shows exam unavailability without discussion or battle controls when %s is locked", async (lockedUrl) => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === lockedUrl) return Response.json({ code: "EXAM_CLOSED_BOOK", error: "Return to the exam workspace." }, { status: 423 });
+      return Response.json(url === "/api/battles" ? battles : discussion);
+    }));
+    render(<CommunitySpaces people={[]} />);
+    expect(await screen.findByRole("heading", { name: /Community and battles are unavailable during your exam/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Return to exam workspace/i })).toHaveAttribute("href", "/exams");
+    expect(screen.queryByRole("tab", { name: "Battles" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+  });
   beforeEach(() => {
     vi.restoreAllMocks();
     installMatchMedia(false);
