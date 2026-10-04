@@ -180,6 +180,7 @@ export const auth = betterAuth({
   },
   rateLimit: {
     enabled: true,
+    storage: "database",
     window: 60,
     max: 100,
     customRules: {
@@ -189,6 +190,7 @@ export const auth = betterAuth({
     },
   },
   advanced: {
+    ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] },
     cookiePrefix: "learncoding",
     useSecureCookies: process.env.NODE_ENV === "production" && !isBuild,
     database: { generateId: () => randomUUID() },

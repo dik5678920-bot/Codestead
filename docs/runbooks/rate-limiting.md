@@ -1,6 +1,6 @@
 # API rate limiting
 
-Codestead uses `rate-limiter-flexible` with PostgreSQL-backed fixed-window counters so enforcement remains consistent across app processes and after a process restart. It does not require Redis. Every identity component of a counter key is an HMAC-SHA-256 digest over a domain separator, policy scope, identity type, and normalized identity. Raw IP addresses, email addresses, invitation tokens, and user IDs are never written to the rate-limit table.
+Codestead uses `rate-limiter-flexible` with PostgreSQL-backed fixed-window counters so enforcement remains consistent across app processes and after a process restart. It does not require Redis. Every identity component of an API counter key is an HMAC-SHA-256 digest over a domain separator, policy scope, identity type, and normalized identity. Raw IP addresses, email addresses, invitation tokens, and user IDs are never written to the API table. Better Auth uses a separate database table with IP-bearing keys, described below.
 
 ## Default budgets
 
@@ -73,3 +73,15 @@ The suite covers exact boundaries, concurrent calls, window reset, identity/scop
 ## Migration 0071
 
 Stop all app processes before applying `0071_rate_limiter_flexible`, then restart on this release. The migration locks the old table, copies every existing count and expiry without granting a fresh budget, and drops `api_rate_limit_window`. The old binary cannot run against the new layout; rollback requires restoring the pre-migration database and deploying the old binary together. Existing role reconciliation and restore authority pins advance to 0071 without widening grants.
+
+## Better Auth database limiter and migration 0072
+
+Better Auth stores its native budgets in `auth_rate_limit`, shared across app instances and process restarts. Its existing custom rules remain sign-in 8/minute, sign-up 3/10 minutes and TOTP verification 6/minute; the base policy remains 100/minute and other built-in/plugin rules are unchanged. The Drizzle schema exports the library model as `rateLimit`; keys are unique and `last_request` stores Unix milliseconds. The library uses conditional atomic increments rather than an in-memory budget or fallback. Native denied requests retain Better Auth's 429 JSON and `X-Retry-After` header.
+
+Auth IP resolution trusts only `cf-connecting-ip`, matching the API limiter's default header. Forwarding headers do not split an auth budget. In production, missing or invalid Cloudflare addresses use Better Auth's restrictive shared per-path bucket; dev/test uses the library's localhost fallback bucket. Keep the Cloudflare Tunnel as the only route to the origin.
+
+Unlike `api_rate_limit`, this table contains the resolved IP (including Better Auth's IPv6 subnet normalization) or the shared fallback marker, plus endpoint path, request count and last admitted-request time. It has no account identifier. Do not log or project its keys. Only the app has SELECT/INSERT/UPDATE/DELETE; retention has SELECT/DELETE, and the mail worker has no table access.
+
+Better Auth opportunistically removes entries older than its longest configured window on window resets. Policy `2026-10-04.v6` additionally makes rows inactive for more than one UTC day eligible for the existing daily retention worker, in bounded batches (default 1,000; maximum 5,000). Dry-run reports include aggregate `authRateLimits` counts. Apply deletes recheck `last_request` on the outer DELETE so a concurrent refresh cannot lose an active budget; a row exactly at the cutoff is retained. Review backlog counts and keep the daily worker running. IP-bearing rows can persist in encrypted backups until normal backup expiry.
+
+Apply `0072_auth_database_rate_limit` with the reviewed owner migration flow, reconcile roles to the new exact catalog and deploy the app and retention worker together. The migration is additive and leaves the 0071 API counter untouched. Existing in-memory auth budgets cannot be migrated and begin fresh on the first rollout; subsequent restarts retain database budgets. Rollback to a memory-backed release discards that protection.

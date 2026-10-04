@@ -942,6 +942,12 @@ export async function runRetention(input: {
       return report;
     }
     const categories: Record<string, RetentionCategoryReport> = {};
+    const authRateLimitCutoff = new Date(cutoffs.authRateLimits).getTime();
+    const authRateLimitEligible = await count(
+      client,
+      "select count(*)::text as count from auth_rate_limit where last_request < $1",
+      [authRateLimitCutoff],
+    );
     const chatEligible = await count(
       client,
       "select count(*)::text as count from chat_message where created_at < $1",
@@ -1221,6 +1227,7 @@ export async function runRetention(input: {
 
     const objectFiles = { removed: 0, alreadyAbsent: 0, failed: 0 };
     if (input.dryRun) {
+      categories.authRateLimits = category(authRateLimitEligible, 0, "dry-run");
       categories.rawChat = category(chatEligible, 0, "dry-run");
       categories.tutorReplayReceipts = category(
         tutorReceiptEligible,
@@ -1341,6 +1348,17 @@ export async function runRetention(input: {
           "Tutor safe-response copies follow the 12-month raw-chat cutoff.",
         );
 
+        // Recheck the mutable timestamp on the outer DELETE too: a concurrent
+        // auth request can refresh an old row while retention waits for its lock.
+        const deletedAuthRateLimits = await client.query<IdRow>(
+          `delete from auth_rate_limit
+            where last_request < $1 and id in (
+              select id from auth_rate_limit where last_request < $1
+              order by last_request asc, id asc limit $2
+            ) returning id`,
+          [authRateLimitCutoff, limit],
+        );
+        categories.authRateLimits = category(authRateLimitEligible, deletedAuthRateLimits.rowCount ?? 0);
         categories.rawCode = await deleteBounded(
           client,
           "code_submission",

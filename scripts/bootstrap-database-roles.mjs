@@ -4887,7 +4887,8 @@ export async function verifyDatabaseRoleBootstrapState(
             and c.relname not in (
               'backup_status_mail_authority',
               'backup_status_mail_admin_guard',
-              'email_outbox_idempotency_authority'
+              'email_outbox_idempotency_authority',
+              'auth_rate_limit'
             )
             and c.relname <> all($4::text[])
             and (
@@ -4910,7 +4911,8 @@ export async function verifyDatabaseRoleBootstrapState(
               'email_outbox',
               'backup_status_mail_authority',
               'backup_status_mail_admin_guard',
-              'email_outbox_idempotency_authority'
+              'email_outbox_idempotency_authority',
+              'auth_rate_limit'
             )
             and c.relname <> all($4::text[])
             and (
@@ -4924,6 +4926,27 @@ export async function verifyDatabaseRoleBootstrapState(
               or has_table_privilege('learncoding_worker', c.oid, 'MAINTAIN')
             )
        ) worker_other_table_privileges_exact,
+       case when to_regclass('public.auth_rate_limit') is null then true
+         else not exists (
+           select 1
+             from unnest(array['learncoding_app','learncoding_ops','learncoding_worker','learncoding_migrator','learncoding_backup_reporter']) role_name
+            cross join unnest(array['SELECT','INSERT','UPDATE','DELETE','TRUNCATE','REFERENCES','TRIGGER','MAINTAIN']) privilege_name
+            where has_table_privilege(role_name, 'public.auth_rate_limit', privilege_name)
+                  is distinct from (
+                    (role_name = 'learncoding_app' and privilege_name in ('SELECT','INSERT','UPDATE','DELETE'))
+                    or (role_name = 'learncoding_ops' and privilege_name in ('SELECT','DELETE'))
+                  )
+         ) and not exists (
+           select 1
+             from unnest(array['learncoding_app','learncoding_ops','learncoding_worker','learncoding_migrator','learncoding_backup_reporter']) role_name
+            cross join unnest(array['SELECT','INSERT','UPDATE','REFERENCES']) privilege_name
+            where has_any_column_privilege(role_name, 'public.auth_rate_limit', privilege_name)
+                  is distinct from (
+                    (role_name = 'learncoding_app' and privilege_name in ('SELECT','INSERT','UPDATE'))
+                    or (role_name = 'learncoding_ops' and privilege_name = 'SELECT')
+                  )
+         )
+       end auth_rate_limit_privileges_exact,
        case when to_regclass('public.email_outbox') is null then true
          else
            has_table_privilege(

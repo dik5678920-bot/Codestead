@@ -37,6 +37,25 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllEnvs(); vi.restoreAllMocks(); });
 
 describe("authentication account and session lifecycle", () => {
+  it("stores auth abuse budgets in the database across app instances", () => {
+    const configured = mocks.options as { rateLimit: { storage?: string } };
+    expect(configured.rateLimit.storage).toBe("database");
+  });
+  it("resolves auth IP budgets only from the trusted Cloudflare header", () => {
+    const configured = mocks.options as { advanced: { ipAddress?: { ipAddressHeaders?: string[] } } };
+    expect(configured.advanced.ipAddress?.ipAddressHeaders).toEqual(["cf-connecting-ip"]);
+  });
+  it("preserves every existing auth custom budget and window", () => {
+    const configured = mocks.options as { rateLimit: unknown };
+    expect(configured.rateLimit).toMatchObject({
+      enabled: true, window: 60, max: 100,
+      customRules: {
+        "/sign-in/email": { window: 60, max: 8 },
+        "/sign-up/email": { window: 600, max: 3 },
+        "/two-factor/verify-totp": { window: 60, max: 6 },
+      },
+    });
+  });
   it.each([undefined, { ...activation, email: "another@example.test" }])("refuses account creation without matching activation authority", async (authority) => {
     mocks.activation.mockReturnValue(authority);
     expect(await options().databaseHooks.user.create.before({ email: "LEARNER@example.test" })).toBe(false);

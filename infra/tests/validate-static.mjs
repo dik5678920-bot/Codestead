@@ -587,8 +587,8 @@ expect(
   /FROM worker AS operations/.test(dockerfile) &&
     /COPY --chown=node:node content \.\/content/.test(operationsStage) &&
     /COPY --chown=node:node drizzle\/meta\/_journal\.json \.\/drizzle\/meta\/_journal\.json/.test(operationsStage) &&
-    /COPY --chown=node:node drizzle\/meta\/0071_public_column_attnums\.json \.\/drizzle\/meta\/0071_public_column_attnums\.json/.test(operationsStage) &&
-    /COPY --chown=node:node drizzle\/meta\/0071_snapshot\.json \.\/drizzle\/meta\/0071_snapshot\.json/.test(operationsStage) &&
+    /COPY --chown=node:node drizzle\/meta\/0072_public_column_attnums\.json \.\/drizzle\/meta\/0072_public_column_attnums\.json/.test(operationsStage) &&
+    /COPY --chown=node:node drizzle\/meta\/0072_snapshot\.json \.\/drizzle\/meta\/0072_snapshot\.json/.test(operationsStage) &&
     /COPY --chown=node:node scripts\/bootstrap-admin\.ts \.\/scripts\/bootstrap-admin\.ts/.test(operationsStage) &&
     /COPY --chown=node:node scripts\/seed-platform\.ts \.\/scripts\/seed-platform\.ts/.test(operationsStage) &&
     /COPY --chown=node:node scripts\/bootstrap-database-roles\.mjs \.\/scripts\/bootstrap-database-roles\.mjs/.test(operationsStage) &&
@@ -1362,47 +1362,48 @@ for (const [timerPath, timer] of persistentTimers) {
 
 const lifecycleService = composeService("lifecycle");
 expect(
-  /data-lifecycle\.ts[\s\S]*?- retention[\s\S]*?- --apply[\s\S]*?- --confirm[\s\S]*?- 2026-07-25\.v5/.test(
+  /data-lifecycle\.ts[\s\S]*?- retention[\s\S]*?- --apply[\s\S]*?- --confirm[\s\S]*?- 2026-10-04\.v6/.test(
     lifecycleService,
   ),
-  "Compose lifecycle command must use canonical retention version 2026-07-25.v5",
+  "Compose lifecycle command must use canonical retention version 2026-10-04.v6",
 );
 expect(
-  /"worker:retention": "tsx scripts\/data-lifecycle\.ts retention --apply --confirm 2026-07-25\.v5"/.test(
+  /"worker:retention": "tsx scripts\/data-lifecycle\.ts retention --apply --confirm 2026-10-04\.v6"/.test(
     packageJson,
   ) &&
-    /RETENTION_POLICY_VERSION = "2026-07-25\.v5"/.test(retentionPolicy) &&
-    /2026-07-25\.v5/.test(retentionPolicyTest) &&
-    /2026-07-25\.v5/.test(retentionRuntimeTest) &&
-    /2026-07-25\.v5/.test(composeValidator),
-  "active retention runtime and validation surfaces must agree on 2026-07-25.v5",
+    /RETENTION_POLICY_VERSION = "2026-10-04\.v6"/.test(retentionPolicy) &&
+    /2026-10-04\.v6/.test(retentionPolicyTest) &&
+    /2026-10-04\.v6/.test(retentionRuntimeTest) &&
+    /2026-10-04\.v6/.test(composeValidator),
+  "active retention runtime and validation surfaces must agree on 2026-10-04.v6",
 );
 expect(
-  /Policy version `2026-07-25\.v5` is authoritative/.test(lifecycleRunbook) &&
-    /Version v5 adds/.test(lifecycleRunbook) &&
+  /Policy version `2026-10-04\.v6` is authoritative/.test(lifecycleRunbook) &&
+    /Version v6 adds/.test(lifecycleRunbook) &&
+    /version v5 adds/.test(lifecycleRunbook) &&
     /version v3 added/.test(lifecycleRunbook) &&
     /version v2 added/.test(lifecycleRunbook) &&
-    (lifecycleRunbook.match(/retention:2026-07-25\.v5:/g) ?? []).length === 2 &&
+    (lifecycleRunbook.match(/retention:2026-10-04\.v6:/g) ?? []).length === 2 &&
     !/2026-07-12\.v3/.test(lifecycleRunbook),
-  "lifecycle runbook must make v5 authoritative while preserving v2/v3 history",
+  "lifecycle runbook must make v6 authoritative while preserving v2/v3 history",
 );
 expect(
-  /docker compose --env-file \/etc\/learncoding\/compose\.env \\\r?\n\s+-f \/opt\/learncoding\/compose\.yaml --profile operations run --rm --no-deps lifecycle \\\r?\n\s+node --import tsx \/app\/scripts\/data-lifecycle\.ts retention --apply \\\r?\n\s+--confirm 2026-07-25\.v5 \\\r?\n\s+--idempotency-key retention:2026-07-25\.v5:YYYY-MM-DD:apply/.test(
+  /docker compose --env-file \/etc\/learncoding\/compose\.env \\\r?\n\s+-f \/opt\/learncoding\/compose\.yaml --profile operations run --rm --no-deps lifecycle \\\r?\n\s+node --import tsx \/app\/scripts\/data-lifecycle\.ts retention --apply \\\r?\n\s+--confirm 2026-10-04\.v6 \\\r?\n\s+--idempotency-key retention:2026-10-04\.v6:YYYY-MM-DD:apply/.test(
     lifecycleRunbook,
   ) && !/npm run lifecycle -- retention --apply/.test(lifecycleRunbook),
-  "lifecycle runbook apply example must use the explicit Compose lifecycle container and v5 confirmation",
+  "lifecycle runbook apply example must use the explicit Compose lifecycle container and v6 confirmation",
 );
 expect(
-  /Retention policy `2026-07-25\.v5`/.test(draftSyncGuide) &&
-    /Retention policy `2026-07-25\.v5`/.test(projectRevisionsGuide),
-  "draft and project-revision product guides must name active retention v5",
+  /Retention policy `2026-10-04\.v6`/.test(draftSyncGuide) &&
+    /Retention policy `2026-10-04\.v6`/.test(projectRevisionsGuide),
+  "draft and project-revision product guides must name active retention v6",
 );
 expect(
-  /2026-07-25\.v5/.test(deploymentGuide) &&
+  /2026-10-04\.v6/.test(deploymentGuide) &&
     /runbooks\/data-lifecycle\.md/.test(deploymentGuide) &&
-    /2026-07-25\.v5/.test(updatesRunbook) &&
+    /2026-10-04\.v6/.test(updatesRunbook) &&
     /\(data-lifecycle\.md\)/.test(updatesRunbook),
-  "deployment and update guides must link to the canonical v5 lifecycle procedure",
+  "deployment and update guides must link to the canonical v6 lifecycle procedure",
 );
 expect(
   /NODEJS_APT_VERSION=22\.23\.1-1nodesource1/.test(deploymentGuide) &&

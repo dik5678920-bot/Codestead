@@ -111,17 +111,17 @@ async function fixtureRoot() {
 }
 
 describe("restore smoke verifier", () => {
-  it("validates the exact 0071 ledger and required authority relations without trusting row data", async () => {
+  it("validates the exact 0072 ledger and required authority relations without trusting row data", async () => {
     const queries: string[] = [];
     const ledgerRows = await exactAppliedLedgerRows();
     const {
       REVIEWED_MIGRATION_LEDGER,
       REVIEWED_MIGRATION_LEDGER_SHA256,
     } = await reviewedLedger();
-    expect(REVIEWED_MIGRATION_LEDGER).toHaveLength(72);
+    expect(REVIEWED_MIGRATION_LEDGER).toHaveLength(73);
     expect(REVIEWED_MIGRATION_LEDGER.at(-1)).toMatchObject({
-      idx: 71,
-      tag: "0071_rate_limiter_flexible",
+      idx: 72,
+      tag: "0072_auth_database_rate_limit",
     });
     const client = {
       async query(sql: string) {
@@ -147,7 +147,7 @@ describe("restore smoke verifier", () => {
     };
 
     await expect(verifyDatabaseSchema(client)).resolves.toEqual({
-      appliedMigrationCount: 72,
+      appliedMigrationCount: 73,
       migrationLedgerSha256: REVIEWED_MIGRATION_LEDGER_SHA256,
       publicTableCount: 18,
     });

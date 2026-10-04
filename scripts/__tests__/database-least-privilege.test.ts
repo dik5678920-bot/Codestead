@@ -1482,7 +1482,10 @@ describe("database least-privilege bootstrap", () => {
     const opsProofCalls = [
       ...opsProofSource.matchAll(/(?:\bretention[.])?runRetention\(/gu),
     ];
-    expect(opsProofCalls).toHaveLength(2);
+    expect(opsProofCalls).toHaveLength(3);
+    expect(opsProofSource).toMatch(
+      /const dryRun = await runRetention\(\{[\s\S]*?\}, integrationRetentionDependencies\);/u,
+    );
     expect(opsProofSource).toMatch(
       /const integrationRetentionDependencies = \{[\s\S]*?acquireClient: \(\) => integrationRetentionPool[.]connect\(\),[\s\S]*?\} as const;/u,
     );
