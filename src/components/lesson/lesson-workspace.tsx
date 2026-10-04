@@ -49,6 +49,7 @@ import {
 } from "@/lib/runner/practice-request-cache";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import { DeterministicLogicGame } from "./deterministic-logic-game";
+import { ConfirmedInterestAnalogy } from "./confirmed-interest-analogy";
 import { InteractiveLessonFlow } from "./interactive-lesson-flow";
 import { PracticePanel } from "./practice-panel";
 import { useRegisterTutorLesson } from "./tutor-context";
@@ -126,13 +127,6 @@ function codeLabStdinStorageKey(
   }
 }
 
-const fallbackVisualStates = [
-  { line: 1, label: "Start", values: { count: "0", item: "—", total: "0" }, note: "Memory is allocated for the declared state." },
-  { line: 2, label: "Read", values: { count: "0", item: "4", total: "0" }, note: "The current value enters the loop body." },
-  { line: 3, label: "Update", values: { count: "1", item: "4", total: "4" }, note: "The assignment creates the next observable state." },
-  { line: 2, label: "Repeat", values: { count: "1", item: "7", total: "4" }, note: "Control returns to the condition or iterator." },
-  { line: 3, label: "Finish", values: { count: "2", item: "7", total: "11" }, note: "The invariant still holds when iteration finishes." },
-];
 
 function blockSummary(block: LessonBlueprintBlock) {
   switch (block.kind) {
@@ -148,14 +142,14 @@ function blockSummary(block: LessonBlueprintBlock) {
   }
 }
 
-function LessonBlock({ block }: { block: LessonBlueprintBlock }) {
+function LessonBlock({ block, courseId, skillId }: { block: LessonBlueprintBlock; courseId: string; skillId: string }) {
   if (block.kind === "objective") return <><p className={styles.lead}>By the end of this lesson, you should be able to:</p><ul className={styles.outcomes}>{block.outcomes.map((item) => <li key={item}><CheckCircle2 size={17} /> {item}</li>)}</ul><div className={styles.evidence}><span>Evidence we will look for</span>{block.evidenceTypes.map((item) => <i key={item}><LessonInline>{item}</LessonInline></i>)}</div></>;
   if (block.kind === "mental-model") return <><div className={styles.callout}><Lightbulb size={21} /><div><strong>The plain-language anchor</strong><p>{block.plainLanguageSeed}</p></div></div><p>{block.authorPrompt}</p><div className={styles.termRow}>{block.canonicalTerms.map((term) => <span key={term}>{term}</span>)}</div></>;
   if (block.kind === "source-linked-explanation-seed") return <><p className={styles.lead}>{block.seed}</p><p>This definition is intentionally short in the offline blueprint. Codestead may elaborate from this bounded source context, but cannot change the official skill or grading rule.</p><div className={styles.sourceList}>{block.sources.map((source) => <a href={source.url} key={source.id} target="_blank" rel="noreferrer"><ExternalLink size={14} /><span><strong>{source.title}</strong><small>{source.versionOrDate}</small></span></a>)}</div></>;
   if (block.kind === "worked-example-specification") { const spec = block.specification; return <><p className={styles.lead}>{spec.goal}</p><div className={styles.exampleGrid}><div><span>Start from</span><p>{spec.startingState}</p></div><div><span>Build</span><p>{spec.artifactType}</p></div></div><ol className={styles.steps}>{spec.requiredSteps.map((item) => <li key={item}><LessonInline>{item}</LessonInline></li>)}</ol><h3>Verification gate</h3><ul>{spec.validationRequirements.map((item) => <li key={item}><LessonInline>{item}</LessonInline></li>)}</ul></>; }
   if (block.kind === "misconception-prompts") return <><p className={styles.lead}>Before moving on, test these tempting assumptions.</p><div className={styles.misconceptions}>{block.prompts.map((prompt, index) => <details key={prompt}><summary><span>{index + 1}</span><LessonInline>{prompt}</LessonInline></summary><p>Write a prediction, then use a trace or a minimal run to confirm it. The application records the evidence; an AI guess never becomes mastery.</p></details>)}</div></>;
   if ("mode" in block) return <><div className={styles.activityHeader}><span>{block.mode}</span><i>{block.applicability}</i></div><p className={styles.lead}>{block.promptSeed}</p><h3>What counts as evidence</h3><ul>{block.acceptanceSignals.map((item) => <li key={item}><LessonInline>{item}</LessonInline></li>)}</ul>{block.neutralContextRequired && <p className={styles.callout}><Sparkles size={18} /> This transfer check removes the hobby analogy so we know the concept—not the story—was learned.</p>}</>;
-  if (block.kind === "analogy-slot") return <><div className={styles.callout}><Sparkles size={20} /><div><strong>Analogy is optional</strong><p>The canonical lesson must stand alone. If you enabled interests, Codestead can offer one analogy, explain where it breaks, and ask you to confirm it helps.</p></div></div><button className="button button-secondary" type="button">Use my confirmed interests</button></>;
+  if (block.kind === "analogy-slot") return <><div className={styles.callout}><Sparkles size={20} /><div><strong>Analogy is optional</strong><p>The canonical lesson must stand alone. If you enabled interests, Codestead can offer one analogy and explain where it breaks.</p></div></div><ConfirmedInterestAnalogy key={`${courseId}:${skillId}`} courseId={courseId} skillId={skillId} /></>;
   if (block.kind === "recap") return <><p className={styles.lead}>Close the lesson without looking back first.</p><div className={styles.recap}>{block.prompts.map((prompt) => <label key={prompt}><span><LessonInline>{prompt}</LessonInline></span><textarea placeholder="Explain in your own words…" /></label>)}</div></>;
   if (block.kind === "accessibility-text") return <><p className={styles.lead}>{block.textAlternativeSeed}</p><ul>{block.requirements.map((item) => <li key={item}><LessonInline>{item}</LessonInline></li>)}</ul></>;
   return null;
@@ -169,8 +163,8 @@ export function Visualizer({ trace }: { trace?: AuthoredLesson["trace"] }) {
         values: step.state,
         note: step.explanation,
       }))
-    : fallbackVisualStates;
-  const artifact = trace?.artifact ?? ["count = 0", "for item in [4, 7]:", "    count += 1; total += item"];
+    : [];
+  const artifact = trace?.artifact ?? [];
   const [index, setIndex] = useState(0);
   const state = visualStates[index];
   const [playing, setPlaying] = useState(false);
@@ -181,7 +175,7 @@ export function Visualizer({ trace }: { trace?: AuthoredLesson["trace"] }) {
     }, 900);
     return () => window.clearInterval(timer);
   }, [playing, visualStates.length]);
-  if (!state) return <div className={styles.visualizer}><p>No trace states are available for this draft.</p></div>;
+  if (!state) return <div className={styles.visualizer} role="status"><p>No visual trace for this skill yet</p></div>;
   return <div className={styles.visualizer}><div className={styles.visualTop}><span><Sparkles size={16} /> {trace ? "Topic trace visualizer" : "State visualizer"}</span><div><button aria-label="Restart visualizer" onClick={() => { setIndex(0); setPlaying(false); }}><RotateCcw size={15} /></button><button aria-label={playing ? "Pause visualizer" : "Play visualizer"} onClick={() => setPlaying(!playing)}>{playing ? <Pause size={15} /> : <Play size={15} />}</button><button aria-label="Next visualizer step" onClick={() => setIndex((value) => Math.min(visualStates.length - 1, value + 1))}><StepForward size={15} /></button></div></div><div className={styles.fakeCode}>{artifact.map((line, lineIndex) => <code className={state.line === lineIndex + 1 ? styles.activeLine : ""} key={`${lineIndex}-${line}`}><b>{lineIndex + 1}</b>{line}</code>)}</div><div className={styles.memoryTable}><span>Variable</span><span>Value now</span>{Object.entries(state.values).flatMap(([key, value]) => [<code key={`${key}-k`}>{key}</code>,<strong key={`${key}-v`}>{value}</strong>])}</div><div aria-live="polite" className={styles.visualNote}><b>Step {index + 1}: {state.label}</b><p>{state.note}</p></div><div className={styles.visualProgress}>{visualStates.map((_, item) => <i className={item <= index ? styles.doneStep : ""} key={item} />)}</div></div>;
 }
 
@@ -195,7 +189,7 @@ function FallbackLogicGame({ skill }: { skill: AtomicSkill }) {
     { title: "Explain the mechanism", prompt: `In one sentence, explain why your change demonstrates: ${skill.outcomes[0]}`, token: "" },
   ];
   const challenge = challenges[stage];
-  function check() { if (answer.trim().length < 8) { setFeedback("Give a little more evidence—at least one complete idea."); return; } setFeedback("Evidence captured. The deterministic test still decides correctness in the practice or runner panel."); if (stage < challenges.length - 1) { setTimeout(() => { setStage((value) => value + 1); setAnswer(""); setFeedback(null); }, 500); } }
+  function check() { if (answer.trim().length < 8) { setFeedback("Write at least one complete idea."); return; } setFeedback("This is an ungraded reflection. No evidence is saved. Use practice or the runner for a correctness check."); if (stage < challenges.length - 1) { setTimeout(() => { setStage((value) => value + 1); setAnswer(""); setFeedback(null); }, 500); } }
   return <div className={styles.game}><div className={styles.gameScene}><span className={styles.gameBot}>B</span><div className={styles.gamePath}>{challenges.map((_,index) => <i className={index <= stage ? styles.gameActive : ""} key={index}>{index + 1}</i>)}</div><span className={styles.gameGoal}>★</span></div><span className={styles.eyebrow}>Logic quest · stage {stage + 1} of {challenges.length}</span><h3>{challenge.title}</h3><p>{challenge.prompt}</p><textarea value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Type your reasoning or code fragment…" /><div className={styles.gameActions}><button className="button button-primary" type="button" onClick={check}>{stage === challenges.length - 1 ? "Finish quest" : "Run action"}<ArrowRight size={15} /></button><button className="button button-ghost" type="button" onClick={() => setFeedback("Hint: start from the skill outcome and name a before-and-after state.")}>Use a hint</button></div>{feedback && <p className={styles.gameFeedback}>{feedback}</p>}</div>;
 }
 
@@ -1060,7 +1054,7 @@ function BlueprintLessonWorkspace({ assessmentBank, blueprint, skill, courseTitl
       <main className={styles.content}>
         <LearningModeTabs mode={mode} onChange={setMode} />
         <section aria-labelledby={`learning-mode-tab-${mode}`} id="learning-mode-panel" role="tabpanel" tabIndex={0}>
-          {mode === "lesson" && <><article className={styles.lessonCard}><div className={styles.blockMeta}><span>{String(active + 1).padStart(2, "0")} / {String(blueprint.blocks.length).padStart(2, "0")}</span><i>{block.kind.replaceAll("-", " ")}</i></div><h1>{block.title}</h1><p className={styles.blockSummary}>{blockSummary(block)}</p><LessonBlock block={block} /><div className={styles.draftNotice}><ListChecks size={17} /><span><strong>Beta authored fallback</strong><small>{blueprint.provenance.notice}</small></span></div></article><InlineTopicCheckpoint draftPreviewCount={assessmentBank?.items.length ?? 0} skillId={skill.id} /></>}
+          {mode === "lesson" && <><article className={styles.lessonCard}><div className={styles.blockMeta}><span>{String(active + 1).padStart(2, "0")} / {String(blueprint.blocks.length).padStart(2, "0")}</span><i>{block.kind.replaceAll("-", " ")}</i></div><h1>{block.title}</h1><p className={styles.blockSummary}>{blockSummary(block)}</p><LessonBlock block={block} courseId={blueprint.courseId} skillId={skill.id} /><div className={styles.draftNotice}><ListChecks size={17} /><span><strong>Beta authored fallback</strong><small>{blueprint.provenance.notice}</small></span></div></article><InlineTopicCheckpoint draftPreviewCount={assessmentBank?.items.length ?? 0} skillId={skill.id} /></>}
           {mode === "practice" && <PracticePanel skillId={skill.id} draftPreviewCount={assessmentBank?.items.length ?? 0} />}
           {mode === "code" && <CodeLab courseId={blueprint.courseId} dsaRunnerLanguage={dsaRunnerLanguage} skillId={skill.id} runnerLabel={runnerLabel} />}
           {mode === "visual" && <Visualizer />}

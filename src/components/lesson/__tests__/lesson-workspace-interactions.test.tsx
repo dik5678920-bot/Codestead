@@ -77,7 +77,7 @@ describe("lesson workspace interactions", () => {
     expect(screen.getByText(/at least one complete idea/i)).toBeInTheDocument();
     await user.type(screen.getByPlaceholderText(/reasoning or code fragment/i), "The output changes from unknown to 91.");
     await user.click(screen.getByRole("button", { name: /Run action/i }));
-    expect(screen.getByText(/Evidence captured/i)).toBeInTheDocument();
+    expect(screen.getByText(/No evidence is saved/i)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /Use a hint/i }));
     expect(screen.getByText(/before-and-after state/i)).toBeInTheDocument();
   });
