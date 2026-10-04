@@ -505,6 +505,13 @@
       "when": 1791034812537,
       "tag": "0071_rate_limiter_flexible",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1791122117336,
+      "tag": "0072_admin_ai_models",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { defaultModelForProvider, type CatalogProviderId } from "@/lib/ai/provider-catalog";
 import { callProvider } from "@/lib/ai/providers";
@@ -24,7 +24,7 @@ export async function validateProviderCredential(input: {
     .where(
       and(
         eq(providerPolicy.provider, input.provider),
-        eq(providerPolicy.operation, "credential_validation"),
+        inArray(providerPolicy.operation, ["credential_validation", "tutor"]),
         eq(providerPolicy.enabled, true),
       ),
     )
@@ -55,6 +55,7 @@ export async function validateProviderCredential(input: {
       provider: input.provider,
       apiKey: input.secret,
       model,
+      ...(policy?.baseUrl ? { baseUrl: policy.baseUrl } : {}),
       messages: [{ role: "user", content: "Reply with exactly OK." }],
       // gpt-oss is a reasoning model: a tiny budget is spent thinking and returns no text.
       maxOutputTokens: 256,

@@ -1,6 +1,6 @@
 "use client";
 
-import { Award, BookOpenCheck, BriefcaseBusiness, ClipboardList, FolderKanban, Gauge, Scale, ShieldCheck, Users, Wrench } from "lucide-react";
+import { Bot, Award, BookOpenCheck, BriefcaseBusiness, ClipboardList, FolderKanban, Gauge, Scale, ShieldCheck, Users, Wrench } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -8,6 +8,7 @@ import styles from "./admin.module.css";
 import { AdminStepUpDialog } from "./step-up";
 
 const links = [
+  { href: "/admin/ai-models", label: "AI models", icon: Bot, exact: false },
   { href: "/admin", label: "Overview", icon: Gauge, exact: true },
   { href: "/admin#learners", label: "Learners", icon: Users, exact: false },
   { href: "/admin/access", label: "Access queue", icon: ClipboardList, exact: false },

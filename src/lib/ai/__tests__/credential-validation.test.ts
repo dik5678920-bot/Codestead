@@ -84,6 +84,15 @@ describe("provider credential validation", () => {
     expect(mocks.callProvider).toHaveBeenLastCalledWith(expect.objectContaining({ model: "test/tutor" }));
   });
 
+  it("uses the administrator model and endpoint with only the learner's own credential", async () => {
+    vi.stubEnv("GOOGLE_TUTOR_MODEL", "environment-model");
+    vi.stubEnv("GOOGLE_VALIDATION_MODEL", "environment-probe");
+    mocks.limit.mockResolvedValueOnce([{ model: "administrator-model", baseUrl: "https://gateway.example.com/v1", platformCredential: { ciphertext: "platform-envelope" } }]);
+    await validateProviderCredential({ ...base, provider: "google" });
+    expect(mocks.callProvider).toHaveBeenCalledWith(expect.objectContaining({ model: "administrator-model", baseUrl: "https://gateway.example.com/v1", apiKey: base.secret }));
+    expect(JSON.stringify(mocks.callProvider.mock.calls)).not.toContain("platform-envelope");
+  });
+
   it("logs HTTP status with code and provider without the error body", async () => {
     mocks.callProvider.mockRejectedValueOnce(new ProviderError(base.secret, "MODEL_NOT_FOUND", 410));
     await expect(validateProviderCredential(base)).resolves.toMatchObject({ status: "unreachable", failureCode: "MODEL_NOT_FOUND" });

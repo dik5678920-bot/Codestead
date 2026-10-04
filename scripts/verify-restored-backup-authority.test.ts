@@ -176,7 +176,7 @@ describe("restore-only migration-ledger authority", () => {
     };
 
     await expect(verifyRestoreLedgerRuntimeAuthority(client)).resolves.toEqual({
-      appliedCount: 72,
+      appliedCount: 73,
       complete: true,
       ledgerSha256: REVIEWED_MIGRATION_LEDGER_SHA256,
     });
@@ -458,15 +458,15 @@ describe("restore-only migration-ledger authority", () => {
     await writeFile(
       path.join(decoyModuleRoot, "reviewed-migration-ledger.mjs"),
       [
-        "export const REVIEWED_MIGRATION_LEDGER = Array.from({ length: 72 }, (_, idx) => ({",
+        "export const REVIEWED_MIGRATION_LEDGER = Array.from({ length: 73 }, (_, idx) => ({",
         "  idx,",
         "  when: idx + 1,",
-        "  tag: idx === 71 ? '0071_rate_limiter_flexible' : `${String(idx).padStart(4, '0')}_decoy`,",
+        "  tag: idx === 72 ? '0072_admin_ai_models' : `${String(idx).padStart(4, '0')}_decoy`,",
         "  sqlSha256: 'a'.repeat(64),",
         "}));",
         `export const REVIEWED_MIGRATION_LEDGER_SHA256 = "${fakeDigest}";`,
         "export async function verifyAppliedMigrationLedger() {",
-        `  return { appliedCount: 72, complete: true, ledgerSha256: "${fakeDigest}" };`,
+        `  return { appliedCount: 73, complete: true, ledgerSha256: "${fakeDigest}" };`,
         "}",
         "",
       ].join("\n"),
@@ -495,7 +495,7 @@ describe("restore-only migration-ledger authority", () => {
     process.chdir(decoyRoot);
     try {
       await expect(verifyRestoreLedgerRuntimeAuthority(client)).resolves.toEqual({
-        appliedCount: 72,
+        appliedCount: 73,
         complete: true,
         ledgerSha256: REVIEWED_MIGRATION_LEDGER_SHA256,
       });

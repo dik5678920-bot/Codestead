@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { safeProviderRequest } from "./safe-provider-http";
 
 import {
   isProviderError,
@@ -112,8 +113,10 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
   const startedAt = performance.now();
   const definition =
     request.provider === "custom_openai_compatible"
-      ? { baseUrl: safeCustomBaseUrl(), protocol: "openai" as const }
+      ? { baseUrl: request.baseUrl ?? safeCustomBaseUrl(), protocol: "openai" as const }
       : providerDefinitions[request.provider];
+  const baseUrl = request.baseUrl ?? definition.baseUrl;
+  const transport = request.transport ?? (request.baseUrl ? safeProviderRequest : fetch);
   const timeoutMs = Number.isFinite(request.timeoutMs ?? 30_000)
     ? Math.min(Math.max(request.timeoutMs ?? 30_000, 1_000), 120_000)
     : 30_000;
@@ -138,7 +141,7 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
         .filter((message) => message.role === "system")
         .map((message) => message.content)
         .join("\n\n");
-      const url = `${definition.baseUrl}/${isAnthropic ? "messages" : "chat/completions"}`;
+      const url = `${baseUrl}/${isAnthropic ? "messages" : "chat/completions"}`;
       const headers: Record<string, string> = {
         "content-type": "application/json",
         accept: "application/json",
@@ -172,7 +175,7 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
             stream: false,
           };
 
-      const response = await fetch(url, {
+      const response = await transport(url, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
@@ -205,6 +208,7 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
           .trim();
         if (!content) throw new ProviderError("Provider returned no tutor text.", "BAD_RESPONSE");
         return {
+          httpStatus: response.status,
           provider: request.provider,
           model: parsed.data.model ?? request.model,
           content,
@@ -222,6 +226,7 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
       const content = choice?.message.content?.trim();
       if (!content) throw new ProviderError("Provider returned no tutor text.", "BAD_RESPONSE");
       return {
+        httpStatus: response.status,
         provider: request.provider,
         model: parsed.data.model ?? request.model,
         content,

@@ -1,17 +1,17 @@
 {
   "schemaVersion": 1,
-  "files": 126,
-  "operations": 163,
-  "matrixRows": 163,
+  "files": 127,
+  "operations": 165,
+  "matrixRows": 165,
   "boundaryCounts": {
     "public": 6,
     "auth-handler": 2,
     "authenticated": 92,
-    "admin": 63
+    "admin": 65
   },
   "objectAuthorizationCounts": {
     "public-input": 6,
-    "administrator-scope": 63,
+    "administrator-scope": 65,
     "session-user": 86,
     "auth-provider": 2,
     "no-user-object": 4,
@@ -181,6 +181,32 @@
       "objectAuthorization": "administrator-scope",
       "ownershipProof": "requireAdmin() before request parsing or data access",
       "operationSourceSha256": "ee405234c98522ff6c3ac3643c944319c87b19e38dc73071922398611009ca02"
+    },
+    {
+      "operation": "GET /api/admin/ai-models",
+      "file": "src/app/api/admin/ai-models/route.ts",
+      "route": "/api/admin/ai-models",
+      "method": "GET",
+      "boundary": "admin",
+      "anonymous": "authenticated",
+      "learner": "administrator",
+      "admin": "allowed",
+      "objectAuthorization": "administrator-scope",
+      "ownershipProof": "requireAdmin() before request parsing or data access",
+      "operationSourceSha256": "af779196c8768e0fdc7e52dfe331e0648db7bb7c2602d94568c0dfede8452500"
+    },
+    {
+      "operation": "POST /api/admin/ai-models",
+      "file": "src/app/api/admin/ai-models/route.ts",
+      "route": "/api/admin/ai-models",
+      "method": "POST",
+      "boundary": "admin",
+      "anonymous": "authenticated",
+      "learner": "administrator",
+      "admin": "allowed",
+      "objectAuthorization": "administrator-scope",
+      "ownershipProof": "requireAdmin() before request parsing or data access",
+      "operationSourceSha256": "071ae158f4e293cdce96f794707f5ccfca947d5b8902e34bdcd598d40655ea69"
     },
     {
       "operation": "POST /api/admin/appeals/[appealId]/decision",
@@ -1025,7 +1051,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by eq(chatThread.userId, authz.session.user.id)",
-      "operationSourceSha256": "fae9e2f9eb6993fb4a4e6d92f4cb0b04536d46cb91826ae57a69b129bb9c9b19"
+      "operationSourceSha256": "a46c9a2de17dd16b2468ba89ae0b51fdeecea4ac05a890fa9148c708f7f6b764"
     },
     {
       "operation": "GET /api/auth/[...all]",
@@ -2257,8 +2283,8 @@
     "representativeObjectAuthorizationTest": "integration/runtime-authorization.integration.test.ts",
     "protectedOperationInvocations": {
       "anonymousAuthenticated": 92,
-      "anonymousAdmin": 63,
-      "learnerAdmin": 63
+      "anonymousAdmin": 65,
+      "learnerAdmin": 65
     },
     "betterAuthAdminPolicyTest": "src/lib/security/__tests__/better-auth-admin-policy.test.ts"
   }

@@ -354,6 +354,7 @@ describe("tutor route durable execution coverage", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     if (originalMasterKey === undefined) delete process.env.CREDENTIAL_MASTER_KEY;
     else process.env.CREDENTIAL_MASTER_KEY = originalMasterKey;
     if (originalNimModel === undefined) delete process.env.NVIDIA_NIM_TUTOR_MODEL;
@@ -537,7 +538,7 @@ describe("tutor route durable execution coverage", () => {
     expect(mocks.routeTutorRequest).toHaveBeenCalledTimes(1);
   });
 
-  it("tries the learner's preferred healthy provider before a lower policy priority number", async () => {
+  it("honors administrator failover priority before learner preference", async () => {
     state.acceptedPurposes.add("provider:openai");
     const preferredNim = { ...credential, isPreferred: true };
     const otherOpenAi = { ...credential, id: "openai-credential", provider: "openai", isPreferred: false };
@@ -555,7 +556,7 @@ describe("tutor route durable execution coverage", () => {
     });
 
     const response = await POST(tutorRequest());
-    expect(routedProviders).toEqual(["nvidia_nim", "openai"]);
+    expect(routedProviders).toEqual(["openai", "nvidia_nim"]);
     expect(response.status).toBe(200);
   });
 
@@ -564,10 +565,12 @@ describe("tutor route durable execution coverage", () => {
     mocks.consentPurposeForProvider.mockImplementation((provider) =>
       ["nvidia_nim", "openai", "google"].includes(provider) ? `provider:${provider}` : null);
     const googleCredential = { ...credential, id: "google-credential", provider: "google" };
-    const adminGooglePolicy = { ...nimPolicy, id: "policy-google", provider: "google", model: "gemini-1.5-pro" };
+    vi.stubEnv("GOOGLE_TUTOR_MODEL", "environment-model");
+    const adminGooglePolicy = { ...nimPolicy, id: "policy-google", provider: "google", model: "gemini-1.5-pro", baseUrl: "https://gateway.example.com/v1", verificationStatus: "verified", verifiedReportedModel: "resolved-google-model", platformCredential: { ciphertext: "platform-envelope" } };
     queueExecution({ credentials: [googleCredential], policies: [adminGooglePolicy] });
     mocks.routeTutorRequest.mockImplementationOnce(async (input) => {
-      expect(input.candidates[0]).toMatchObject({ provider: "google", model: "gemini-1.5-pro" });
+      expect(input.candidates[0]).toMatchObject({ provider: "google", model: "gemini-1.5-pro", baseUrl: "https://gateway.example.com/v1", verifiedReportedModel: "resolved-google-model", source: "learner" });
+      expect(JSON.stringify(input.candidates)).not.toContain("platform-envelope");
       return providerSuccess("google-credential", "learner");
     });
 

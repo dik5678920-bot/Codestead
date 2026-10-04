@@ -13,6 +13,8 @@ export interface ProviderCandidate {
   model: string;
   maxOutputTokens?: number;
   timeoutMs?: number;
+  baseUrl?: string;
+  verifiedReportedModel?: string;
   source: "learner" | "admin_fallback";
   fallbackGrantId?: string;
   fallbackStartsAt?: Date;
@@ -152,10 +154,12 @@ export async function routeTutorRequest(input: {
         messages: input.messages,
         maxOutputTokens,
         timeoutMs: candidate.timeoutMs,
+        ...(candidate.baseUrl ? { baseUrl: candidate.baseUrl } : {}),
       });
       const requestedModel = canonicalProviderModelAlias(candidate.provider, candidate.model);
       const reportedModel = canonicalProviderModelAlias(candidate.provider, result.model);
-      if (!requestedModel || !reportedModel || reportedModel !== requestedModel) {
+      const approvedModel = candidate.verifiedReportedModel ? canonicalProviderModelAlias(candidate.provider, candidate.verifiedReportedModel) : null;
+      if (!requestedModel || !reportedModel || (reportedModel !== requestedModel && reportedModel !== approvedModel)) {
         throw new ProviderError("Provider reported an unexpected model.", "BAD_RESPONSE");
       }
     } catch (error) {
