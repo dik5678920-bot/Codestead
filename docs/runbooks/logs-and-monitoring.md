@@ -25,6 +25,10 @@ The bounded smoke command above checks that inventory, migration completion, app
 
 `GET /health/ready` checks the application process and runs the bounded PostgreSQL `SELECT 1` probe. It returns HTTP 200 only when the database dependency is available; Compose and the production smoke gate use this endpoint. Both endpoints are unauthenticated, return only generic status JSON, and disable caching.
 
+`GET /health/runner` reports HTTP 200 with `{ "status": "ready", "latencyMs": ... }`, or HTTP 503 with generic `unavailable` status. In Piston mode it queries `/api/v2/runtimes` and checks the five required language versions; it does not execute learner code. Legacy mode uses the existing runner availability check. A three-second deadline bounds each probe. Successes and failures are cached internally for 30 seconds per app process, concurrent requests share one probe, and a fixed process-wide limit permits 120 requests per minute. Over-limit requests return generic 503 with `Retry-After: 30`; browser/CDN caching is disabled. URLs, versions, credentials and upstream errors are never returned. A successful runtime-inventory probe does not certify sandbox execution or spare capacity.
+
+In Uptime Kuma, add an HTTP(s) monitor for **https://code.shivanshmishra.in/health/runner**, expected status **200**, interval **60 seconds**, timeout **10 seconds**, and notify on persistent failure. Health JSON routes bypass the document CSP proxy and require no sign-in. This monitor covers the internal Piston dependency despite Kata having no Docker healthcheck or exposed host port.
+
 ## Service logs
 
 ```bash

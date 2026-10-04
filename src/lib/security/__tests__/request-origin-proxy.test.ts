@@ -30,7 +30,7 @@ describe("Next request-origin proxy", () => {
     expect(report.entries.every((entry) => entry.route.startsWith("/api/"))).toBe(true);
     expect(config).toEqual({ matcher: [
       "/api/:path*",
-      "/((?!api/|_next/static|_next/image|monaco/|favicon.ico).*)",
+      "/((?!api/|health/|_next/static|_next/image|monaco/|favicon.ico).*)",
     ] });
     for (const entry of report.entries) {
       expect(unstable_doesMiddlewareMatch({ config, url: entry.route })).toBe(true);
