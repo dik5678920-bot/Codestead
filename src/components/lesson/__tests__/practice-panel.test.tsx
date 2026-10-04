@@ -195,7 +195,7 @@ describe("learner persisted practice panel", () => {
     const first = JSON.parse(String(fetch.mock.calls[0]?.[1]?.body));
     const second = JSON.parse(String(fetch.mock.calls[1]?.[1]?.body));
     expect(second.idempotencyKey).toBe(first.idempotencyKey);
-    expect(screen.getByRole("link", { name: "Report a content problem" })).toHaveAttribute("href", expect.stringContaining("skillId=python.variables.assignment"));
+    expect(screen.getByRole("link", { name: "Report a content problem" })).toHaveAttribute("href", "/requests?kind=content-defect&skillId=python.variables.assignment");
   });
 
   it("runs a strict official MCQ checkpoint, manages async focus, and starts unlimited fresh attempts", async () => {

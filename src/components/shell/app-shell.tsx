@@ -18,7 +18,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   MessageCircleMore,
-  Search,
   Settings,
   Shield,
   Trophy,
@@ -39,6 +38,7 @@ import {
 } from "@/lib/browser-durability/lifecycle";
 import { signOutWithBrowserDurabilityCleanup } from "@/lib/drafts/logout";
 import styles from "./app-shell.module.css";
+import { CatalogSearch, type CatalogSearchItem } from "./catalog-search";
 import { ExamLockdownOverlay } from "./exam-lockdown-overlay";
 import { InterfaceThemeOptions } from "./interface-theme-menu";
 import { NotificationMenu } from "./notification-menu";
@@ -74,6 +74,7 @@ function isLessonPath(pathname: string) {
 export function AppShell({
   children,
   admin = false,
+  catalog = [],
   viewer = { name: "Aarav Rao", role: "Learner" },
   browserDurabilityNamespace = null,
   authenticatedSessionMonitoring = browserDurabilityNamespace !== null,
@@ -81,6 +82,7 @@ export function AppShell({
 }: {
   children: React.ReactNode;
   admin?: boolean;
+  catalog?: readonly CatalogSearchItem[];
   viewer?: { name: string; role: string; image?: string | null };
   browserDurabilityNamespace?: string | null;
   authenticatedSessionMonitoring?: boolean;
@@ -402,10 +404,11 @@ export function AppShell({
             <X aria-hidden="true" size={20} />
           </button>
         </div>
-        <div aria-disabled="true" className={styles.searchBox} title="Course search is coming soon">
-          <Search size={16} aria-hidden="true" />
-          <span>Search · coming soon</span>
-        </div>
+        <CatalogSearch catalog={catalog} onNavigate={() => setOpen(false)} onShortcut={() => {
+          setRailHoverSuppressed(false);
+          setSidebarHidden(false);
+          if (compactNavigation) setOpen(true);
+        }} />
         <nav className={styles.sideNav} aria-label="Learner navigation">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active = isActivePath(pathname, href);

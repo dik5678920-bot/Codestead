@@ -29,8 +29,10 @@ test("excepts only the dev-only GHSA and its complete propagated ESLint chain", 
 
 test("the exception fails at the exact expiry instant, but clean audits still pass", () => {
   const { report, lock } = fixture();
+  const expiry = Date.parse(EXCEPTION.expiresAt);
+  assert.deepEqual(checkDevelopmentAudit(report, lock, new Date(expiry - 1)), []);
   assert.equal(checkDevelopmentAudit(report, lock, new Date(EXCEPTION.expiresAt)).length, 5);
-  assert.equal(checkDevelopmentAudit(report, lock, new Date("2026-10-18T00:00:00Z")).length, 5);
+  assert.equal(checkDevelopmentAudit(report, lock, new Date("2026-11-01T00:00:00Z")).length, 5);
   const empty = clean();
   assert.deepEqual(checkDevelopmentAudit(empty.report, empty.lock, new Date(EXCEPTION.expiresAt)), []);
 });
