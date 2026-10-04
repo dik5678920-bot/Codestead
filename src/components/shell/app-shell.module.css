@@ -96,6 +96,7 @@
 .searchBox input {
   width: 100%;
   min-width: 0;
+  min-height: max(44px, var(--control-min));
   border: 0;
   background: transparent;
   color: var(--ink);
