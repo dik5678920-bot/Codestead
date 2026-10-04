@@ -26,6 +26,26 @@ function json(body: unknown, init: ResponseInit = {}) {
 describe("provider credential settings", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("opens contact admin from a model failure and sends no credential metadata", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === "/api/learning-requests" && init?.method === "POST") return json({ request: { id: credential.id } }, { status: 201 });
+      return json({ credentials: [{ ...credential, status: "invalid", failureCode: "MODEL_NOT_FOUND" }], mfaFresh: true });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    render(<SettingsView />);
+    await screen.findByText("Personal NIM");
+    fireEvent.click(screen.getAllByRole("button", { name: "Contact admin" }).at(-1)!);
+    fireEvent.change(screen.getByLabelText("Message"), { target: { value: "Please update the configured model" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send request" }));
+    await screen.findByText("Request sent. You can follow it in Requests.");
+    const supportCall = fetchMock.mock.calls.find(([input]) => String(input) === "/api/learning-requests")!;
+    const supportBody = JSON.parse(supportCall[1]!.body as string);
+    expect(supportBody.context).toEqual({ provider: "nvidia_nim", errorCode: "MODEL_NOT_FOUND" });
+    expect(JSON.stringify(supportBody)).not.toContain(credential.lastFour);
+    expect(JSON.stringify(supportBody)).not.toContain(credential.label);
+    expect(JSON.stringify(supportBody)).not.toContain(credential.id);
+  });
+
   it("hides redundant code controls when the session is already verified", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ credentials: [credential], mfaFresh: true })));
     render(<SettingsView />);

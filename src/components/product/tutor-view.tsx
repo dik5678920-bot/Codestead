@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { MentorRecommendation } from "@/lib/ai/mentor-policy";
 
 import { AiOutputReport } from "./ai-output-report";
+import { ContactAdminButton } from "./contact-admin";
 import { PlatformQuotaDialog } from "@/components/lesson/platform-quota-dialog";
 import styles from "./product-pages.module.css";
 
@@ -619,7 +620,7 @@ export function TutorView() {
           </div>
 
           <div className={styles.composer}>
-            {error && <p className={styles.composerError} role="alert">{error}</p>}
+            {error && <><p className={styles.composerError} role="alert">{error}</p><ContactAdminButton /></>}
             {sanitizationNotice && <p className={styles.archiveNotice} role="status">{sanitizationNotice}</p>}
             {archived && <p className={styles.archiveNotice}>This thread is archived. Reopen it to continue, or start a new conversation.</p>}
             <textarea

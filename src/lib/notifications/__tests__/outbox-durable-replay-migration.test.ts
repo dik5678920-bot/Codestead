@@ -206,7 +206,7 @@ describe("0067 durable email replay authority", () => {
       "validate constraint email_outbox_idempotency_authority_fk",
     );
   });
-  it("classifies every production template with an exact reviewed legacy strategy", () => {
+  it("preserves the historical template taxonomy while allowing reviewed native additions", () => {
     const policySource = readFileSync(
       resolve(
         repositoryRoot,
@@ -223,12 +223,14 @@ describe("0067 durable email replay authority", () => {
     expect(registry).not.toBeNull();
     const templates = [...(registry?.[1] ?? "").matchAll(/"([^"]+)"/gu)]
       .map((match) => match[1]);
-    expect(templates).toHaveLength(29);
+    expect(templates).toHaveLength(31);
+    const nativeAdditions = ["support-request-admin", "support-request-fixed"];
+    expect(nativeAdditions.every((template) => templates.includes(template))).toBe(true);
     expect(new Set([
       ...SOURCE_MAP_TEMPLATES,
       ...Object.keys(RETAINED_TEMPLATE_VERSIONS),
     ])).toEqual(
-      new Set(templates),
+      new Set(templates.filter((template) => !nativeAdditions.includes(template))),
     );
 
     for (const template of SOURCE_MAP_TEMPLATES) {

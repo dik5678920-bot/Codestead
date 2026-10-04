@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, notInArray } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
@@ -8,11 +8,19 @@ import { requireAdmin } from "@/lib/http/authz";
 import { enqueueEmail } from "@/lib/notifications/outbox";
 import { writeAuditEvent } from "@/lib/security/audit-writer";
 import { authorizePrivilegedAction } from "@/lib/security/privileged-access";
+import { evaluateRequestOrigin } from "@/lib/security/request-origin-policy";
+import { containsCredentialOrHiddenEvidence } from "@/lib/security/sensitive-text";
+import { supportKinds } from "@/lib/learning-requests/support-contract";
+import { fixSupportRequest } from "@/lib/learning-requests/support-service";
 
 const bodySchema = z.object({
   decision: z.enum(["approved", "rejected"]),
   reason: z.string().trim().min(8).max(500),
-});
+}).strict();
+const fixedSchema = z.object({
+  decision: z.literal("fixed"),
+  reply: z.string().trim().max(500).default("").refine((text) => !containsCredentialOrHiddenEvidence(text) && !/\b(?:api[_ -]?key|secret|authorization|bearer)\s*[:=]\s*\S+/i.test(text)),
+}).strict();
 
 export async function POST(
   request: NextRequest,
@@ -20,7 +28,22 @@ export async function POST(
 ) {
   const authz = await requireAdmin();
   if (!authz.session) return authz.response;
-  const body = bodySchema.safeParse(await request.json().catch(() => null));
+  const origin = evaluateRequestOrigin({ method: request.method, headers: request.headers, appUrl: process.env.APP_URL, production: process.env.NODE_ENV === "production" });
+  if (!origin.allowed) return NextResponse.json({ error: origin.code }, { status: origin.status });
+  const { id } = await context.params;
+  if (!z.uuid().safeParse(id).success) return NextResponse.json({ error: "Invalid request identifier." }, { status: 400 });
+  const raw = await request.json().catch(() => null);
+  if (raw?.decision === "fixed") {
+    const fixed = fixedSchema.safeParse(raw);
+    if (!fixed.success) return NextResponse.json({ error: "Provide an optional reply up to 500 characters without credentials." }, { status: 400 });
+    try {
+      const result = await fixSupportRequest(authz.session.user.id, id, fixed.data.reply);
+      return NextResponse.json(result ?? { error: "Open support request not found." }, { status: result ? 200 : 404, headers: { "Cache-Control": "private, no-store" } });
+    } catch {
+      return NextResponse.json({ error: "The request could not be marked fixed. Try again." }, { status: 503, headers: { "Cache-Control": "private, no-store" } });
+    }
+  }
+  const body = bodySchema.safeParse(raw);
   if (!body.success) return NextResponse.json({ error: "A decision and specific reason are required." }, { status: 400 });
   const [authSession] = await db
     .select({ mfaVerifiedAt: session.mfaVerifiedAt })
@@ -35,7 +58,6 @@ export async function POST(
   });
   if (!authorization.allowed) return NextResponse.json({ error: authorization.code }, { status: 403 });
 
-  const { id } = await context.params;
   const decidedAt = new Date();
   const candidate = await db.transaction(async (tx) => {
     const [pending] = await tx
@@ -48,7 +70,7 @@ export async function POST(
       })
       .from(learningRequest)
       .innerJoin(user, eq(user.id, learningRequest.userId))
-      .where(and(eq(learningRequest.id, id), eq(learningRequest.status, "pending")))
+      .where(and(eq(learningRequest.id, id), eq(learningRequest.status, "pending"), notInArray(learningRequest.kind, [...supportKinds])))
       .limit(1)
       .for("update");
     if (!pending) return null;

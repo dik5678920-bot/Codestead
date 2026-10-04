@@ -204,6 +204,15 @@ const IDENTIFIER_OWNERSHIP_ANCHORS = new Map<string, string>([
 
 const SUPPORTING_OWNER_CONTRACTS = [
   {
+    file: "src/lib/learning-requests/support-service.ts",
+    purpose: "session-owned support receipts and open-request dedupe",
+    anchors: [
+      "eq(learningRequest.userId, userId), eq(learningRequest.requestId, input.requestId)",
+      "eq(learningRequest.userId, userId), eq(learningRequest.kind, input.kind)",
+      "tx.insert(learningRequest).values({ userId, requestId: input.requestId",
+    ],
+  },
+  {
     file: "src/lib/battles/service.ts",
     purpose: "scope-visible battles, participant-bound submissions, and reviewed immutable challenge sources",
     anchors: [

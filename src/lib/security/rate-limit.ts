@@ -64,6 +64,7 @@ export type RateLimitPolicyName =
   | "project_revision_user"
   | "project_review_appeal_user"
   | "learning_request_user"
+  | "contact_admin_ai_provider_user"
   | "data_export_admin"
   | "account_deletion_admin"
   | "storage_quota_admin"
@@ -142,6 +143,7 @@ const DEFAULT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
   project_revision_user: policy("project_revision_user", 30, 60 * 60),
   project_review_appeal_user: policy("project_review_appeal_user", 10, 60 * 60),
   learning_request_user: policy("learning_request_user", 5, 24 * 60 * 60),
+  contact_admin_ai_provider_user: policy("contact_admin_ai_provider_user", 1, 24 * 60 * 60),
   data_export_admin: policy("data_export_admin", 5, 24 * 60 * 60),
   account_deletion_admin: policy("account_deletion_admin", 3, 24 * 60 * 60),
   storage_quota_admin: policy("storage_quota_admin", 30, 60 * 60),

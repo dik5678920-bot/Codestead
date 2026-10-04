@@ -27,6 +27,7 @@ import { ProfileSettingsPanel } from "./profile-settings-panel";
 import { DeviceSessionsPanel } from "./device-sessions-panel";
 import { PrivacyConsentPanel } from "./privacy-consent-panel";
 import { NotificationPreferencesPanel } from "./notification-preferences-panel";
+import { ContactAdminButton } from "./contact-admin";
 
 type Credential = { id: string; provider: string; label: string; lastFour: string; status: string; failureCode?: string | null; isPreferred: boolean; routingConsented: boolean; lastValidatedAt?: string | null };
 const tabs = [
@@ -45,6 +46,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
   const [credentials, setCredentials] = useState<Credential[]>([]);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [supportDiagnostics, setSupportDiagnostics] = useState<{ provider?: string; errorCode?: string; httpStatus?: number }>({});
   const [busy, setBusy] = useState(false);
   const [mfaCode, setMfaCode] = useState("");
   const [mfaFresh, setMfaFresh] = useState(false);
@@ -208,6 +210,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
       if (!response.ok) {
         if (body.code === "FRESH_MFA_REQUIRED") setMfaFresh(false);
         setError(body.error ?? "The credential could not be stored.");
+        setSupportDiagnostics({ provider: target?.provider ?? addProvider, errorCode: body.code, httpStatus: response.status });
         return;
       }
       setMfaCode("");
@@ -234,6 +237,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
       if (!response.ok) {
         if (body.code === "FRESH_MFA_REQUIRED") setMfaFresh(false);
         setError(body.error ?? "The credential could not be changed.");
+        setSupportDiagnostics({ provider: credentials.find((item) => item.id === id)?.provider, errorCode: body.code, httpStatus: response.status });
         return;
       }
       setMfaCode("");
@@ -293,6 +297,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
         <div>
           <h2>Your AI providers</h2>
           <p>AI provider keys are optional. Add a supported provider for AI tutoring and more providers for automatic failover; the app chooses the model.</p>
+          <ContactAdminButton />
         </div>
         <button
           className="button button-primary"
@@ -307,7 +312,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
           <Plus size={15} /> Add provider
         </button>
       </div>
-      {error && !deleteTarget && !open && <p className={styles.error} role="alert">{error}</p>}
+      {error && !deleteTarget && !open && <><p className={styles.error} role="alert">{error}</p><ContactAdminButton {...supportDiagnostics} /></>}
       <div className={styles.sideCard}>
         <h3>Verify before changing a key</h3>
         <p>{mfaFresh ? "Authenticator verified for this sign-in; no extra code needed." : "Enter a current authenticator code. Verification stays valid for this sign-in."}</p>
@@ -342,6 +347,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
               <span><KeyRound size={23} /></span>
               <h2>AI providers could not be loaded</h2>
               <p>{credentialLoadError}</p>
+              <ContactAdminButton />
               <button className="button button-secondary" disabled={busy} onClick={() => void refresh()} type="button">Try again</button>
             </div>
           </div>
@@ -353,6 +359,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
               <strong>{item.label} {item.isPreferred && <i className="pill">preferred</i>}</strong>
               <small>{item.provider.replaceAll("_", " ")} · •••• {item.lastFour} · {item.status === "active" ? "valid" : item.status.replaceAll("_", " ")} · {item.routingConsented ? "routing allowed" : "routing withdrawn"}</small>
               {credentialValidationReason(item.status, item.failureCode) && <small>{credentialValidationReason(item.status, item.failureCode)}</small>}
+              {credentialValidationReason(item.status, item.failureCode) && <ContactAdminButton provider={item.provider} errorCode={item.failureCode} />}
             </span>
             <div className={styles.credentialActions}>
               <button disabled={busy || !item.routingConsented} onClick={() => void action(item.id, "test")} type="button">{item.status === "active" ? "Test" : "Validate"}</button>
@@ -507,7 +514,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
               </div>
               <button className={styles.iconButton} aria-label="Close" data-dialog-initial-focus disabled={busy} onClick={closeProviderDialog}><X size={17} /></button>
             </div>
-            {error && <p className={styles.error} role="alert">{error}</p>}
+            {error && <><p className={styles.error} role="alert">{error}</p><ContactAdminButton {...supportDiagnostics} /></>}
             <form className={styles.form} onSubmit={add}>
               {!replaceTarget && <>
                 <label>Provider<select name="provider" onChange={(event) => setAddProvider(event.target.value as CatalogProviderId)} value={addProvider}>{AI_PROVIDER_CATALOG.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select><small>{AI_PROVIDER_CATALOG.find((entry) => entry.id === addProvider)?.hint}</small></label>

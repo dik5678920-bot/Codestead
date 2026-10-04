@@ -2,8 +2,9 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { db, pool } from "@/lib/db/client";
-import { learningRequest, user } from "@/lib/db/schema";
+import { auditEvent, emailOutbox, learningRequest, notification, user } from "@/lib/db/schema";
 import { learningRequestRepository } from "@/lib/learning-requests/repository";
+import { createSupportRequest, fixSupportRequest } from "@/lib/learning-requests/support-service";
 import { resetDisposableIntegrationDatabase } from "./support/reset-disposable-database";
 
 const LEARNER_ID = "learning-request-learner";
@@ -57,6 +58,43 @@ afterAll(async () => {
 });
 
 describe("real PostgreSQL learner curriculum requests", () => {
+  it("dedupes concurrent support submissions and atomically fixes exactly once", async () => {
+    await db.update(user).set({ emailVerified: true, banned: false }).where(eq(user.id, LEARNER_ID));
+    await db.insert(user).values({ id: "support-admin", publicId: "20000000-0000-4000-8000-000000000003", name: "Admin", email: "support-admin@integration.invalid", role: "admin", status: "active", emailVerified: true, banned: false });
+    const supportInput = { requestId: REQUEST_ID, kind: "support-ai" as const, provider: "google" as const, message: "Model validation fails", context: { provider: "google" as const, errorCode: "MODEL_NOT_FOUND" as const, httpStatus: 404 } };
+    const responses = await Promise.all([
+      createSupportRequest(LEARNER_ID, supportInput),
+      createSupportRequest(LEARNER_ID, { ...supportInput, requestId: "10000000-0000-4000-8000-000000000002" }),
+    ]);
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 201]);
+    const rows = await db.select().from(learningRequest).where(eq(learningRequest.userId, LEARNER_ID));
+    expect(rows).toHaveLength(1);
+    expect(await db.select().from(emailOutbox).where(eq(emailOutbox.template, "support-request-admin"))).toHaveLength(1);
+    expect((await createSupportRequest(LEARNER_ID, { ...supportInput, requestId: "10000000-0000-4000-8000-000000000004", message: "Different issue" })).status).toBe(429);
+    const fixed = await Promise.all([fixSupportRequest("support-admin", rows[0].id, "The model is updated"), fixSupportRequest("support-admin", rows[0].id, "The model is updated")]);
+    expect(fixed.map((result) => result?.replayed).sort()).toEqual([false, true]);
+    expect(await db.select().from(notification).where(eq(notification.userId, LEARNER_ID))).toHaveLength(1);
+    expect(await db.select().from(emailOutbox).where(eq(emailOutbox.template, "support-request-fixed"))).toHaveLength(1);
+    expect(await db.select().from(auditEvent).where(eq(auditEvent.action, "support_request.fixed"))).toHaveLength(1);
+    expect(await learningRequestRepository.listForUser(OTHER_LEARNER_ID)).toEqual([]);
+  });
+
+  it("enforces the five-request daily total for other support requests", async () => {
+    for (let index = 1; index <= 6; index++) {
+      const response = await createSupportRequest(LEARNER_ID, { requestId: `10000000-0000-4000-8000-${String(index).padStart(12, "0")}`, kind: "support-other", message: `Distinct account issue ${index}` });
+      expect(response.status).toBe(index <= 5 ? 201 : 429);
+    }
+    expect(await db.select().from(learningRequest).where(eq(learningRequest.userId, LEARNER_ID))).toHaveLength(5);
+  });
+
+  it("rolls back fixed state and audit if durable notification insertion fails", async () => {
+    const [created] = await db.insert(learningRequest).values({ userId: LEARNER_ID, requestId: REQUEST_ID, kind: "support-other", subject: "Other support request", details: JSON.stringify({ message: "Help" }) }).returning();
+    // NUL is rejected by PostgreSQL text, after the update has executed.
+    await expect(fixSupportRequest(OTHER_LEARNER_ID, created.id, "invalid\0reply")).rejects.toThrow();
+    expect((await db.select().from(learningRequest).where(eq(learningRequest.id, created.id)))[0].status).toBe("pending");
+    expect(await db.select().from(notification)).toHaveLength(0);
+    expect(await db.select().from(auditEvent)).toHaveLength(0);
+  });
   it("recovers a lost response, rejects changed reuse, and scopes the request id per learner", async () => {
     const committedButResponseLost = await learningRequestRepository.create(input);
     expect(committedButResponseLost.replayed).toBe(false);

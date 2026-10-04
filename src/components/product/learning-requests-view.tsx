@@ -4,8 +4,10 @@ import { Lightbulb, LoaderCircle, Send } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import styles from "./product-pages.module.css";
+import { decodeSupportDetails, isSupportKind } from "@/lib/learning-requests/support-contract";
+import { ContactAdminButton } from "./contact-admin";
 
-const REQUEST_KINDS = new Set(["new-subject", "topic-extension", "content-defect"]);
+const REQUEST_KINDS = new Set(["new-subject", "topic-extension", "content-defect", "support-ai", "support-other"]);
 const REQUEST_STATUSES = new Set(["pending", "approved", "rejected", "expired", "withdrawn"]);
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -45,8 +47,8 @@ function isLearningRequestItem(value: unknown): value is LearningRequestItem {
     && value.subject.trim().length >= 2
     && value.subject.length <= 120
     && typeof value.details === "string"
-    && value.details.trim().length >= 10
-    && value.details.length <= 2_000
+    && (isSupportKind(value.kind) ? decodeSupportDetails(value.details) !== null : value.details.trim().length >= 10)
+    && value.details.length <= (isSupportKind(value.kind) ? 7_000 : 2_000)
     && typeof value.status === "string"
     && REQUEST_STATUSES.has(value.status)
     && (value.decisionReason === null || typeof value.decisionReason === "string")
@@ -261,7 +263,7 @@ export function LearningRequestsView({ prefill }: { prefill?: LearningRequestPre
           {feedback && <p className={feedback.tone === "error" ? styles.error : styles.success} role={feedback.tone === "error" ? "alert" : "status"}>{feedback.text}</p>}
         </form>
         <article aria-labelledby="learning-request-history-title" className={`${styles.requestPanel} ${styles.requestHistory} card`}>
-          <div className={styles.requestPanelHead}><div><h2 id="learning-request-history-title">Your requests</h2><p>Track triage decisions without confusing acceptance with publication.</p></div>{!loading && <span className={`${styles.requestCount} pill`}>{items.length}</span>}</div>
+          <div className={styles.requestPanelHead}><div><h2 id="learning-request-history-title">Your requests</h2><ContactAdminButton /><p>Track triage decisions without confusing acceptance with publication.</p></div>{!loading && <span className={`${styles.requestCount} pill`}>{items.length}</span>}</div>
           {loading
             ? <p aria-live="polite" className={styles.requestLoading}><LoaderCircle aria-hidden="true" size={16} /> Loading requests…</p>
             : <>
@@ -269,7 +271,7 @@ export function LearningRequestsView({ prefill }: { prefill?: LearningRequestPre
                 {listError && <div className={styles.requestLoadError}><p role="alert">{listError}</p><button aria-busy={refreshing} className="button button-secondary" disabled={refreshing} onClick={() => void refreshList()} type="button">Try again</button></div>}
                 {hasResolvedList && (items.length === 0
                   ? <div className={styles.requestEmpty}><Lightbulb aria-hidden="true" size={20} /><strong>No requests yet</strong><p>Your submitted curriculum ideas and their review status will appear here.</p></div>
-                  : <ul className={styles.requestList}>{items.map((item) => <li className={styles.requestItem} key={item.id}><span aria-hidden="true" className={styles.providerMark}><Lightbulb size={17} /></span><div><div className={styles.requestItemHead}><strong>{item.subject}</strong><span className="pill">{item.status.replaceAll("-", " ")}</span></div><small>{item.kind.replaceAll("-", " ")} · <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString()}</time></small><p>{item.details}</p>{item.decisionReason && <p className={styles.requestDecision}><strong>Administrator note</strong>{item.decisionReason}</p>}</div></li>)}</ul>)}
+                  : <ul className={styles.requestList}>{items.map((item) => <li className={styles.requestItem} key={item.id}><span aria-hidden="true" className={styles.providerMark}><Lightbulb size={17} /></span><div><div className={styles.requestItemHead}><strong>{item.subject}</strong><span className="pill">{isSupportKind(item.kind) ? (item.status === "pending" ? "open" : item.status === "approved" ? "resolved" : item.status) : item.status.replaceAll("-", " ")}</span></div><small>{item.kind.replaceAll("-", " ")} · <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString()}</time></small><p>{isSupportKind(item.kind) ? decodeSupportDetails(item.details)?.message : item.details}</p>{item.decisionReason && <p className={styles.requestDecision}><strong>Administrator note</strong>{item.decisionReason}</p>}</div></li>)}</ul>)}
               </>}
         </article>
       </section>

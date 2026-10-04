@@ -8,6 +8,8 @@ export const learningRequestKinds = [
   "new-subject",
   "topic-extension",
   "content-defect",
+  "support-ai",
+  "support-other",
 ] as const;
 
 export type LearningRequestKind = (typeof learningRequestKinds)[number];
