@@ -22,6 +22,11 @@ export function CatalogSearch({ catalog, onNavigate, onShortcut }: {
   useEffect(() => {
     function focusSearch(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        const target = event.target;
+        if (target instanceof Element && (
+          target.closest('.monaco-editor, textarea, [contenteditable]:not([contenteditable="false"])')
+          || (target.closest("input") && target !== inputRef.current)
+        )) return;
         event.preventDefault();
         onShortcut?.();
         // Let the shell open its mobile drawer before focusing an inert input.
@@ -44,8 +49,8 @@ export function CatalogSearch({ catalog, onNavigate, onShortcut }: {
       <input ref={inputRef} type="search" aria-label="Search courses and skills" aria-controls={tokens.length ? "catalog-search-results" : undefined} aria-keyshortcuts="Control+k Meta+k" placeholder="Search courses and skills" value={query} onChange={(event) => setQuery(event.target.value)} />
     </label>
     {tokens.length > 0 && <div id="catalog-search-results" className={styles.searchResults}>
-      <p role="status">{results.length ? `${results.length} results` : "No courses or skills found. Try another search."}</p>
-      {results.length > 0 && <ul>{results.map((item) => <li key={item.href}><Link href={item.href} onClick={() => { setQuery(""); onNavigate(); }}>{item.title} · {item.courseTitle}</Link></li>)}</ul>}
+      <p role="status">{results.length > 20 ? `Showing 20 of ${results.length}` : results.length ? `${results.length} results` : "No courses or skills found. Try another search."}</p>
+      {results.length > 0 && <ul>{results.slice(0, 20).map((item) => <li key={item.href}><Link href={item.href} onClick={() => { setQuery(""); onNavigate(); }}>{item.title} · {item.courseTitle}</Link></li>)}</ul>}
     </div>}
   </div>;
 }
