@@ -4,6 +4,7 @@ import { Eye, Flame, Medal, RefreshCw, ShieldCheck, Sparkles, Trophy } from "luc
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CommunitySpaces } from "./community-spaces";
+import { ExamCapabilityUnavailable, isExamCapabilityError, type ExamCapabilityError } from "./exam-capability-unavailable";
 import styles from "./product-pages.module.css";
 
 type VisibleProfile = {
@@ -42,10 +43,10 @@ type Settings = {
   exclusionNotice: string;
 };
 
-async function json<T>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, { ...init, headers: { "content-type": "application/json", ...init?.headers } });
-  const body = await response.json() as T & { error?: string };
-  if (!response.ok) throw new Error(body.error ?? "The cohort request failed safely.");
+  const body = await response.json() as T & { error?: string; code?: string };
+  if (!response.ok) throw Object.assign(new Error(body.error ?? "The cohort request failed safely."), { code: body.code });
   return body;
 }
 
@@ -67,6 +68,15 @@ export function CommunityView() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [examError, setExamError] = useState<ExamCapabilityError | null>(null);
+  const json = useCallback(async <T,>(url: string, init?: RequestInit): Promise<T> => {
+    try {
+      return await fetchJson<T>(url, init);
+    } catch (cause) {
+      if (isExamCapabilityError(cause)) setExamError(cause);
+      throw cause;
+    }
+  }, []);
 
   const applySettings = useCallback((next: Settings) => {
     setSettings(next);
@@ -86,21 +96,27 @@ export function CommunityView() {
     ]);
     applySettings(own.settings);
     setCommunity(cohort);
-  }, [applySettings]);
+  }, [applySettings, json]);
   useEffect(() => {
     let active = true;
     void Promise.all([
-      json<{ settings: Settings }>("/api/community/profile"),
-      json<CommunityData>("/api/community"),
+      fetchJson<{ settings: Settings }>("/api/community/profile"),
+      fetchJson<CommunityData>("/api/community"),
     ]).then(([own, cohort]) => {
       if (!active) return;
       applySettings(own.settings);
       setCommunity(cohort);
     }).catch((cause: unknown) => {
-      if (active) setError(cause instanceof Error ? cause.message : "Community unavailable.");
+      if (!active) return;
+      if (isExamCapabilityError(cause)) setExamError(cause);
+      setError(cause instanceof Error ? cause.message : "Community unavailable.");
     });
     return () => { active = false; };
   }, [applySettings]);
+
+  function refresh() {
+    void load().catch((cause: unknown) => setError(cause instanceof Error ? cause.message : "Community unavailable."));
+  }
 
   async function consent(purpose: "cohort_profile" | "leaderboard", decision: "accepted" | "withdrawn") {
     if (!settings) return;
@@ -145,10 +161,12 @@ export function CommunityView() {
   const preview = settings?.livePreview ?? draftPreview;
   const board = community?.leaderboards[period];
 
+  if (examError) return <div className={styles.page}><ExamCapabilityUnavailable feature="Community" error={examError} /></div>;
+
   if (!settings || !community) return <div className={styles.page}><div className={`${styles.empty} card`}><div><RefreshCw size={24} /><h2>Loading the private cohort</h2><p>No profile is exposed while this view is loading.</p>{error && <p className={styles.error} role="alert">{error}</p>}</div></div></div>;
 
   return <div className={styles.page}>
-    <header className={styles.pageHead}><div><span className={styles.eyebrow}>Private closed cohort</span><h1>See growth, not surveillance.</h1><p>Nothing appears until current cohort consent and explicit publication both exist. Alias is the only default field.</p></div><button type="button" className="button button-secondary" onClick={() => void load()} disabled={busy}><RefreshCw size={15} /> Refresh evidence</button></header>
+    <header className={styles.pageHead}><div><span className={styles.eyebrow}>Private closed cohort</span><h1>See growth, not surveillance.</h1><p>Nothing appears until current cohort consent and explicit publication both exist. Alias is the only default field.</p></div><button type="button" className="button button-secondary" onClick={refresh} disabled={busy}><RefreshCw size={15} /> Refresh evidence</button></header>
     {error && <p className={styles.error} role="alert">{error}</p>}{notice && <p className={styles.success} role="status">{notice}</p>}
     <section className={styles.stats}><article className={`${styles.stat} card`}><span><Trophy size={18} /></span><div><strong>{community.profiles.length}</strong><small>explicitly visible aliases</small></div></article><article className={`${styles.stat} card`}><span><Medal size={18} /></span><div><strong>{community.profiles.reduce((sum, item) => sum + item.badges.length, 0)}</strong><small>selected visible badges</small></div></article><article className={`${styles.stat} card`}><span><Sparkles size={18} /></span><div><strong>{community.profiles.reduce((sum, item) => sum + item.projects.length, 0)}</strong><small>selected visible projects</small></div></article><article className={`${styles.stat} card`}><span><ShieldCheck size={18} /></span><div><strong>{settings.live ? "Visible" : "Private"}</strong><small>your current projection</small></div></article></section>
     <section className={styles.communityGrid}>

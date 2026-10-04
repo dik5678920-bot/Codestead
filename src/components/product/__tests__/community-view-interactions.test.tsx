@@ -26,6 +26,42 @@ const community = {
 };
 
 describe("community privacy controls", () => {
+  it("removes loaded sharing controls when a refresh is locked by a newly active exam", async () => {
+    render(<CommunityView />);
+    await screen.findByRole("heading", { name: "See growth, not surveillance." });
+    vi.mocked(fetch).mockImplementation(async () => Response.json({ code: "EXAM_CLOSED_BOOK", error: "Return to the exam workspace." }, { status: 423 }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh evidence" }));
+    expect(await screen.findByRole("heading", { name: /Community is unavailable during your exam/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Publish exact preview/i })).not.toBeInTheDocument();
+  });
+
+  it("removes loaded sharing controls when profile publication is blocked during an exam", async () => {
+    render(<CommunityView />);
+    await screen.findByRole("heading", { name: "See growth, not surveillance." });
+    vi.mocked(fetch).mockImplementation(async () => Response.json({ code: "EXAM_CLOSED_BOOK", error: "Return to the exam workspace." }, { status: 423 }));
+    fireEvent.click(screen.getByRole("button", { name: /Publish exact preview/i }));
+    expect(await screen.findByRole("heading", { name: /Community is unavailable during your exam/i })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "See growth, not surveillance." })).not.toBeInTheDocument();
+  });
+
+  it("shows a distinct fail-closed state when exam status cannot be verified", async () => {
+    vi.mocked(fetch).mockImplementation(async () => Response.json({ code: "EXAM_STATE_UNAVAILABLE", error: "Exam state could not be verified." }, { status: 503 }));
+    render(<CommunityView />);
+    expect(await screen.findByRole("heading", { name: "Community is temporarily unavailable" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Publish exact preview/i })).not.toBeInTheDocument();
+  });
+  it.each(["/api/community", "/api/community/profile"])("shows exam unavailability instead of sharing controls when %s is locked", async (lockedUrl) => {
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === lockedUrl) return Response.json({ code: "EXAM_CLOSED_BOOK", error: "Return to the exam workspace." }, { status: 423 });
+      return Response.json(url === "/api/community/profile" ? { settings } : community);
+    }));
+    render(<CommunityView />);
+    expect(await screen.findByRole("heading", { name: /Community is unavailable during your exam/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Return to exam workspace/i })).toHaveAttribute("href", "/exams");
+    expect(screen.queryByRole("button", { name: /Publish exact preview/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /Loading the private cohort/i })).not.toBeInTheDocument();
+  });
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.stubGlobal("crypto", { randomUUID: () => "b3000000-0000-4000-8000-000000000001" });

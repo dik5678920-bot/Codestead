@@ -15,6 +15,7 @@ import {
 } from "react";
 
 import styles from "./community-spaces.module.css";
+import { ExamCapabilityUnavailable, isExamCapabilityError, type ExamCapabilityError } from "./exam-capability-unavailable";
 
 type Person = { publicId: string; alias: string };
 type Group = {
@@ -49,13 +50,13 @@ type CommunityTab = "discuss" | "battle";
 
 const communityTabs: readonly CommunityTab[] = ["discuss", "battle"];
 
-async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
+async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
     headers: init?.body ? { "content-type": "application/json", ...init.headers } : init?.headers,
   });
-  const body = await response.json() as T & { error?: string };
-  if (!response.ok) throw new Error(body.error ?? "The request failed safely. Try again.");
+  const body = await response.json() as T & { error?: string; code?: string };
+  if (!response.ok) throw Object.assign(new Error(body.error ?? "The request failed safely. Try again."), { code: body.code });
   return body;
 }
 
@@ -83,7 +84,7 @@ function formatTime(value: string) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-function ReportControl({ target, targetId, onDone }: { target: "post" | "reply"; targetId: string; onDone: (notice: string) => void }) {
+function ReportControl({ target, targetId, onDone, requestJson }: { target: "post" | "reply"; targetId: string; onDone: (notice: string) => void; requestJson: typeof fetchJson }) {
   const [reason, setReason] = useState<"harassment" | "unsafe_code" | "spam" | "privacy" | "other">("other");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -145,6 +146,15 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
   const logicalRequestIds = useRef(new Map<string, { fingerprint: string; requestId: string }>());
   const selectedGroupRef = useRef("");
   const loadGeneration = useRef(0);
+  const [examError, setExamError] = useState<ExamCapabilityError | null>(null);
+  const requestJson = useCallback(async <T,>(url: string, init?: RequestInit): Promise<T> => {
+    try {
+      return await fetchJson<T>(url, init);
+    } catch (cause) {
+      if (isExamCapabilityError(cause)) setExamError(cause);
+      throw cause;
+    }
+  }, []);
 
   function requestIdFor(key: string, payload: Record<string, unknown>) {
     const fingerprint = JSON.stringify(payload);
@@ -208,7 +218,7 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
     } catch (cause) {
       if (isCurrent()) throw cause;
     }
-  }, []);
+  }, [requestJson]);
 
   const loadSafely = useCallback((groupId?: string, append = false, cursor?: string | null) => {
     void load(groupId, append, cursor).catch((cause: unknown) => {
@@ -221,8 +231,8 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
     const generation = ++loadGeneration.current;
     const isCurrent = () => active && generation === loadGeneration.current;
     void Promise.all([
-      requestJson<DiscussionPayload>("/api/community/discussions"),
-      requestJson<BattlePayload>("/api/battles"),
+      fetchJson<DiscussionPayload>("/api/community/discussions"),
+      fetchJson<BattlePayload>("/api/battles"),
     ]).then(([nextDiscussion, nextBattles]) => {
       if (!isCurrent()) return;
       assertCommunityPayloads(nextDiscussion, nextBattles);
@@ -231,11 +241,15 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
       selectedGroupRef.current = nextDiscussion.groups[0]?.id ?? "";
       setSelectedGroup(selectedGroupRef.current);
       if (nextDiscussion.moderation) {
-        void requestJson<{ reports: Report[] }>("/api/admin/community/moderation")
+        void fetchJson<{ reports: Report[] }>("/api/admin/community/moderation")
           .then((value) => { if (isCurrent()) setReports(value.reports); })
           .catch(() => { if (isCurrent()) setError("The discussion loaded, but the moderation queue did not."); });
       }
-    }).catch((cause: unknown) => { if (isCurrent()) setError(cause instanceof Error ? cause.message : "Community spaces are unavailable."); });
+    }).catch((cause: unknown) => {
+      if (!isCurrent()) return;
+      if (isExamCapabilityError(cause)) setExamError(cause);
+      setError(cause instanceof Error ? cause.message : "Community spaces are unavailable.");
+    });
     return () => { active = false; loadGeneration.current += 1; };
   }, []);
 
@@ -438,6 +452,8 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
   const selected = discussion?.groups.find((group) => group.id === selectedGroup);
   const filteredBattles = battles?.battles.filter((battle) => battleFilter === "all" || battle.scope === battleFilter) ?? [];
 
+  if (examError) return <ExamCapabilityUnavailable feature="Community and battles" error={examError} />;
+
   if (!discussion || !battles) return <section className={styles.shell} aria-busy={!error}>
     <div className={styles.state}><RefreshCw size={24} /><h2>{error ? "Community spaces are unavailable" : "Opening community spaces"}</h2><p>No private group or battle answer is exposed while this view loads.</p>{error && <><p role="alert">{error}</p><button type="button" className="button button-secondary" onClick={() => loadSafely()}>Retry</button></>}</div>
   </section>;
@@ -479,12 +495,12 @@ export function CommunitySpaces({ people }: { people: Person[] }) {
         {visiblePosts.length ? visiblePosts.map((post) => <article className={styles.post} key={post.id}>
           <div className={styles.postMeta}><span className={styles.kind}>{post.kind.replace("_", " ")}</span><span>{post.authorAlias} · {formatTime(post.createdAt)}{post.editedAt ? " · edited" : ""}</span></div>
           {editing?.id === post.id ? <form className={styles.editForm} onSubmit={(event) => void saveEdit(event)}><label>Title<input value={editing.title} onChange={(event) => setEditing({ ...editing, title: event.target.value })} /></label><label>Post<textarea value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} /></label><div><button className="button button-primary">Save edit</button><button type="button" className="button button-secondary" onClick={() => setEditing(null)}>Cancel</button></div></form> : <><h3>{post.title}</h3><p className={styles.body}>{post.body}</p></>}
-          <div className={styles.actions}><button type="button" onClick={() => setReplying(replying === post.id ? null : post.id)}><MessageCircle size={14} /> Reply</button>{post.own && <><button type="button" onClick={() => setEditing({ target: "post", id: post.id, version: post.rowVersion, title: post.title, body: post.body })}><Pencil size={14} /> Edit</button><button type="button" onClick={() => void mutate({ action: "delete", target: "post", targetId: post.id, expectedVersion: post.rowVersion }, "Post removed from the cohort feed.")}><Trash2 size={14} /> Delete</button></>}<ReportControl target="post" targetId={post.id} onDone={setNotice} /></div>
+          <div className={styles.actions}><button type="button" onClick={() => setReplying(replying === post.id ? null : post.id)}><MessageCircle size={14} /> Reply</button>{post.own && <><button type="button" onClick={() => setEditing({ target: "post", id: post.id, version: post.rowVersion, title: post.title, body: post.body })}><Pencil size={14} /> Edit</button><button type="button" onClick={() => void mutate({ action: "delete", target: "post", targetId: post.id, expectedVersion: post.rowVersion }, "Post removed from the cohort feed.")}><Trash2 size={14} /> Delete</button></>}<ReportControl target="post" targetId={post.id} onDone={setNotice} requestJson={requestJson} /></div>
           {replying === post.id && <form className={styles.replyForm} onSubmit={(event) => void reply(event)}><label htmlFor={`reply-${post.id}`}>Your reply</label><textarea id={`reply-${post.id}`} value={replyBody} minLength={2} maxLength={4000} onChange={(event) => setReplyBody(event.target.value)} required /><button className="button button-primary" disabled={busy}>Post reply</button></form>}
           {post.replies.length ? <div className={styles.replies}>{post.replies.map((item) => <div className={styles.reply} key={item.id}>
             <div><strong>{item.authorAlias}</strong><small>{formatTime(item.createdAt)}{item.editedAt ? " · edited" : ""}</small></div>
             {editing?.id === item.id ? <form className={styles.editForm} onSubmit={(event) => void saveEdit(event)}><label>Reply<textarea value={editing.body} onChange={(event) => setEditing({ ...editing, body: event.target.value })} /></label><div><button className="button button-primary">Save</button><button type="button" className="button button-secondary" onClick={() => setEditing(null)}>Cancel</button></div></form> : <p className={styles.body}>{item.body}</p>}
-            <div className={styles.actions}>{item.own && <><button type="button" onClick={() => setEditing({ target: "reply", id: item.id, version: item.rowVersion, title: "", body: item.body })}><Pencil size={13} /> Edit</button><button type="button" onClick={() => void mutate({ action: "delete", target: "reply", targetId: item.id, expectedVersion: item.rowVersion }, "Reply removed from the cohort feed.")}><Trash2 size={13} /> Delete</button></>}<ReportControl target="reply" targetId={item.id} onDone={setNotice} /></div>
+            <div className={styles.actions}>{item.own && <><button type="button" onClick={() => setEditing({ target: "reply", id: item.id, version: item.rowVersion, title: "", body: item.body })}><Pencil size={13} /> Edit</button><button type="button" onClick={() => void mutate({ action: "delete", target: "reply", targetId: item.id, expectedVersion: item.rowVersion }, "Reply removed from the cohort feed.")}><Trash2 size={13} /> Delete</button></>}<ReportControl target="reply" targetId={item.id} onDone={setNotice} requestJson={requestJson} /></div>
           </div>)}</div> : null}
           {post.replyNextCursor && <button type="button" className="button button-secondary" disabled={loadingReplies}
             onClick={() => void loadReplies(post)}>Load more replies</button>}

@@ -31,6 +31,9 @@ describe("server-authoritative closed-book capability gate", () => {
     "learner_files",
     "project_workspace",
     "learning_workspace",
+    "community_read",
+    "community_write",
+    "battles",
   ] as const)(
     "allows %s only when no active or system-paused exam exists",
     async (capability) => {
@@ -93,6 +96,12 @@ describe("server-authoritative closed-book capability gate", () => {
   it("marks file, project, and learning APIs as closed-book capabilities", () => {
     const routes: Readonly<Record<string, string>> = {
       "src/app/api/ai/reports/route.ts": 'closedBookCapability: "ai_tutor"',
+      "src/app/api/community/route.ts": 'closedBookCapability: "community_read"',
+      "src/app/api/community/profiles/[publicId]/route.ts": 'closedBookCapability: "community_read"',
+      "src/app/api/community/profile/route.ts": 'closedBookCapability: "community_write"',
+      "src/app/api/community/discussions/route.ts": 'closedBookCapability: "community_write"',
+      "src/app/api/battles/route.ts": 'closedBookCapability: "battles"',
+      "src/app/api/battles/[battleId]/route.ts": 'closedBookCapability: "battles"',
       "src/app/api/files/route.ts": 'closedBookCapability: "learner_files"',
       "src/app/api/files/[id]/route.ts": 'closedBookCapability: "learner_files"',
       "src/app/api/projects/route.ts": 'closedBookCapability: "project_workspace"',

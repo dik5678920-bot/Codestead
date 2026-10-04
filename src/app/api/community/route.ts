@@ -6,7 +6,7 @@ import { loadCohortLeaderboards } from "@/lib/social/leaderboard-service";
 import { listVisibleProfileOwners, loadVisibleCohortProfile } from "@/lib/social/profile-service";
 
 export async function GET() {
-  const authz = await requireAuth();
+  const authz = await requireAuth({ closedBookCapability: "community_read" });
   if (!authz.session) return authz.response;
   return withRateLimit(
     { policy: "social_read_user", identity: { kind: "user", value: authz.session.user.id } },

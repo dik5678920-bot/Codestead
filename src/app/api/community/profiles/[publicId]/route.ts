@@ -5,7 +5,7 @@ import { withRateLimit } from "@/lib/security/rate-limit";
 import { loadVisibleCohortProfile, SocialProfileError } from "@/lib/social/profile-service";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ publicId: string }> }) {
-  const authz = await requireAuth();
+  const authz = await requireAuth({ closedBookCapability: "community_read" });
   if (!authz.session) return authz.response;
   return withRateLimit(
     { policy: "social_read_user", identity: { kind: "user", value: authz.session.user.id } },

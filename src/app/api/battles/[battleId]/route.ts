@@ -28,7 +28,7 @@ function response(error: unknown) {
 }
 
 export async function GET(_request: NextRequest, context: { params: Promise<{ battleId: string }> }) {
-  const authz = await requireAuth();
+  const authz = await requireAuth({ closedBookCapability: "battles" });
   if (!authz.session) return authz.response;
   return withRateLimit(
     { policy: "battle_read_user", identity: { kind: "user", value: authz.session.user.id } },
@@ -41,7 +41,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ ba
 }
 
 export async function POST(request: NextRequest, context: { params: Promise<{ battleId: string }> }) {
-  const authz = await requireAuth();
+  const authz = await requireAuth({ closedBookCapability: "battles" });
   if (!authz.session) return authz.response;
   const body = schema.safeParse(await request.json().catch(() => null));
   if (!body.success) return NextResponse.json({ error: "Choose join or provide exactly one accepted submission type." }, { status: 400, headers });

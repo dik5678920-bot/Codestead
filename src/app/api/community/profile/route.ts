@@ -31,14 +31,14 @@ function status(code: string) {
 }
 
 export async function GET() {
-  const authz = await requireAuth();
+  const authz = await requireAuth({ closedBookCapability: "community_read" });
   if (!authz.session) return authz.response;
   const settings = await loadOwnCohortSettings(authz.session.user.id);
   return NextResponse.json({ settings }, { headers: noStore });
 }
 
 export async function PATCH(request: NextRequest) {
-  const authz = await requireAuth();
+  const authz = await requireAuth({ closedBookCapability: "community_write" });
   if (!authz.session) return authz.response;
   return withRateLimit(
     { policy: "social_profile_user", identity: { kind: "user", value: authz.session.user.id } },
