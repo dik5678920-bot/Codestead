@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { NextRequest } from "next/server";
+import { unstable_doesMiddlewareMatch } from "next/experimental/testing/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { config, proxy } from "../../../proxy";
@@ -27,7 +28,13 @@ describe("Next request-origin proxy", () => {
     expect(report.errors).toEqual([]);
     expect(report.entries.length).toBeGreaterThanOrEqual(80);
     expect(report.entries.every((entry) => entry.route.startsWith("/api/"))).toBe(true);
-    expect(config).toEqual({ matcher: ["/api/:path*"] });
+    expect(config).toEqual({ matcher: [
+      "/api/:path*",
+      "/((?!api/|_next/static|_next/image|monaco/|favicon.ico).*)",
+    ] });
+    for (const entry of report.entries) {
+      expect(unstable_doesMiddlewareMatch({ config, url: entry.route })).toBe(true);
+    }
   });
 
   it.each(["GET", "HEAD", "OPTIONS"])("leaves %s requests unaffected", (method) => {

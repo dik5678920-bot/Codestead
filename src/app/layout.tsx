@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { headers } from "next/headers";
 
 import { ACCESSIBILITY_PREFERENCES_BOOTSTRAP_SCRIPT } from "@/lib/preferences/accessibility-preferences";
 import { SITE_URL } from "@/lib/site";
@@ -43,11 +44,14 @@ export const viewport: Viewport = {
   ]
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  // Reading request headers opts every page into dynamic nonce-aware rendering.
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
   return (
     <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <script
+          nonce={nonce}
           dangerouslySetInnerHTML={{ __html: ACCESSIBILITY_PREFERENCES_BOOTSTRAP_SCRIPT }}
           id="accessibility-preferences-bootstrap"
         />

@@ -70,6 +70,7 @@
     "test:restore-drill-role-boundary:pg17": "node infra/tests/restore-drill-role-boundary.integration.mjs",
     "test:restore-drill-role-boundary:pg18": "node infra/tests/restore-drill-role-boundary.integration.mjs",
     "test:e2e": "playwright test",
+    "test:csp": "node scripts/test-csp.mjs",
     "test:browser:auth": "tsx scripts/verify-authenticated-learn-runtime.ts",
     "test:load:smoke": "tsx scripts/load-projection-smoke.ts",
     "test:load:k6": "k6 run --no-usage-report load/smoke.js",

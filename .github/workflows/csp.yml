@@ -1,0 +1,41 @@
+name: CSP browser check
+
+# e2e/csp.spec.ts needs a production build and the disposable authenticated
+# PostgreSQL fixture that `npm run test:csp` creates, so it runs here instead of
+# in the dev-server browser shards of ci.yml.
+on:
+  pull_request:
+    paths:
+      - .github/workflows/csp.yml
+      - src/**
+      - e2e/csp.spec.ts
+      - playwright.csp.config.ts
+      - scripts/test-csp.mjs
+      - next.config.*
+      - package.json
+      - package-lock.json
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  csp:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22.23.1
+          cache: npm
+      - name: Install dependencies and Chromium
+        run: |
+          npm ci > npm-ci.log 2>&1 || { cat npm-ci.log; exit 1; }
+          npx playwright install --with-deps chromium > playwright.log 2>&1 || { cat playwright.log; exit 1; }
+          rm npm-ci.log playwright.log
+      - run: npm run test:csp

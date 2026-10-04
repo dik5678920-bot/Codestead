@@ -8,6 +8,9 @@ const baseURL = `http://127.0.0.1:${requestedPort}`;
 
 export default defineConfig({
   testDir: "./e2e",
+  // csp.spec.ts needs the production build and the disposable authenticated
+  // fixture from `npm run test:csp` (playwright.csp.config.ts, CSP workflow).
+  testIgnore: ["csp.spec.ts"],
   globalSetup: "./e2e/global-setup.ts",
   // Next's development compiler can reload already-open pages when a second
   // worker compiles a cold route. One worker keeps accessibility scans and

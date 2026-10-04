@@ -10,21 +10,6 @@ const productionHeaders = process.env.NODE_ENV === "production"
 const isolatedDistDir = process.env.LEARNCODING_NEXT_DIST_DIR?.trim();
 const typedEnvironmentEnabled = process.env.LEARNCODING_DISABLE_TYPED_ENV !== "1";
 
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  "base-uri 'self'",
-  "frame-ancestors 'none'",
-  "object-src 'none'",
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  `connect-src 'self'${process.env.NODE_ENV === "production" ? "" : " ws: wss:"}`,
-  "worker-src 'self' blob:",
-  "form-action 'self'",
-  ...(process.env.NODE_ENV === "production" ? ["upgrade-insecure-requests"] : []),
-].join("; ");
-
 const nextConfig: NextConfig = {
   // The floating dev badge covered the sidebar footer; errors still show as overlays.
   devIndicators: false,
@@ -55,7 +40,6 @@ const nextConfig: NextConfig = {
         { key: "X-DNS-Prefetch-Control", value: "off" },
         { key: "X-Permitted-Cross-Domain-Policies", value: "none" },
         { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
-        { key: "Content-Security-Policy", value: contentSecurityPolicy },
         { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
         { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=()" },
         ...productionHeaders,

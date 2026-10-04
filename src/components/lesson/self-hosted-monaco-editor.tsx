@@ -14,7 +14,11 @@ import styles from "./lesson-workspace.module.css";
 
 // The loader package otherwise pulls executable code from jsDelivr. Codestead
 // deliberately keeps a same-origin CSP and ships the installed Monaco version.
-loader.config({ paths: { vs: "/monaco/vs" } });
+// Blob workers cannot resolve a root-relative AMD module URL. Keep the asset
+// origin local while giving both the document and workers an absolute base.
+loader.config({ paths: { vs: typeof window === "undefined"
+  ? "/monaco/vs"
+  : new URL("/monaco/vs", window.location.origin).href } });
 
 // Monaco rejects in-flight work with a CancellationError (name and message
 // "Canceled") when an editor is disposed. That is expected cleanup, not a
