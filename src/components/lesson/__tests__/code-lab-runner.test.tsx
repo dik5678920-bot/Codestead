@@ -42,6 +42,11 @@ function storedValues() {
 }
 
 describe("CodeLab non-authoritative runner client", () => {
+  it("uses the server-selected Piston label in embedded practice", () => {
+    render(<CodeLab courseId="python" skillId="python.variables" runnerLabel="isolated Piston runner" />);
+    expect(screen.getByText(/PYTHON practice.*isolated Piston runner.*no mastery award/i)).toBeInTheDocument();
+    expect(screen.queryByText(/isolated NUC runner/i)).not.toBeInTheDocument();
+  });
   it.each([
     ["c", "#include <stdio.h>"],
     ["cpp", "#include <vector>"],
@@ -158,7 +163,7 @@ describe("CodeLab non-authoritative runner client", () => {
     expect(runningButton).toBeDisabled();
     expect(runningButton).toHaveAttribute("aria-busy", "true");
     expect(document.getElementById(runningButton.getAttribute("aria-controls")!)).toHaveAttribute("aria-busy", "true");
-    expect(screen.getByText(/waiting for one of two isolated runner slots.*queue is bounded/i)).toBeInTheDocument();
+    expect(screen.getByText(/waiting for the isolated NUC runner.*queue is bounded/i)).toBeInTheDocument();
     expect(screen.getByRole("status", { name: "Run status" })).toHaveTextContent("Waiting for an isolated runner slot.");
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     const [url, init] = fetchMock.mock.calls[0]!;

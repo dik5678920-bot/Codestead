@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { PISTON_LIMITS } from "./provider-config";
 
 import {
   isTrustedRunnerJob,
@@ -31,10 +32,6 @@ export const PISTON_RUNTIMES: Record<RunnerLanguage, { language: string; version
   javascript: { language: "javascript", version: "22.23.3", label: "Node.js 22.23.3 (Piston)" },
 };
 
-// Must match PISTON_RUN_TIMEOUT / PISTON_COMPILE_TIMEOUT in compose.yaml:
-// Piston rejects requests above its configured maxima.
-const PISTON_MAX_RUN_TIMEOUT_MS = 3_000;
-const PISTON_COMPILE_TIMEOUT_MS = 10_000;
 const PISTON_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_OUTPUT_BYTES = 65_536;
 const DEFAULT_MEMORY_MB = 128;
@@ -233,7 +230,7 @@ export class PistonRunnerClient {
     const others = request.sourceFiles.filter((file) => file !== entry);
     const outputBytes = request.limits?.outputBytes ?? DEFAULT_OUTPUT_BYTES;
     const budget = new OutputBudget(outputBytes);
-    const runTimeoutMs = Math.min(request.limits?.wallTimeMs ?? PISTON_MAX_RUN_TIMEOUT_MS, PISTON_MAX_RUN_TIMEOUT_MS);
+    const runTimeoutMs = Math.min(request.limits?.wallTimeMs ?? PISTON_LIMITS.runTimeoutMs, PISTON_LIMITS.runTimeoutMs);
     const memoryBytes = (request.limits?.memoryMb ?? DEFAULT_MEMORY_MB) * 1024 * 1024;
     const learnerFiles = [entry, ...others].map((file) => ({ name: file.path, content: file.content }));
 
@@ -244,7 +241,7 @@ export class PistonRunnerClient {
         files,
         stdin,
         run_timeout: runTimeout,
-        compile_timeout: PISTON_COMPILE_TIMEOUT_MS,
+        compile_timeout: PISTON_LIMITS.compileTimeoutMs,
         run_memory_limit: memoryBytes,
       });
 
