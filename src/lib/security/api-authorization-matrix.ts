@@ -82,6 +82,8 @@ const SESSION_USER_OPERATIONS = new Set([
   "POST /api/certificates",
   "GET /api/drafts",
   "PUT /api/drafts",
+  "GET /api/settings/profile",
+  "PATCH /api/settings/profile",
   "GET /api/community/profile",
   "PATCH /api/community/profile",
   "GET /api/community/discussions",
@@ -314,6 +316,18 @@ const SUPPORTING_OWNER_CONTRACTS = [
       "where certificate.user_id=$1",
       "where owned.user_id=$1 and badge.rule_version=$2",
       "evidence_attempt.user_id=owned.user_id",
+    ],
+  },
+  {
+    file: "src/lib/preferences/profile-settings.ts",
+    purpose: "owner-bound learning profile preferences and consent-gated cohort visibility",
+    anchors: [
+      "eq(learnerProfile.userId, userId)",
+      "lockUserAuthority(tx, userId)",
+      "eq(user.id, userId)",
+      "owner?.status !== \"active\"",
+      "actorUserId: userId",
+      "!cohort?.consent.cohortProfile",
     ],
   },
   {
