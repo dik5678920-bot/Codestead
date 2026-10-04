@@ -73,3 +73,9 @@ The suite covers exact boundaries, concurrent calls, window reset, identity/scop
 ## Migration 0071
 
 Stop all app processes before applying `0071_rate_limiter_flexible`, then restart on this release. The migration locks the old table, copies every existing count and expiry without granting a fresh budget, and drops `api_rate_limit_window`. The old binary cannot run against the new layout; rollback requires restoring the pre-migration database and deploying the old binary together. Existing role reconciliation and restore authority pins advance to 0071 without widening grants.
+
+## Atomic auth admission
+
+The Better Auth request plugin enforces sign-in 8/minute, sign-up 3/10 minutes and TOTP verification 6/minute through the existing atomic PostgreSQL limiter before body validation. Endpoint-specific scopes and HMACs of `cf-connecting-ip` use the existing `api_rate_limit` table and fixed epoch windows. Missing/invalid addresses share a restrictive bucket; forwarding headers and API policy/header overrides cannot change auth admission. Denials preserve Better Auth's exact 429 JSON and `X-Retry-After` header; persistence failures return 503 without a memory fallback.
+
+Production always requires atomic database admission, including when `DATABASE_URL` is missing or blank. Configured development/integration processes do too; database-free dev/e2e retains native memory budgets. The native limiter is memory-only as a secondary guard for other default/plugin rules. No additional migration, table, grants or retention policy is required. Counters use the existing API cleanup and survive new auth instances and process restarts.

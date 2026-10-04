@@ -9,6 +9,9 @@ import { pool } from "@/lib/db/client";
 export type RateLimitFailureMode = "closed" | "open";
 
 export type RateLimitPolicyName =
+  | "auth_sign_in_ip"
+  | "auth_sign_up_ip"
+  | "auth_totp_ip"
   | "access_request_ip"
   | "access_request_email"
   | "invitation_validate_ip"
@@ -81,6 +84,9 @@ export type RateLimitPolicy = Readonly<{
 }>;
 
 const DEFAULT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
+  auth_sign_in_ip: policy("auth_sign_in_ip", 8, 60),
+  auth_sign_up_ip: policy("auth_sign_up_ip", 3, 600),
+  auth_totp_ip: policy("auth_totp_ip", 6, 60),
   access_request_ip: policy("access_request_ip", 5, 15 * 60),
   access_request_email: policy("access_request_email", 3, 24 * 60 * 60),
   invitation_validate_ip: policy("invitation_validate_ip", 30, 15 * 60),

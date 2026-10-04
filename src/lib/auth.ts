@@ -49,6 +49,7 @@ import {
 } from "@/lib/security/session-takeover";
 import { PERSISTENT_SESSION_LIFETIME } from "@/lib/security/session-lifetime";
 import { breachedPasswordPlugin } from "@/lib/security/breached-passwords";
+import { atomicAuthRateLimitPlugin } from "@/lib/security/auth-rate-limit";
 
 /** Account behind a password-verified sign-in that is waiting for its second factor. */
 async function pendingTwoFactorUserId(ctx: GenericEndpointContext) {
@@ -61,6 +62,7 @@ async function pendingTwoFactorUserId(ctx: GenericEndpointContext) {
 }
 
 const isBuild = process.env.NEXT_PHASE === "phase-production-build";
+const databaseRateLimitsRequired = process.env.NODE_ENV === "production" || Boolean(process.env.DATABASE_URL?.trim());
 const authSecret =
   process.env.BETTER_AUTH_SECRET ??
   (isBuild || process.env.NODE_ENV === "development"
@@ -180,15 +182,19 @@ export const auth = betterAuth({
   },
   rateLimit: {
     enabled: true,
+    // Native/plugin defaults remain a secondary process-local guard. The
+    // sensitive budgets below use atomic Postgres admission when DB-backed.
+    storage: "memory",
     window: 60,
     max: 100,
     customRules: {
-      "/sign-in/email": { window: 60, max: 8 },
-      "/sign-up/email": { window: 60 * 10, max: 3 },
-      "/two-factor/verify-totp": { window: 60, max: 6 },
+      "/sign-in/email": databaseRateLimitsRequired ? false : { window: 60, max: 8 },
+      "/sign-up/email": databaseRateLimitsRequired ? false : { window: 60 * 10, max: 3 },
+      "/two-factor/verify-totp": databaseRateLimitsRequired ? false : { window: 60, max: 6 },
     },
   },
   advanced: {
+    ipAddress: { ipAddressHeaders: ["cf-connecting-ip"] },
     cookiePrefix: "learncoding",
     useSecureCookies: process.env.NODE_ENV === "production" && !isBuild,
     database: { generateId: () => randomUUID() },
@@ -372,6 +378,7 @@ export const auth = betterAuth({
     },
   },
   plugins: [
+    atomicAuthRateLimitPlugin(databaseRateLimitsRequired),
     breachedPasswordPlugin(),
     twoFactor({
       issuer: process.env.APP_NAME ?? "Codestead",
