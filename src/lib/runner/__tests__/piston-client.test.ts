@@ -11,6 +11,9 @@ import {
 } from "../client";
 import { PISTON_RUNTIMES, PistonRunnerClient } from "../piston-client";
 import { PRACTICE_LIMITS } from "../practice-dispatch";
+import { DockerJobExecutor } from "../../../../services/runner/src/docker-executor";
+import { validateJobRequest } from "../../../../services/runner/src/validation";
+import { jobRequest, processResult, testConfig } from "../../../../services/runner/src/__tests__/fixtures";
 
 const IMAGE = "codestead-piston:test@sha256:" + "a".repeat(64);
 const languages: RunnerLanguage[] = ["c", "cpp", "java", "python", "javascript"];
@@ -95,6 +98,96 @@ function client(fetchImpl: typeof fetch) {
 }
 
 const isCheckCall = (call: PistonCall) => call.files[0]?.name.startsWith("__codestead_check");
+
+describe("legacy job budget parity", () => {
+  const testCase = (visibility: "VISIBLE" | "HIDDEN", expectedStdout = "ok") => ({
+    id: "budget", visibility, category: "NORMAL" as const, stdin: "", expectedStdout, comparison: "EXACT" as const,
+  });
+  it.each(["VISIBLE", "HIDDEN"] as const)("budgets %s stderr before grading", async (visibility) => {
+    const piston = fakePiston((call) => ({ run: isCheckCall(call) ? {} : { stdout: "ok", stderr: "x".repeat(65_536) } }));
+    const job = await client(piston.fetchImpl).submit(request("python", "TEST", { tests: [testCase(visibility)] }), "budget");
+    expect(job.result?.status).toBe("OUTPUT_LIMIT");
+    expect(job.result?.tests[0].status).toBe("OUTPUT_LIMIT");
+    if (visibility === "HIDDEN") expect(job.result?.tests[0]).not.toHaveProperty("stderr");
+  });
+  it("shares output across multiple tests", async () => {
+    const output = "x".repeat(40_000);
+    const piston = fakePiston((call) => ({ run: isCheckCall(call) ? {} : { stdout: output } }));
+    const job = await client(piston.fetchImpl).submit(request("python", "TEST", { tests: [testCase("VISIBLE", output), { ...testCase("HIDDEN", output), id: "second" }] }), "budget");
+    expect(job.result?.tests.map((test) => test.status)).toEqual(["PASSED", "OUTPUT_LIMIT"]);
+  });
+  it("never grades an empty display projection as empty stdout", async () => {
+    const piston = fakePiston((call) => ({ run: isCheckCall(call) ? {} : { stdout: "wrong output" } }));
+    const job = await client(piston.fetchImpl).submit(request("python", "TEST", { limits: { ...PRACTICE_LIMITS, outputBytes: 1 }, tests: [testCase("VISIBLE", "")] }), "budget");
+    expect(job.result?.status).toBe("OUTPUT_LIMIT");
+  });
+  it("clamps compile and test stages to one wall deadline", async () => {
+    let now = 1000;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      const piston = fakePiston(() => { now += 1000; return { run: { stdout: "ok" } }; });
+      await client(piston.fetchImpl).submit(request("python", "TEST", { limits: { ...PRACTICE_LIMITS, wallTimeMs: 2500 }, tests: [testCase("VISIBLE"), { ...testCase("HIDDEN"), id: "second" }] }), "budget");
+      expect(piston.calls.map((call) => [call.run_timeout, call.compile_timeout])).toEqual([[2500, 2500], [1500, 1500], [500, 500]]);
+    } finally { clock.mockRestore(); }
+  });
+  it.each([
+    { stdout: "😀".repeat(20), expected: "", status: null, result: "OUTPUT_LIMIT" },
+    { stdout: "\n<output truncated>", expected: "\n<output truncated>", status: null, result: "ACCEPTED" },
+    { stdout: "x".repeat(100), expected: "", status: "TO", result: "TIMEOUT" },
+  ])("keeps grading independent of projection: $result / $status", async ({ stdout, expected, status, result }) => {
+    const piston = fakePiston((call) => ({ run: isCheckCall(call) ? {} : { stdout, status } }));
+    const job = await client(piston.fetchImpl).submit(request("python", "TEST", { limits: { ...PRACTICE_LIMITS, outputBytes: 24 }, tests: [testCase("VISIBLE", expected)] }), "budget");
+    expect(job.result?.status).toBe(result);
+    expect(JSON.stringify(job.result?.tests[0])).not.toContain("\uFFFD");
+  });
+  it("charges compile output to the job budget", async () => {
+    const piston = fakePiston((call) => ({ run: isCheckCall(call) ? { stdout: "x".repeat(65_535) } : { stdout: "ok" } }));
+    const job = await client(piston.fetchImpl).submit(request("python", "TEST", { tests: [testCase("HIDDEN")] }), "budget");
+    expect(job.result?.status).toBe("OUTPUT_LIMIT");
+  });
+  it("reports compile output overflow before compile success", async () => {
+    const piston = fakePiston(() => ({ run: { stderr: "x".repeat(65_537) } }));
+    const job = await client(piston.fetchImpl).submit(request("python", "COMPILE"), "budget");
+    expect(job.result?.status).toBe("OUTPUT_LIMIT");
+    expect(piston.calls).toHaveLength(1);
+  });
+  it("budgets repeated native compilation without exposing hidden diagnostics", async () => {
+    let calls = 0;
+    const piston = fakePiston(() => ({ compile: calls++ === 0 ? {} : { stderr: "hidden diagnostic".repeat(4096) }, run: { stdout: "ok" } }));
+    const job = await client(piston.fetchImpl).submit(request("c", "TEST", { tests: [testCase("HIDDEN")] }), "budget");
+    expect(job.result?.status).toBe("OUTPUT_LIMIT");
+    expect(JSON.stringify(job)).not.toContain("hidden diagnostic");
+  });
+  it("stops dispatching when the wall deadline expires, ahead of output exhaustion", async () => {
+    let now = 1000;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      const piston = fakePiston((call) => {
+        if (!isCheckCall(call)) now += 3000;
+        return { run: isCheckCall(call) ? {} : { stdout: "x".repeat(65_537) } };
+      });
+      const job = await client(piston.fetchImpl).submit(request("python", "TEST", { limits: { ...PRACTICE_LIMITS, wallTimeMs: 2500 }, tests: [testCase("VISIBLE"), { ...testCase("HIDDEN"), id: "second" }] }), "budget");
+      expect(job.result?.tests.map((test) => test.status)).toEqual(["TIMEOUT", "TIMEOUT"]);
+      expect(piston.calls).toHaveLength(2);
+    } finally { clock.mockRestore(); }
+  });
+  it.each(["VISIBLE", "HIDDEN"] as const)("matches DockerJobExecutor output accounting for %s tests", async (visibility) => {
+    const tests = [testCase(visibility), { ...testCase(visibility), id: "second" }];
+    const config = testConfig();
+    let step = 0;
+    const legacy = await new DockerJobExecutor(config, {
+      async run(call) {
+        if (call.args[0] === "rm") return processResult();
+        if (step++ === 0) return processResult();
+        return processResult({ stdout: "ok", stderr: "x".repeat(65_536), outputLimitExceeded: 65_538 > call.maxOutputBytes });
+      },
+    }).execute(validateJobRequest(jobRequest("python", { mode: "TEST", stdin: undefined, testBundleVersion: "budget-1", tests, limits: PRACTICE_LIMITS }), config), "a".repeat(64));
+    const piston = fakePiston((call) => ({ run: isCheckCall(call) ? {} : { stdout: "ok", stderr: "x".repeat(65_536) } }));
+    const job = await client(piston.fetchImpl).submit(request("python", "TEST", { tests }), "budget");
+    expect(job.result?.status).toBe(legacy.status);
+    expect(job.result?.tests.map((test) => [test.status, test.feedbackCode])).toEqual(legacy.tests.map((test) => [test.status, test.feedbackCode]));
+  });
+});
 
 afterEach(() => {
   vi.unstubAllEnvs();

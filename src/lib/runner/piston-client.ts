@@ -37,6 +37,7 @@ const PISTON_MAX_RUN_TIMEOUT_MS = 3_000;
 const PISTON_COMPILE_TIMEOUT_MS = 10_000;
 const PISTON_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 const DEFAULT_OUTPUT_BYTES = 65_536;
+const DEFAULT_WALL_TIME_MS = 5_000;
 const DEFAULT_MEMORY_MB = 128;
 const TRUNCATION_MARKER = "\n<output truncated>";
 
@@ -138,12 +139,14 @@ class OutputBudget {
   truncated = false;
   constructor(private remaining: number) {}
 
+  get exhausted() { return this.remaining <= 0 || this.truncated; }
+
   take(raw: string) {
-    const value = sanitize(raw);
+    const value = raw;
     const bytes = Buffer.from(value, "utf8");
     if (bytes.length <= this.remaining) {
       this.remaining -= bytes.length;
-      return value;
+      return sanitize(value);
     }
     this.truncated = true;
     const marker = Buffer.byteLength(TRUNCATION_MARKER, "utf8");
@@ -151,8 +154,8 @@ class OutputBudget {
     // Drop a partial UTF-8 sequence at the cut.
     const kept = bytes.subarray(0, keep).toString("utf8").replace(/\uFFFD$/u, "");
     const result = this.remaining >= marker ? kept + TRUNCATION_MARKER : "";
-    this.remaining -= Buffer.byteLength(result, "utf8");
-    return result;
+    this.remaining = 0;
+    return sanitize(result);
   }
 }
 
@@ -226,7 +229,9 @@ export class PistonRunnerClient {
 
   private async execute(request: RunnerRequest, jobId: string): Promise<RunnerJobResponse> {
     if (!/^[A-Za-z0-9._:-]{1,128}$/.test(jobId)) throw new Error("Invalid runner job id.");
-    const deadline = Date.now() + this.requestTimeoutMs;
+    const startedAt = Date.now();
+    const deadline = startedAt + this.requestTimeoutMs;
+    const wallDeadline = startedAt + (request.limits?.wallTimeMs ?? DEFAULT_WALL_TIME_MS);
     const runtime = PISTON_RUNTIMES[request.language];
     const entry = request.sourceFiles.find((file) => file.path === request.entrypoint);
     if (!runtime || !entry) throw new RunnerClientError("PISTON_REQUEST_INVALID", false, 400);
@@ -237,21 +242,32 @@ export class PistonRunnerClient {
     const memoryBytes = (request.limits?.memoryMb ?? DEFAULT_MEMORY_MB) * 1024 * 1024;
     const learnerFiles = [entry, ...others].map((file) => ({ name: file.path, content: file.content }));
 
-    const call = (files: Array<{ name: string; content: string }>, stdin: string, runTimeout = runTimeoutMs) =>
-      this.call(deadline, {
+    const call = async (files: Array<{ name: string; content: string }>, stdin: string, runTimeout = runTimeoutMs) => {
+      const remaining = Math.floor(wallDeadline - Date.now());
+      if (remaining <= 0 || budget.exhausted) {
+        const stage: PistonStage = { stdout: "", stderr: "", code: null, signal: null, status: remaining <= 0 ? "TO" : "OL", wallTimeMs: 0 };
+        return { compile: stage, run: stage };
+      }
+      const outcome = await this.call(deadline, {
         language: runtime.language,
         version: runtime.version,
         files,
         stdin,
-        run_timeout: runTimeout,
-        compile_timeout: PISTON_COMPILE_TIMEOUT_MS,
+        run_timeout: Math.min(runTimeout, remaining),
+        compile_timeout: Math.min(PISTON_COMPILE_TIMEOUT_MS, remaining),
         run_memory_limit: memoryBytes,
       });
+      if (Date.now() >= wallDeadline && classify(outcome.run) !== "INFRASTRUCTURE_ERROR") {
+        outcome.run = { ...outcome.run, status: "TO" };
+      }
+      return outcome;
+    };
 
     // 1. Compile (or syntax-check) once.
     const checker = CHECKERS[request.language];
     let compileStage: PistonStage;
     let compiledRun: PistonStage | null = null;
+    let probeRun: PistonStage | null = null;
     if (checker) {
       compileStage = (await call([{ name: checker.name, content: checker.content(entry.path) }, ...learnerFiles], "")).run;
     } else {
@@ -260,6 +276,9 @@ export class PistonRunnerClient {
       if (!first.compile) throw new RunnerClientError("PISTON_RESPONSE_UNTRUSTED", true, 502);
       compileStage = first.compile;
       if (request.mode === "RUN" && classify(compileStage) === "OK") compiledRun = first.run;
+      // TEST/COMPILE still execute Piston's one-millisecond probe. Account for
+      // its output without exposing it as compile diagnostics or test output.
+      if (request.mode !== "RUN") probeRun = first.run;
     }
     const compileClass = classify(compileStage);
     const compile = {
@@ -269,6 +288,8 @@ export class PistonRunnerClient {
       exitCode: compileStage.code,
       wallTimeMs: compileStage.wallTimeMs,
     };
+    if (probeRun) { budget.take(probeRun.stdout); budget.take(probeRun.stderr); }
+    if (budget.truncated && compileClass !== "TIMEOUT" && compileClass !== "MEMORY_LIMIT" && compileClass !== "INFRASTRUCTURE_ERROR") compile.status = "OUTPUT_LIMIT";
     if (compile.status !== "OK") {
       return this.completed(request, jobId, compile.status, compile, undefined, []);
     }
@@ -276,7 +297,9 @@ export class PistonRunnerClient {
 
     // 2. Run once (RUN) or once per test (TEST).
     if (request.mode === "RUN") {
-      const stage = compiledRun ?? (await call(learnerFiles, request.stdin ?? "")).run;
+      const outcome = compiledRun ? { run: compiledRun } : await call(learnerFiles, request.stdin ?? "");
+      if (outcome.compile) { budget.take(outcome.compile.stdout); budget.take(outcome.compile.stderr); }
+      const stage = outcome.run;
       const runClass = classify(stage);
       const run = {
         stdout: budget.take(stage.stdout),
@@ -284,7 +307,7 @@ export class PistonRunnerClient {
         exitCode: stage.code,
         wallTimeMs: stage.wallTimeMs,
       };
-      const status = budget.truncated && runClass !== "TIMEOUT" && runClass !== "MEMORY_LIMIT"
+      const status = budget.truncated && runClass !== "TIMEOUT" && runClass !== "MEMORY_LIMIT" && runClass !== "INFRASTRUCTURE_ERROR"
         ? "OUTPUT_LIMIT"
         : runClass === "OK" ? "ACCEPTED" : runClass === "FAILED" ? "RUNTIME_ERROR" : runClass;
       return this.completed(request, jobId, status, compile, run, []);
@@ -303,11 +326,14 @@ export class PistonRunnerClient {
       stderr?: string;
     }> = [];
     for (const test of request.tests ?? []) {
-      const stage = (await call(learnerFiles, test.stdin)).run;
-      const runClass = classify(stage);
-      const testBudget = new OutputBudget(outputBytes);
-      const actual = testBudget.take(stage.stdout);
-      const passed = runClass === "OK" && normalizeOutput(actual, test.comparison) === normalizeOutput(test.expectedStdout, test.comparison);
+      const outcome = await call(learnerFiles, test.stdin);
+      if (outcome.compile) { budget.take(outcome.compile.stdout); budget.take(outcome.compile.stderr); }
+      const stage = outcome.run;
+      const stageClass = outcome.compile && classify(outcome.compile) !== "OK" ? classify(outcome.compile) : classify(stage);
+      const actual = budget.take(stage.stdout);
+      const stderr = budget.take(stage.stderr);
+      const runClass = budget.truncated && !["TIMEOUT", "MEMORY_LIMIT", "INFRASTRUCTURE_ERROR"].includes(stageClass) ? "OUTPUT_LIMIT" : stageClass;
+      const passed = runClass === "OK" && normalizeOutput(stage.stdout, test.comparison) === normalizeOutput(test.expectedStdout, test.comparison);
       const status = runClass === "OK"
         ? passed ? "PASSED" : "FAILED"
         : runClass === "FAILED" ? "RUNTIME_ERROR" : runClass;
@@ -321,7 +347,7 @@ export class PistonRunnerClient {
         wallTimeMs: stage.wallTimeMs,
         ...(test.visibility === "HIDDEN"
           ? {}
-          : { actualStdout: actual, expectedStdout: test.expectedStdout, stderr: testBudget.take(stage.stderr) }),
+          : { actualStdout: actual, expectedStdout: test.expectedStdout, stderr }),
       });
     }
     const worst = TEST_STATUS_PRIORITY.find((status) => tests.some((test) => test.status === status));
