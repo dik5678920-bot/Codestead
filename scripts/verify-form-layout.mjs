@@ -69,6 +69,17 @@ try {
         assert.equal(focus[1], "2px");
         assert.equal(focus[2], focus[3]);
       }
+      await page.emulateMedia({ forcedColors: "active" });
+      const systemFocus = await page.locator("input").evaluate((e) => {
+        const probe = document.createElement("span");
+        probe.style.color = "Highlight";
+        document.body.append(probe);
+        const highlight = getComputedStyle(probe).color;
+        probe.remove();
+        return [getComputedStyle(e).outlineColor, highlight];
+      });
+      assert.equal(systemFocus[0], systemFocus[1], `${module}: system focus color`);
+      await page.emulateMedia({ forcedColors: "none" });
     }
   }
 } finally {
