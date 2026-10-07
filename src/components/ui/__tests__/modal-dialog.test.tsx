@@ -3,8 +3,8 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
-import { ModalDialog } from "../modal-dialog";
 import { Field } from "../field";
+import { ModalDialog } from "../modal-dialog";
 
 function Harness() {
   const [open, setOpen] = useState(false);
@@ -25,13 +25,14 @@ function Harness() {
 }
 
 describe("ModalDialog", () => {
-  it("preserves a shared Field's single child and accessible help", () => {
-    render(<ModalDialog backdropClassName="backdrop" dialogClassName="dialog" labelledBy="field-dialog-title" onClose={() => {}}>
-      <h2 id="field-dialog-title">Edit details</h2>
-      <Field id="dialog-name" label="Name" help="Enter your name."><input /></Field>
+  it("keeps a single element child single so Field can label its control", () => {
+    render(<ModalDialog backdropClassName="backdrop" dialogClassName="dialog" labelledBy="field-title" onClose={() => {}}>
+      <h2 id="field-title">Field dialog</h2>
+      <form><Field id="field-message" label="Message" help="Plain text only."><textarea /></Field></form>
     </ModalDialog>);
-    expect(screen.getByRole("dialog", { name: "Edit details" })).toContainElement(screen.getByLabelText("Name"));
-    expect(screen.getByLabelText("Name")).toHaveAccessibleDescription("Enter your name.");
+    const message = screen.getByRole("textbox", { name: "Message" });
+    expect(message).toHaveAttribute("aria-describedby", "field-message-help");
+    expect(screen.getByRole("dialog", { name: "Field dialog" })).toContainElement(message);
   });
   it("contains focus when mounted inside a nested page beside an outside control", async () => {
     const user = userEvent.setup();
