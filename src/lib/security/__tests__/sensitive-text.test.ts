@@ -58,6 +58,64 @@ describe("shared sensitive-text boundary", () => {
     });
   });
 
+  it.each(["access token", "DEPLOY_API_KEY", "service-auth-password", "aws_secret_access_key"])(
+    "preserves prefixes and quotes when redacting the %s label", (label) => {
+      const candidate = ["Q7w9", "Er2Ty4Ui6Op8As0Df3Gh"].join("");
+      const input = `${label}="${candidate}"`;
+      expect(redactSensitiveText(input, 1_000)).toEqual({
+        text: `${label}="[REDACTED]"`, redacted: true, truncated: false,
+      });
+      expect(containsCredentialOrHiddenEvidence(input)).toBe(true);
+    },
+  );
+
+  it("preserves legacy labelled-credential coverage across prefixes, separators, and quoting", () => {
+    const value = join("Q7w9", "Er2Ty4Ui6Op8As0Df3Gh");
+    const suffixes = ["api_key", "api-key", "api key", "secret", "token", "password", "passphrase"];
+    const prefixes = ["", "DEPLOY_", "service-auth-", "access ", "one__two--three "];
+    for (const suffix of suffixes) {
+      for (const prefix of prefixes) {
+        for (const quote of ["", '"', "'", "`"]) {
+          const label = prefix + suffix;
+          const input = `${label}=${quote}${value}${quote}`;
+          expect(containsCredentialOrHiddenEvidence(input), input).toBe(true);
+          expect(redactSensitiveText(input, input.length)).toEqual({
+            text: `${label}=${quote}[REDACTED]${quote}`, redacted: true, truncated: false,
+          });
+        }
+      }
+    }
+  });
+
+  it("handles long prose prefixes while retaining credential detection after them", () => {
+    const prefix = "a ".repeat(32_768);
+    expect(containsCredentialOrHiddenEvidence(prefix)).toBe(false);
+    const input = `${prefix}service_token=${["Q7w9", "Er2Ty4Ui6Op8As0Df3Gh"].join("")}`;
+    expect(containsCredentialOrHiddenEvidence(input)).toBe(true);
+    expect(redactSensitiveText(input, input.length)).toEqual({
+      text: `${prefix}service_token=[REDACTED]`, redacted: true, truncated: false,
+    });
+  });
+
+  it("redacts a 65,536-character near-match within a generous 250 ms budget", () => {
+    const input = "a ".repeat(32_768);
+    const started = performance.now();
+    const result = redactSensitiveText(input, input.length);
+    const elapsed = performance.now() - started;
+    expect(result).toEqual({ text: input, redacted: false, truncated: false });
+    expect(elapsed).toBeLessThanOrEqual(250);
+  });
+
+  it.each(["token_count", "api_key_count", "password_length", "secret_name"])(
+    "does not newly flag the ordinary %s identifier", (label) => {
+      const input = `${label}=${join("Q7w9", "Er2Ty4Ui6Op8As0Df3Gh")}`;
+      expect(containsCredentialOrHiddenEvidence(input)).toBe(false);
+      expect(redactSensitiveText(input, input.length)).toEqual({
+        text: input, redacted: false, truncated: false,
+      });
+    },
+  );
+
   it("does not redact ordinary identifiers, hashes, prose, URLs, or short non-secret labels", () => {
     const safe = [
       "python.values.scalars",
