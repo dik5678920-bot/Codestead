@@ -34,11 +34,12 @@ export interface ProviderResult {
   latencyMs: number;
   requestId: string | null;
   httpStatus?: number;
+  reasoningDetected?: boolean;
 }
 
 const providerErrorCodes = [
   "AUTHENTICATION", "RATE_LIMIT", "TIMEOUT", "UNAVAILABLE",
-  "BAD_RESPONSE", "MODEL_NOT_FOUND", "BAD_REQUEST", "POLICY", "UNKNOWN",
+  "BAD_RESPONSE", "MODEL_NOT_FOUND", "BAD_REQUEST", "POLICY", "UNKNOWN", "REASONING_LEAK", "MODEL_LIST_LIMIT",
 ] as const;
 
 export type ProviderErrorCode = typeof providerErrorCodes[number];

@@ -9,6 +9,8 @@ import {
 } from "./authored-types";
 
 const nonEmpty = z.string().trim().min(1);
+// Code artifacts must validate non-empty content without trimming indentation.
+const codeLine = z.string().refine((value) => value.trim().length > 0, "Code line must not be blank");
 const meaningful = z.string().trim().min(12);
 const identifier = z.string().regex(/^[a-z][a-z0-9]*(?:[.-][a-z0-9][a-z0-9-]*)*$/);
 const semver = z.string().regex(/^\d+\.\d+\.\d+$/);
@@ -111,7 +113,7 @@ export const authoredLessonSchema = z.object({
     canonicalExplanationStandsAlone: z.literal(true),
   }).strict(),
   trace: z.object({
-    artifact: z.array(nonEmpty).min(1),
+    artifact: z.array(codeLine).min(1),
     steps: z.array(z.object({
       step: z.number().int().positive(),
       focus: nonEmpty,
@@ -210,7 +212,7 @@ const mcqItemSchema = z.object({
 const traceItemSchema = z.object({
   ...baseItemShape,
   kind: z.literal("trace"),
-  artifact: z.array(nonEmpty).min(1),
+  artifact: z.array(codeLine).min(1),
   answer: z.object({
     acceptedTraces: z.array(nonEmpty).min(1),
     caseSensitive: z.boolean(),

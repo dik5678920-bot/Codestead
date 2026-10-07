@@ -63,6 +63,18 @@ function switchNamed(name: RegExp) {
 }
 
 describe("privacy and consent settings", () => {
+  it("collapses core disclosures with an acknowledged count and accessible toggle", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json(snapshot())));
+    const user = userEvent.setup();
+    render(<PrivacyConsentPanel />);
+    const toggle = await screen.findByRole("button", { name: /Core service disclosures.*6 acknowledged/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("Adult-only pilot disclosure summary.")).not.toBeInTheDocument();
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Adult-only pilot disclosure summary.")).toBeVisible();
+    expect(screen.getByRole("region", { name: "Cohort sharing" })).toBeInTheDocument();
+  });
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
@@ -84,6 +96,7 @@ describe("privacy and consent settings", () => {
 
     expect(await screen.findByRole("heading", { name: "Privacy and consent" })).toBeInTheDocument();
     expect(screen.getByText(policyVersion)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: /Core service disclosures/i }));
     for (const disclosure of disclosures) {
       expect(screen.getByText(disclosure.title, { selector: "strong" })).toBeInTheDocument();
     }

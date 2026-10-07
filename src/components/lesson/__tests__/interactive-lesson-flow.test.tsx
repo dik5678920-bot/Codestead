@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -31,6 +31,32 @@ afterEach(() => {
 });
 
 describe("interactive authored lesson flow", () => {
+  it("preserves authored Python indentation through repository parsing", () => {
+    expect(lesson.trace.artifact).toContain("    if s > best: best = s");
+  });
+
+  it("preserves four spaces, eight spaces, and tabs in prediction and trace code", () => {
+    const artifact = ["    four", "        eight", "\t tab"];
+    const { container } = render(<InteractiveLessonFlow lesson={{ ...lesson, trace: { ...lesson.trace, artifact } }} />);
+    for (const id of ["predict", "trace"]) {
+      const code = container.querySelector(`#${id} pre`)!;
+      expect(code.textContent).toBe(artifact.join("\n"));
+      expect(getComputedStyle(code).whiteSpace).toBe("pre");
+    }
+  });
+
+  it.each([
+    ["PRINT 91", true], ["abc", true], ["ab", false], ["a b", false],
+    ["", false], [" \t\n ", false], [" a \t b ", false],
+  ])("accepts only predictions with three non-whitespace characters: %j", (value, enabled) => {
+    render(<InteractiveLessonFlow lesson={lesson} />);
+    fireEvent.input(screen.getByRole("textbox", { name: "Your prediction" }), { target: { value } });
+    const reveal = screen.getByRole("button", { name: "Reveal the first step" });
+    if (enabled) expect(reveal).toBeEnabled();
+    else expect(reveal).toBeDisabled();
+    expect(screen.getByText("Write a short prediction to compare it with the trace.")).toBeInTheDocument();
+  });
+
   it("uses unique landmark and heading ids with a stable sources label", () => {
     const { container } = render(<InteractiveLessonFlow lesson={lesson} />);
     const ids = Array.from(container.querySelectorAll<HTMLElement>("[id]"), (element) => element.id);
@@ -38,6 +64,14 @@ describe("interactive authored lesson flow", () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(screen.getByRole("region", { name: "Sources and review status" }))
       .toHaveTextContent(lesson.sources[0]!.sourceRef);
+  });
+
+  it("retains the twelve-character minimum for practice and recap", () => {
+    render(<InteractiveLessonFlow lesson={lesson} />);
+    for (const [label, button] of [["Your guided-practice answer", "Continue to near transfer"], ["Teach it back in your own words", "Compare with the recap"]]) {
+      fireEvent.input(screen.getByRole("textbox", { name: label }), { target: { value: "PRINT 91" } });
+      expect(screen.getByRole("button", { name: button })).toBeDisabled();
+    }
   });
 
   it("requires a prediction before revealing the first machine-state step", async () => {

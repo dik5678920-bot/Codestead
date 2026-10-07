@@ -87,6 +87,18 @@ function graded(options: { correct?: boolean; revealed?: boolean } = {}) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("learner persisted practice panel", () => {
+  it("preserves spaces and tabs in trace assessment artifacts", async () => {
+    const artifact = ["    four", "        eight", "\ttab"];
+    vi.stubGlobal("fetch", vi.fn(() => jsonResponse({ ...creation, activity: { ...creation.activity, specification: { ...creation.activity.specification, artifact } } }, 201)));
+    const user = userEvent.setup();
+    const { container } = render(<PracticePanel skillId="python.variables.assignment" />);
+    await user.click(screen.getByRole("button", { name: "Start practice" }));
+    await screen.findByRole("heading", { name: "Choose the assignment" });
+    const code = container.querySelector("pre")!;
+    expect(code.textContent).toBe(artifact.join("\n"));
+    expect(getComputedStyle(code).whiteSpace).toBe("pre");
+  });
+
   it("creates an idempotent owner-bound attempt, records hint assistance, and shows targeted retry feedback", async () => {
     const fetch = vi.fn()
       .mockImplementationOnce(() => jsonResponse(creation, 201))

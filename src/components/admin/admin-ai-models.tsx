@@ -7,17 +7,26 @@ import styles from "./admin-ai-models.module.css";
 
 type ProviderSetting = { provider: string; label: string; baseUrl: string; version: number; hasPlatformKey: boolean; model: string; priority: number; verification: string; verifiedAt?: string | null; source: string };
 type Model = { id: string; name: string; free: boolean };
-type TestReply = { content: string; latencyMs: number; httpStatus: number; proof: string; reportedModel: string };
+type TestReply = { content: string; latencyMs: number; httpStatus: number; proof: string; reportedModel: string; reasoningDetected?: boolean };
 type PlatformUsage = { count: number; date: string; dailyLimit: number };
+async function responseBody(response: Response) {
+  try {
+    const body = await response.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error();
+    return body;
+  } catch {
+    throw new Error(`AI model service returned a non-JSON response (HTTP ${response.status}). Try again.`);
+  }
+}
 async function fetchSettings(): Promise<{ providers: ProviderSetting[]; platformUsage?: PlatformUsage }> {
   const response = await fetch("/api/admin/ai-models", { cache: "no-store" });
-  const body = await response.json();
+  const body = await responseBody(response);
   if (!response.ok || !Array.isArray(body.providers)) throw new Error("AI model settings could not be loaded.");
   return body;
 }
 async function post(command: Record<string, unknown>) {
   const response = await withStepUp(() => fetch("/api/admin/ai-models", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(command) }));
-  const body = await response.json();
+  const body = await responseBody(response);
   if (!response.ok) throw new Error(`${body.error ?? "Operation failed"}${body.httpStatus ? ` (HTTP ${body.httpStatus})` : ""}`);
   return body;
 }
@@ -54,10 +63,10 @@ function ProviderCard({ setting, reload }: { setting: ProviderSetting; reload: (
       <label>Platform API key<PasswordInput value={platformKey} autoComplete="off" onChange={(event) => setPlatformKey(event.target.value)} placeholder={setting.hasPlatformKey ? "Stored securely; enter a replacement" : "Optional; enables platform AI for learners"} /></label>
       {setting.hasPlatformKey && <label><span><input type="checkbox" checked={removeKey} onChange={(event) => setRemoveKey(event.target.checked)} /> Remove stored platform key</span></label>}
       <small>Learners without their own key for this provider can use the platform key within their daily allowance, with the saved default model and their routing consent. Changing the endpoint requires replacing or removing its stored key. Save connection edits before loading or testing.</small>
-      <button className="button button-secondary" type="button" disabled={!dirtyConnection || !baseUrl || (removeKey && Boolean(platformKey))} onClick={() => void run(async () => {
+      <div className={styles.actions}><button className="button button-secondary" type="button" disabled={!dirtyConnection || !baseUrl || (removeKey && Boolean(platformKey))} onClick={() => void run(async () => {
         await post({ ...commandBase, action: "configure", baseUrl, ...(platformKey ? { platformKey } : {}), ...(removeKey ? { removeKey } : {}) });
         setPlatformKey(""); setReply(null); await reload();
-      })}>Save connection</button>
+      })}>Save connection</button></div>
       <div className={styles.actions}>
         <button className="button button-secondary" type="button" disabled={dirtyConnection || (!setting.hasPlatformKey && !publicList) || !baseUrl} onClick={() => void run(async () => {
           const body = await post({ ...commandBase, action: "load" }); setModels(body.models); setNotice(`Loaded ${body.models.length} models.`);
@@ -70,13 +79,14 @@ function ProviderCard({ setting, reload }: { setting: ProviderSetting; reload: (
       <small>Lower numbers are tried first among available learner credentials. Defaults use your saved model, then the provider tutor environment override, then the built-in fallback.</small>
       <label>Save status<select value={verification} onChange={(event) => setVerification(event.target.value)}><option value="untested">Untested</option><option value="verified" disabled={!canVerify}>Verified</option></select></label>
       <small>Verified requires a successful test of this model and saved connection within the last 10 minutes. You can save a typed ID as untested without a platform key.</small>
+      <div className={styles.actions}>
+      {!chatOpen && error && <p role="alert" className={styles.error}>{error}</p>}
+      {notice && <p role="status" className={styles.notice}>{notice}</p>}
       <button className="button button-primary" type="button" disabled={dirtyConnection || !model.trim() || !baseUrl || !Number.isInteger(priority) || priority < 1 || priority > 100} onClick={() => void run(async () => {
         await post({ ...commandBase, action: "save", model, priority, verification, ...(verification === "verified" && reply ? { proof: reply.proof, reportedModel: reply.reportedModel } : {}) });
         await reload();
-      })}>Save default model</button>
+      })}>Save default model</button></div>
     </fieldset>
-    {!chatOpen && error && <p role="alert" className={styles.error}>{error}</p>}
-    {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {chatOpen && <ModalDialog backdropClassName={styles.backdrop} dialogClassName={styles.dialog} labelledBy={`test-${setting.provider}`} onClose={() => { if (!busy) setChatOpen(false); }}>
       <h2 id={`test-${setting.provider}`}>Test {setting.label}: {model}</h2>
       <p>This sends your test message using the stored platform key. It does not include learner data.</p>
@@ -87,7 +97,7 @@ function ProviderCard({ setting, reload }: { setting: ProviderSetting; reload: (
         <label>Test message<textarea data-dialog-initial-focus value={message} maxLength={4000} required onChange={(event) => setMessage(event.target.value)} disabled={busy} /></label>
         <button className="button button-primary" type="submit" disabled={busy || !message.trim()}>{busy ? "Testing…" : "Send test message"}</button>
       </form>
-      {reply && <div aria-live="polite"><p>HTTP {reply.httpStatus} · {reply.latencyMs} ms</p><p className={styles.reply}>{reply.content}</p></div>}
+      {reply && <div aria-live="polite"><p>HTTP {reply.httpStatus} · {reply.latencyMs} ms</p>{reply.reasoningDetected && <p role="alert">This model returns reasoning text</p>}<p className={styles.reply}>{reply.content}</p></div>}
       {error && <p role="alert" className={styles.error}>{error}</p>}
       <button className="button button-secondary" type="button" disabled={busy} onClick={() => setChatOpen(false)}>Close test</button>
     </ModalDialog>}
@@ -104,14 +114,14 @@ export function AdminAiModels() {
   useEffect(() => {
     let active = true;
     fetchSettings().then((body) => { if (active) { setSettings(body.providers); setUsage(body.platformUsage ?? null); setError(null); } })
-      .catch(() => { if (active) setError("AI model settings could not be loaded."); })
+      .catch((failure) => { if (active) setError(failure instanceof Error ? failure.message : "AI model settings could not be loaded."); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
   return <div className={styles.page}><header><h1>AI models</h1><p>Choose the app-wide model and failover order for each provider. Platform keys enable AI for learners without their own key.</p></header>
     {usage && <p aria-live="polite">{usage.count} platform requests today · {usage.date} (UTC). {usage.dailyLimit} per user per UTC day. Counts admitted requests, including provider failures.</p>}
     {loading && <p role="status">Loading AI model settings…</p>}
-    {error && <div role="alert"><p>{error}</p><button className="button button-secondary" onClick={() => void reload().catch(() => setError("AI model settings could not be loaded."))} type="button">Retry</button></div>}
+    {error && <div role="alert"><p>{error}</p><button className="button button-secondary" onClick={() => void reload().catch((failure) => setError(failure instanceof Error ? failure.message : "AI model settings could not be loaded."))} type="button">Retry</button></div>}
     <div className={styles.grid}>{settings.map((setting) => <ProviderCard key={`${setting.provider}:${setting.version}:${setting.model}:${setting.priority}:${setting.verification}`} setting={setting} reload={reload} />)}</div>
   </div>;
 }

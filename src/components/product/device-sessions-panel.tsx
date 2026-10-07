@@ -55,6 +55,7 @@ export function DeviceSessionsPanel({
   const browserDurabilityNamespace = useBrowserDurabilityNamespace();
   const { confirm, confirmDialog } = useConfirm();
   const [sessions, setSessions] = useState<SessionView[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [requests, setRequests] = useState<RevocationRequestView[]>([]);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -239,6 +240,21 @@ export function DeviceSessionsPanel({
 
   const pending = requests.some((item) => item.status === "pending");
   const currentActive = sessions.some((item) => item.current && item.state === "active");
+  const currentDevice = sessions.find((item) => item.current);
+  const otherDevices = sessions.filter((item) => !item.current);
+  function sessionRow(item: SessionView) {
+    return <div className={styles.deviceSession} key={item.id}>
+      <span className={styles.providerMark}><Laptop size={18} /></span>
+      <span><strong>{item.deviceLabel}</strong><small>
+        last seen {time(item.lastSeenAt)}
+        {item.endedAt ? ` · ended ${time(item.endedAt)}` : ` · expires ${time(item.expiresAt)}`}
+      </small></span>
+      <span className={styles.smallBadge}>{item.state}</span>
+      {item.current && item.state === "active" && <button className="button button-secondary" disabled={busy || loadState !== "ready"} onClick={() => void logout("all")} type="button">
+        <LogOut size={15} /> Sign out this device
+      </button>}
+    </div>;
+  }
 
   return (
     <>
@@ -264,29 +280,18 @@ export function DeviceSessionsPanel({
       {mutationError && <p className={styles.error} role="alert">{mutationError}</p>}
       {statusMessage && <p role="status">{statusMessage}</p>}
       <div aria-busy={loadState === "loading" || busy} className={styles.credentialList}>
-        {sessions.length ? sessions.map((item) => (
-          <div className={styles.credential} key={item.id}>
-            <span className={styles.providerMark}><Laptop size={18} /></span>
-            <span>
-              <strong>{item.deviceLabel} {item.current && <i className="pill">current</i>}</strong>
-              <small>
-                {item.state} · last seen {time(item.lastSeenAt)}
-                {item.endedAt ? ` · ended ${time(item.endedAt)}` : ` · expires ${time(item.expiresAt)}`}
-              </small>
-            </span>
-            <span className="pill">{item.state}</span>
-            {item.current && item.state === "active" && (
-              <button
-                className="button button-secondary"
-                disabled={busy || loadState !== "ready"}
-                onClick={() => void logout("all")}
-                type="button"
-              >
-                <LogOut size={15} /> Sign out this device
-              </button>
-            )}
+        {currentDevice && <section className={styles.currentDevice} aria-labelledby="current-device-title">
+          <h3 id="current-device-title">Current device</h3>{sessionRow(currentDevice)}
+        </section>}
+        {otherDevices.length > 0 && <>
+          <button className="button button-secondary" type="button" aria-expanded={historyOpen} aria-controls="other-device-sessions" onClick={() => setHistoryOpen(!historyOpen)}>
+            {historyOpen ? "Show fewer devices" : "Show all devices"} ({otherDevices.length})
+          </button>
+          <div className={styles.credentialList} id="other-device-sessions">
+            {(historyOpen ? otherDevices : otherDevices.slice(0, 3)).map(sessionRow)}
           </div>
-        )) : loadState === "ready" ? <p>No session history is available.</p> : null}
+        </>}
+        {sessions.length === 0 && loadState === "ready" && <p>No session history is available.</p>}
       </div>
       <div className={styles.credentialActions}>
         <button className="button button-secondary" disabled={busy || loadState !== "ready" || sessions.length === 0} onClick={() => void logout("others")} type="button">

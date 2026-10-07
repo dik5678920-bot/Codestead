@@ -147,7 +147,7 @@ describe("TutorView server-owned thread lifecycle", () => {
 
     await user.click(await screen.findByRole("button", { name: /Python: Loop bounds/ }));
     const answer = await screen.findByText("The stop value is exclusive.");
-    expect(within(answer.closest("div")!).getByText("Nvidia Nim · meta/test · your key")).toBeInTheDocument();
+    expect(within(answer.closest('[class*="assistantBubble"]')!).getByText("Nvidia Nim · meta/test · your key")).toBeInTheDocument();
     expect(screen.getByText("Selected conversation's bounded tail")).toBeInTheDocument();
     expect(screen.getByText("last owner-active selected-thread user/assistant messages only")).toBeInTheDocument();
 
@@ -160,7 +160,7 @@ describe("TutorView server-owned thread lifecycle", () => {
 
     await user.click(screen.getByRole("button", { name: /Python: Archived strings/ }));
     const archivedAnswer = await screen.findByText("Archived answer");
-    expect(within(archivedAnswer.closest("div")!).getByText("Openrouter · open/test · admin-funded fallback")).toBeInTheDocument();
+    expect(within(archivedAnswer.closest('[class*="assistantBubble"]')!).getByText("Openrouter · open/test · admin-funded fallback")).toBeInTheDocument();
     expect(screen.getByLabelText("Message Codestead")).toBeDisabled();
     expect(storageWrite).not.toHaveBeenCalled();
     storageWrite.mockRestore();
@@ -208,12 +208,12 @@ describe("TutorView server-owned thread lifecycle", () => {
     expect(mentor).toHaveTextContent(/no roadmap change was made/i);
     await user.click(within(mentor).getByText("Why this recommendation is bounded"));
     expect(mentor).toHaveTextContent(/provider keys.*hidden tests.*other learners/i);
-    expect(within(firstAnswer.closest("div")!).getByText("Openrouter · open/test · admin-funded fallback")).toBeInTheDocument();
+    expect(within(firstAnswer.closest('[class*="assistantBubble"]')!).getByText("Openrouter · open/test · admin-funded fallback")).toBeInTheDocument();
 
     await user.type(screen.getByLabelText("Message Codestead"), "Second question");
     await user.click(screen.getByRole("button", { name: "Send" }));
     const secondAnswer = await screen.findByText("Second answer");
-    expect(within(secondAnswer.closest("div")!).getByText("Openrouter · open/test · admin-funded fallback")).toBeInTheDocument();
+    expect(within(secondAnswer.closest('[class*="assistantBubble"]')!).getByText("Openrouter · open/test · admin-funded fallback")).toBeInTheDocument();
     expect(tutorCalls).toBe(2);
     expect(requestIds.every((requestId) => /^[0-9a-f-]{36}$/i.test(requestId))).toBe(true);
     expect(new Set(requestIds)).toHaveProperty("size", 2);
@@ -440,4 +440,15 @@ describe("TutorView server-owned thread lifecycle", () => {
     expect(new Set(tutorBodies.map((body) => body.requestId))).toHaveProperty("size", 1);
     expect(tutorBodies.every((body) => body.message === "Please preserve this exact question")).toBe(true);
   });
+});
+
+it('renders mentor replies with safe markdown', async () => {
+ vi.stubGlobal('fetch', vi.fn(async (input) => String(input).startsWith('/api/ai/threads?')
+  ? response({ threads: summaries, nextCursor: null })
+  : response({ thread: { id: ACTIVE, title: 'Markdown', status: 'active', createdAt: UPDATED, updatedAt: UPDATED }, messages: [{ id: 'markdown', role: 'assistant', content: '**A variable** stores a value.\n\n<script>window.pwned = true</script>', createdAt: UPDATED }], nextCursor: null })));
+ render(<TutorView />);
+ await userEvent.click(await screen.findByRole('button', { name: /Python: Loop bounds/ }));
+ const bold = await screen.findByText('A variable');
+ expect(bold.tagName).toBe('STRONG');
+ expect(document.querySelector('script')).toBeNull();
 });

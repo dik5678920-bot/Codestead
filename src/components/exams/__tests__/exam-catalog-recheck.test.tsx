@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({ push: vi.fn() }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }) }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: mocks.push }), usePathname: () => "/exams" }));
 
 import { ExamCatalog } from "../exam-catalog";
 
@@ -184,6 +184,11 @@ function remediationEntry() {
 }
 
 describe("exam catalog standard start flow", () => {
+  it("explains that exams are being prepared when the catalog is empty", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ exams: [] })));
+    render(<ExamCatalog />);
+    expect(await screen.findByText("Exams for this course are being prepared.")).toBeInTheDocument();
+  });
   it("filters by course, shows restriction copy, and starts the plain exam endpoint", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

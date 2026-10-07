@@ -23,6 +23,21 @@ async function pilot() {
 }
 
 describe("versioned authored content", () => {
+  it("preserves code-line whitespace in lessons and trace assessments without accepting blank lines", async () => {
+    const { authored } = await pilot();
+    const lesson = authored.lessons.find((entry) => entry.skillId === "pf.computing.program")!;
+    const bank = authored.assessmentBanks.find((entry) => entry.skillId === lesson.skillId)!;
+    const trace = bank.items.find((item) => item.kind === "trace")!;
+    const artifact = ["    four", "        eight", "\ttab"];
+    expect(parseAuthoredLesson({ ...lesson, trace: { ...lesson.trace, artifact } }, "indentation.json").trace.artifact).toEqual(artifact);
+    const parsed = parseAssessmentBank({ ...bank, items: [{ ...trace, artifact }] }, "indentation-bank.json");
+    expect(parsed.items[0]).toMatchObject({ artifact });
+    for (const blank of ["", " ", "\t"]) {
+      expect(() => parseAuthoredLesson({ ...lesson, trace: { ...lesson.trace, artifact: [blank] } }, "blank.json")).toThrow();
+      expect(() => parseAssessmentBank({ ...bank, items: [{ ...trace, artifact: [blank] }] }, "blank-bank.json")).toThrow();
+    }
+  });
+
   it("loads the authored launch-course tranche against declared skills", async () => {
     const { repository, authored } = await pilot();
 

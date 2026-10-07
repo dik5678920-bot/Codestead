@@ -460,7 +460,7 @@
 .notificationPanel > header button,
 .notificationState button {
   display: inline-flex;
-  min-height: 34px;
+  min-height: 44px;
   align-items: center;
   gap: 6px;
   padding: 6px 9px;
@@ -1210,4 +1210,11 @@
    above or below, on any screen size, so no strip shows above the header. */
 .main:has([data-lesson-workspace]) {
   padding-block: 0;
+}
+
+.searchBox:focus-within { outline: 2px solid var(--brand); outline-offset: 2px; }
+.searchBox input:focus-visible { outline: none; }
+.searchBox > svg { flex-shrink: 0; width: 16px; height: 16px; }
+@media (min-width: 921px) {
+  .shellDrawer .sidebar:is(.railSuppressed, :not(:hover):not(:has(:focus-visible)):not(.railMenuOpen)) .searchBox { min-height: 48px; padding-inline: 15px; gap: 0; }
 }
