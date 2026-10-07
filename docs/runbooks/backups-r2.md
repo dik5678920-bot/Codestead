@@ -49,7 +49,11 @@ sudo test -f /etc/learncoding/backup.env && sudo cp /etc/learncoding/backup.env 
 sudoedit /etc/learncoding/backup.env.new
 ```
 
-Add the restic block from `infra/env/backup.env.example` and replace every `REPLACE_` value. Keep the file root-owned with mode `0600`; the scripts refuse anything else, a symlink, or a leftover placeholder. Then move it into place:
+Add the restic block from `infra/env/backup.env.example` and replace every `REPLACE_` value.
+
+If uploads are not used (no `/srv/learncoding/app-data/objects` directory), set `RESTIC_UPLOADS_EXPECTED=false` in the backup env before the first run. Otherwise the backup fails closed on the missing directory. Check with `sudo test -d /srv/learncoding/app-data/objects && echo uploads-present`.
+
+Keep the file root-owned with mode `0600`; the scripts refuse anything else, a symlink, or a leftover placeholder. Then move it into place:
 
 ```bash
 sudo install -o root -g root -m 0600 /etc/learncoding/backup.env.new /etc/learncoding/backup.env
@@ -69,6 +73,8 @@ sudo systemctl enable --now learncoding-restic-backup.timer \
   learncoding-restic-freshness.timer learncoding-restic-restore-test.timer
 systemctl list-timers 'learncoding-restic*'
 ```
+
+The restore test needs a snapshot that contains the object manifest. On the first install, and after upgrading from a version without it, run one new backup (the manual start above, or the next nightly run) before the first restore test. Otherwise the restore test fails with "restored snapshot has no object manifest or recovery point".
 
 Do not run `install-systemd.sh --enable`. It also enables the parked drive and Google Drive timers.
 
