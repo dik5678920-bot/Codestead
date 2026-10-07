@@ -352,27 +352,77 @@ describe("consent-triggered profile withdrawal", () => {
     expect(mocks.connect).not.toHaveBeenCalled();
   });
 
-  it.each([
-    [null, null, { withdrawn: false, replayed: false }, false],
-    [profile({ is_published: true, row_version: "4" }), { id: "prior" }, { withdrawn: true, replayed: true }, false],
-    [profile({ is_published: true, row_version: "4" }), null, { withdrawn: true, replayed: false }, true],
-  ])("hides projections and writes one idempotent withdrawal event %#", async (existing, prior, expected, writesEvent) => {
-    const { query, release } = mockClient(async (statement) => {
-      if (statement.includes("select * from cohort_profile")) return { rows: existing ? [existing] : [] };
-      if (statement.includes("select id from cohort_profile_event")) return { rows: prior ? [prior] : [] };
+  function withdrawalClient(options: {
+    existing: ReturnType<typeof profile> | null;
+    prior?: { id: string } | null;
+    consent?: { id: string; decision: string; policy_version: string } | null;
+  }) {
+    return mockClient(async (statement) => {
+      if (statement.includes("select * from cohort_profile")) return { rows: options.existing ? [options.existing] : [] };
+      if (statement.includes("select id from cohort_profile_event")) return { rows: options.prior ? [options.prior] : [] };
+      if (statement.includes("from consent_record")) return { rows: options.consent ? [options.consent] : [] };
       return { rows: [] };
     });
+  }
+  const hidesProjections = (query: ReturnType<typeof vi.fn>) =>
+    statements(query).some((s) => s.includes("update user_achievement set visibility = 'private'"))
+    || statements(query).some((s) => s.includes("update project set visibility = 'private'"));
+  const withdrawnConsent = { id: "c1", decision: "withdrawn", policy_version: ENROLLMENT_DISCLOSURE_VERSION };
+  const regrant = { id: "c2", decision: "accepted", policy_version: ENROLLMENT_DISCLOSURE_VERSION };
+
+  it.each([
+    [null, { withdrawn: false, replayed: false }, false],
+    [profile({ is_published: true, row_version: "4" }), { withdrawn: true, replayed: false }, true],
+  ])("current withdrawal hides everything and writes one event %#", async (existing, expected, writesEvent) => {
+    const { query, release } = withdrawalClient({ existing, consent: withdrawnConsent });
     await expect(withdrawCohortProfileForConsent({
-      userId: USER_ID,
-      consentRequestId: REQUEST_ID,
-      now: NOW,
+      userId: USER_ID, consentRequestId: REQUEST_ID, now: NOW,
     })).resolves.toEqual(expected);
-    expect(statements(query).some((statement) => statement.includes("update user_achievement set visibility = 'private'"))).toBe(true);
-    expect(statements(query).some((statement) => statement.includes("update project set visibility = 'private'"))).toBe(true);
-    expect(statements(query).some((statement) => statement.includes("insert into cohort_profile_event"))).toBe(writesEvent);
-    expect(statements(query).some((statement) => statement.includes("insert into notification"))).toBe(writesEvent);
+    expect(statements(query).some((s) => s.includes("update user_achievement set visibility = 'private'"))).toBe(true);
+    expect(statements(query).some((s) => s.includes("update project set visibility = 'private'"))).toBe(true);
+    expect(statements(query).some((s) => s.includes("insert into cohort_profile_event"))).toBe(writesEvent);
+    expect(statements(query).some((s) => s.includes("insert into notification"))).toBe(writesEvent);
     expect(query).toHaveBeenCalledWith("commit");
     expect(release).toHaveBeenCalledOnce();
+  });
+
+  it("replay of a receipted withdrawal after re-consent changes nothing", async () => {
+    const { query } = withdrawalClient({
+      existing: profile({ is_published: true, row_version: "6" }), prior: { id: "prior" }, consent: regrant,
+    });
+    await expect(withdrawCohortProfileForConsent({
+      userId: USER_ID, consentRequestId: REQUEST_ID, now: NOW,
+    })).resolves.toEqual({ withdrawn: true, replayed: true });
+    expect(hidesProjections(query)).toBe(false);
+    expect(statements(query).some((s) => s.includes("update cohort_profile"))).toBe(false);
+  });
+
+  it("replay with a receipt never touches visibility even without a newer grant", async () => {
+    const { query } = withdrawalClient({
+      existing: profile({ row_version: "4" }), prior: { id: "prior" }, consent: withdrawnConsent,
+    });
+    await withdrawCohortProfileForConsent({ userId: USER_ID, consentRequestId: REQUEST_ID, now: NOW });
+    expect(hidesProjections(query)).toBe(false);
+    expect(statements(query).some((s) => s.includes("insert into"))).toBe(false);
+  });
+
+  it("delayed first cleanup after a newer grant does not hide or unpublish", async () => {
+    const { query } = withdrawalClient({
+      existing: profile({ is_published: true, row_version: "6" }), prior: null, consent: regrant,
+    });
+    await expect(withdrawCohortProfileForConsent({
+      userId: USER_ID, consentRequestId: REQUEST_ID, now: NOW,
+    })).resolves.toEqual({ withdrawn: false, replayed: false, superseded: true });
+    expect(hidesProjections(query)).toBe(false);
+    expect(statements(query).some((s) => s.includes("update cohort_profile"))).toBe(false);
+    expect(statements(query).some((s) => s.includes("insert into"))).toBe(false);
+  });
+
+  it("takes the user authority lock before the cohort lock", async () => {
+    const { query } = withdrawalClient({ existing: null, consent: withdrawnConsent });
+    await withdrawCohortProfileForConsent({ userId: USER_ID, consentRequestId: REQUEST_ID, now: NOW });
+    const locks = query.mock.calls.filter((c) => String(c[0]).includes("advisory_xact_lock")).map((c) => (c[1] as string[])[0]);
+    expect(locks).toEqual([`user-authority:${USER_ID}`, `cohort-profile:${USER_ID}`]);
   });
 
   it("rolls back and releases on withdrawal failure", async () => {

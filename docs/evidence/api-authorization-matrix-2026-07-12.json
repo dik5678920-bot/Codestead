@@ -113,7 +113,7 @@
       "file": "src/lib/social/profile-service.ts",
       "purpose": "consent-projected cohort sharing",
       "anchors": 3,
-      "sourceSha256": "5e0bf0c2805acfc19b2a40124b649112a8aa840116e97b27c81d0422c779ee1c"
+      "sourceSha256": "866655d6dea3aecf9fc5903835b25e0d4a9b04df1b787f4f352e694822883ef3"
     },
     {
       "file": "src/lib/ai/chat-lifecycle.ts",
