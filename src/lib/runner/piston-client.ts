@@ -231,7 +231,7 @@ export class PistonRunnerClient {
     if (!/^[A-Za-z0-9._:-]{1,128}$/.test(jobId)) throw new Error("Invalid runner job id.");
     const startedAt = Date.now();
     const deadline = startedAt + this.requestTimeoutMs;
-    const wallDeadline = startedAt + (request.limits?.wallTimeMs ?? DEFAULT_WALL_TIME_MS);
+    let runTimeRemainingMs = request.limits?.wallTimeMs ?? DEFAULT_WALL_TIME_MS;
     const runtime = PISTON_RUNTIMES[request.language];
     const entry = request.sourceFiles.find((file) => file.path === request.entrypoint);
     if (!runtime || !entry) throw new RunnerClientError("PISTON_REQUEST_INVALID", false, 400);
@@ -243,7 +243,10 @@ export class PistonRunnerClient {
     const learnerFiles = [entry, ...others].map((file) => ({ name: file.path, content: file.content }));
 
     const call = async (files: Array<{ name: string; content: string }>, stdin: string, runTimeout = runTimeoutMs) => {
-      const remaining = Math.floor(wallDeadline - Date.now());
+      // Piston recompiles native submissions for every call. Charge reported
+      // run time only; the operation deadline separately bounds all transport
+      // and compilation work. Interpreter syntax checkers are run stages too.
+      const remaining = Math.floor(runTimeRemainingMs);
       if (remaining <= 0 || budget.exhausted) {
         const stage: PistonStage = { stdout: "", stderr: "", code: null, signal: null, status: remaining <= 0 ? "TO" : "OL", wallTimeMs: 0 };
         return { compile: stage, run: stage };
@@ -254,10 +257,11 @@ export class PistonRunnerClient {
         files,
         stdin,
         run_timeout: Math.min(runTimeout, remaining),
-        compile_timeout: Math.min(PISTON_COMPILE_TIMEOUT_MS, remaining),
+        compile_timeout: PISTON_COMPILE_TIMEOUT_MS,
         run_memory_limit: memoryBytes,
       });
-      if (Date.now() >= wallDeadline && classify(outcome.run) !== "INFRASTRUCTURE_ERROR") {
+      runTimeRemainingMs = Math.max(0, runTimeRemainingMs - outcome.run.wallTimeMs);
+      if (outcome.run.wallTimeMs > remaining && classify(outcome.run) !== "INFRASTRUCTURE_ERROR") {
         outcome.run = { ...outcome.run, status: "TO" };
       }
       return outcome;

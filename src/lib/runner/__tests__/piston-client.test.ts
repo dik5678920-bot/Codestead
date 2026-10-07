@@ -121,13 +121,39 @@ describe("legacy job budget parity", () => {
     const job = await client(piston.fetchImpl).submit(request("python", "TEST", { limits: { ...PRACTICE_LIMITS, outputBytes: 1 }, tests: [testCase("VISIBLE", "")] }), "budget");
     expect(job.result?.status).toBe("OUTPUT_LIMIT");
   });
-  it("clamps compile and test stages to one wall deadline", async () => {
+  it("clamps each run to the remaining reported run budget", async () => {
     let now = 1000;
     const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
     try {
-      const piston = fakePiston(() => { now += 1000; return { run: { stdout: "ok" } }; });
+      const piston = fakePiston(() => { now += 1000; return { run: { stdout: "ok", wall_time: 1000 } }; });
       await client(piston.fetchImpl).submit(request("python", "TEST", { limits: { ...PRACTICE_LIMITS, wallTimeMs: 2500 }, tests: [testCase("VISIBLE"), { ...testCase("HIDDEN"), id: "second" }] }), "budget");
-      expect(piston.calls.map((call) => [call.run_timeout, call.compile_timeout])).toEqual([[2500, 2500], [1500, 1500], [500, 500]]);
+      expect(piston.calls.map((call) => [call.run_timeout, call.compile_timeout])).toEqual([[2500, 10000], [1500, 10000], [500, 10000]]);
+    } finally { clock.mockRestore(); }
+  });
+  it.each(["java", "cpp"] as const)("accepts five %s tests despite repeated compilation and transport time", async (language) => {
+    let now = 1000;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      const piston = fakePiston(() => {
+        now += 1700;
+        return { compile: { wall_time: 1500 }, run: { stdout: "ok", wall_time: 50 } };
+      });
+      const tests = Array.from({ length: 5 }, (_, index) => ({ ...testCase("HIDDEN"), id: `test-${index}` }));
+      const job = await client(piston.fetchImpl).submit(request(language, "TEST", { tests }), "budget");
+      expect(job.result?.status).toBe("ACCEPTED");
+      expect(job.result?.totals.passed).toBe(5);
+      expect(piston.calls).toHaveLength(6);
+      expect(piston.calls.every((call) => call.compile_timeout === 10000)).toBe(true);
+    } finally { clock.mockRestore(); }
+  });
+  it("times out when reported runs exceed the budget even with a stationary clock", async () => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(1000);
+    try {
+      const piston = fakePiston(() => ({ run: { stdout: "ok", wall_time: 1000 } }));
+      const tests = Array.from({ length: 3 }, (_, index) => ({ ...testCase("VISIBLE"), id: `test-${index}` }));
+      const job = await client(piston.fetchImpl).submit(request("python", "TEST", { limits: { ...PRACTICE_LIMITS, wallTimeMs: 2500 }, tests }), "budget");
+      expect(job.result?.tests.map((test) => test.status)).toEqual(["PASSED", "TIMEOUT", "TIMEOUT"]);
+      expect(piston.calls.map((call) => call.run_timeout)).toEqual([2500, 1500, 500]);
     } finally { clock.mockRestore(); }
   });
   it.each([
@@ -158,13 +184,13 @@ describe("legacy job budget parity", () => {
     expect(job.result?.status).toBe("OUTPUT_LIMIT");
     expect(JSON.stringify(job)).not.toContain("hidden diagnostic");
   });
-  it("stops dispatching when the wall deadline expires, ahead of output exhaustion", async () => {
+  it("stops dispatching when reported run time exhausts the budget, ahead of output exhaustion", async () => {
     let now = 1000;
     const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
     try {
       const piston = fakePiston((call) => {
         if (!isCheckCall(call)) now += 3000;
-        return { run: isCheckCall(call) ? {} : { stdout: "x".repeat(65_537) } };
+        return { run: isCheckCall(call) ? {} : { stdout: "x".repeat(65_537), wall_time: 3000 } };
       });
       const job = await client(piston.fetchImpl).submit(request("python", "TEST", { limits: { ...PRACTICE_LIMITS, wallTimeMs: 2500 }, tests: [testCase("VISIBLE"), { ...testCase("HIDDEN"), id: "second" }] }), "budget");
       expect(job.result?.tests.map((test) => test.status)).toEqual(["TIMEOUT", "TIMEOUT"]);
