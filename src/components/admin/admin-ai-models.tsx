@@ -63,10 +63,10 @@ function ProviderCard({ setting, reload }: { setting: ProviderSetting; reload: (
       <label>Platform API key<PasswordInput value={platformKey} autoComplete="off" onChange={(event) => setPlatformKey(event.target.value)} placeholder={setting.hasPlatformKey ? "Stored securely; enter a replacement" : "Optional; enables platform AI for learners"} /></label>
       {setting.hasPlatformKey && <label><span><input type="checkbox" checked={removeKey} onChange={(event) => setRemoveKey(event.target.checked)} /> Remove stored platform key</span></label>}
       <small>Learners without their own key for this provider can use the platform key within their daily allowance, with the saved default model and their routing consent. Changing the endpoint requires replacing or removing its stored key. Save connection edits before loading or testing.</small>
-      <button className="button button-secondary" type="button" disabled={!dirtyConnection || !baseUrl || (removeKey && Boolean(platformKey))} onClick={() => void run(async () => {
+      <div className={styles.actions}><button className="button button-secondary" type="button" disabled={!dirtyConnection || !baseUrl || (removeKey && Boolean(platformKey))} onClick={() => void run(async () => {
         await post({ ...commandBase, action: "configure", baseUrl, ...(platformKey ? { platformKey } : {}), ...(removeKey ? { removeKey } : {}) });
         setPlatformKey(""); setReply(null); await reload();
-      })}>Save connection</button>
+      })}>Save connection</button></div>
       <div className={styles.actions}>
         <button className="button button-secondary" type="button" disabled={dirtyConnection || (!setting.hasPlatformKey && !publicList) || !baseUrl} onClick={() => void run(async () => {
           const body = await post({ ...commandBase, action: "load" }); setModels(body.models); setNotice(`Loaded ${body.models.length} models.`);
@@ -79,13 +79,14 @@ function ProviderCard({ setting, reload }: { setting: ProviderSetting; reload: (
       <small>Lower numbers are tried first among available learner credentials. Defaults use your saved model, then the provider tutor environment override, then the built-in fallback.</small>
       <label>Save status<select value={verification} onChange={(event) => setVerification(event.target.value)}><option value="untested">Untested</option><option value="verified" disabled={!canVerify}>Verified</option></select></label>
       <small>Verified requires a successful test of this model and saved connection within the last 10 minutes. You can save a typed ID as untested without a platform key.</small>
+      <div className={styles.actions}>
+      {!chatOpen && error && <p role="alert" className={styles.error}>{error}</p>}
+      {notice && <p role="status" className={styles.notice}>{notice}</p>}
       <button className="button button-primary" type="button" disabled={dirtyConnection || !model.trim() || !baseUrl || !Number.isInteger(priority) || priority < 1 || priority > 100} onClick={() => void run(async () => {
         await post({ ...commandBase, action: "save", model, priority, verification, ...(verification === "verified" && reply ? { proof: reply.proof, reportedModel: reply.reportedModel } : {}) });
         await reload();
-      })}>Save default model</button>
+      })}>Save default model</button></div>
     </fieldset>
-    {!chatOpen && error && <p role="alert" className={styles.error}>{error}</p>}
-    {notice && <p role="status" className={styles.notice}>{notice}</p>}
     {chatOpen && <ModalDialog backdropClassName={styles.backdrop} dialogClassName={styles.dialog} labelledBy={`test-${setting.provider}`} onClose={() => { if (!busy) setChatOpen(false); }}>
       <h2 id={`test-${setting.provider}`}>Test {setting.label}: {model}</h2>
       <p>This sends your test message using the stored platform key. It does not include learner data.</p>

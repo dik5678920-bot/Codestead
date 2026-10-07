@@ -20,6 +20,7 @@ import {
 import { AI_PROVIDER_CATALOG, type CatalogProviderId } from "@/lib/ai/provider-catalog";
 import { ModalDialog } from "@/components/ui/modal-dialog";
 import { PasswordInput } from "@/components/ui/password-input";
+import { Field } from "@/components/ui/field";
 
 import styles from "./product-pages.module.css";
 import { SecuritySettingsPanel } from "./security-settings-panel";
@@ -312,8 +313,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
           <Plus size={15} /> Add provider
         </button>
       </div>
-      {error && !deleteTarget && !open && <><p className={styles.error} role="alert">{error}</p><ContactAdminButton {...supportDiagnostics} /></>}
-      <div className={styles.sideCard}>
+      <div className={`${styles.sideCard} ${styles.form}`}>
         <h3>Verify before changing a key</h3>
         <p>{mfaFresh ? "Authenticator verified for this sign-in; no extra code needed." : "Enter a current authenticator code. Verification stays valid for this sign-in."}</p>
         {!mfaFresh && <><label>
@@ -330,9 +330,12 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
             value={mfaCode}
           />
         </label>
+        <div className={styles.formActions}>
+        {error && !deleteTarget && !open && <><p className={styles.error} role="alert">{error}</p><ContactAdminButton {...supportDiagnostics} /></>}
         <button className="button button-secondary" disabled={busy} onClick={() => void verifyMfaFromPanel()} type="button">
           <Shield size={15} /> {busy ? "Verifying…" : "Verify authenticator"}
-        </button></>}
+        </button></div></>}
+        {mfaFresh && error && !deleteTarget && !open && <div className={styles.formActions}><p className={styles.error} role="alert">{error}</p><ContactAdminButton {...supportDiagnostics} /></div>}
       </div>
 
       <div className={styles.credentialList} aria-busy={credentialLoadState === "loading" || busy}>
@@ -514,16 +517,18 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
               </div>
               <button className={styles.iconButton} aria-label="Close" data-dialog-initial-focus disabled={busy} onClick={closeProviderDialog}><X size={17} /></button>
             </div>
-            {error && <><p className={styles.error} role="alert">{error}</p><ContactAdminButton {...supportDiagnostics} /></>}
             <form className={styles.form} onSubmit={add}>
               {!replaceTarget && <>
                 <label>Provider<select name="provider" onChange={(event) => setAddProvider(event.target.value as CatalogProviderId)} value={addProvider}>{AI_PROVIDER_CATALOG.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}</select><small>{AI_PROVIDER_CATALOG.find((entry) => entry.id === addProvider)?.hint}</small></label>
                 <label>Label<input name="label" placeholder="My personal key" required minLength={2} /></label>
               </>}
-              <label>{replaceTarget ? "New API key" : "API key"}<PasswordInput name="secret" autoComplete="off" placeholder="Paste once" required minLength={8} /><small>Never paste a key you have already exposed publicly; rotate it first.</small></label>
+              <Field id="settings-provider-key" label={replaceTarget ? "New API key" : "API key"} help="Never paste a key you have already exposed publicly; rotate it first."><PasswordInput id="settings-provider-key" aria-describedby="settings-provider-key-help" name="secret" autoComplete="off" placeholder="Paste once" required minLength={8} /></Field>
               {!replaceTarget && <label><span><input name="providerConsent" required type="checkbox" /> I allow future tutor requests to send the disclosed bounded lesson context, relevant chat, preferences, and code I choose to discuss to this provider. Email, keys, hidden tests, and other learners are excluded.</span><small>This choice is versioned and can be withdrawn in privacy settings without deleting the stored encrypted key.</small></label>}
               {!replaceTarget && <label><span><input name="preferred" type="checkbox" /> Prefer this provider when healthy</span></label>}
-              <button className="button button-primary" disabled={busy} type="submit">{busy ? "Encrypting and validating…" : replaceTarget ? "Replace encrypted key" : "Store encrypted key"}</button>
+              <div className={styles.formActions}>
+                {error && <><p className={styles.error} role="alert">{error}</p><ContactAdminButton {...supportDiagnostics} /></>}
+                <button className="button button-primary" disabled={busy} type="submit">{busy ? "Encrypting and validating…" : replaceTarget ? "Replace encrypted key" : "Store encrypted key"}</button>
+              </div>
             </form>
         </ModalDialog>
       )}
