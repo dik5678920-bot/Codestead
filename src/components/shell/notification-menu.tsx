@@ -3,6 +3,7 @@
 import { Bell, CheckCheck, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import styles from "./app-shell.module.css";
 
@@ -34,6 +35,7 @@ export function NotificationMenu({ inSidebar = false }: { readonly inSidebar?: b
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
 
   const load = useCallback(async (showLoading = true) => {
     if (showLoading) setState("loading");
@@ -66,13 +68,14 @@ export function NotificationMenu({ inSidebar = false }: { readonly inSidebar?: b
 
   useEffect(() => {
     if (!open) return;
+    panelRef.current?.focus();
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       setOpen(false);
       queueMicrotask(() => buttonRef.current?.focus());
     };
     const outside = (event: PointerEvent) => {
-      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+      if (!rootRef.current?.contains(event.target as Node) && !panelRef.current?.contains(event.target as Node)) setOpen(false);
     };
     window.addEventListener("keydown", escape);
     window.addEventListener("pointerdown", outside);
@@ -109,6 +112,24 @@ export function NotificationMenu({ inSidebar = false }: { readonly inSidebar?: b
     setUnreadCount((value) => Math.max(0, value - 1));
   }
 
+  const panel = (<section ref={panelRef} tabIndex={-1} aria-label="Notifications" className={styles.notificationPanel} id="notification-panel" role="dialog">
+          <header>
+            <div><strong>Notifications</strong><small>{unreadCount ? `${unreadCount} unread` : "You are caught up"}</small></div>
+            <button disabled={!unreadCount} onClick={() => void markAllRead()} type="button"><CheckCheck size={15} /> Mark all read</button>
+          </header>
+          {state === "loading" && <p className={styles.notificationState} role="status">Loading notifications…</p>}
+          {state === "error" && <div className={styles.notificationState} role="alert"><p>Notifications could not be loaded.</p><button onClick={() => void load()} type="button"><RefreshCw size={14} /> Try again</button></div>}
+          {state === "ready" && items.length === 0 && <p className={styles.notificationState}>No notifications yet. Learning and security updates will appear here.</p>}
+          {state === "ready" && items.length > 0 && <div className={styles.notificationList}>{items.map((item) => {
+            const content = <><span className={item.readAt ? styles.notificationRead : styles.notificationUnread}><i aria-hidden="true" /><strong>{item.title}</strong><small>{relativeTime(item.createdAt)}</small></span><p>{item.body}</p></>;
+            const safeAction = item.actionUrl?.startsWith("/") && !item.actionUrl.startsWith("//") ? item.actionUrl : null;
+            return safeAction
+              ? <Link href={safeAction} key={item.id} onClick={() => { void markOneRead(item.id); setOpen(false); }}>{content}</Link>
+              : <button key={item.id} onClick={() => void markOneRead(item.id)} type="button">{content}</button>;
+          })}</div>}
+          <footer><Link href="/settings?section=notifications" onClick={() => setOpen(false)}>Reminder settings</Link></footer>
+        </section>);
+
   return (
     <div className={`${styles.notificationMenu} ${inSidebar ? styles.sidebarNotifications : ""}`} ref={rootRef}>
       <button
@@ -129,25 +150,7 @@ export function NotificationMenu({ inSidebar = false }: { readonly inSidebar?: b
         {inSidebar && <span>Notifications</span>}
         {unreadCount > 0 && <span className={styles.notificationDot} />}
       </button>
-      {open && (
-        <section aria-label="Notifications" className={styles.notificationPanel} id="notification-panel" role="dialog">
-          <header>
-            <div><strong>Notifications</strong><small>{unreadCount ? `${unreadCount} unread` : "You are caught up"}</small></div>
-            <button disabled={!unreadCount} onClick={() => void markAllRead()} type="button"><CheckCheck size={15} /> Mark all read</button>
-          </header>
-          {state === "loading" && <p className={styles.notificationState} role="status">Loading notifications…</p>}
-          {state === "error" && <div className={styles.notificationState} role="alert"><p>Notifications could not be loaded.</p><button onClick={() => void load()} type="button"><RefreshCw size={14} /> Try again</button></div>}
-          {state === "ready" && items.length === 0 && <p className={styles.notificationState}>No notifications yet. Learning and security updates will appear here.</p>}
-          {state === "ready" && items.length > 0 && <div className={styles.notificationList}>{items.map((item) => {
-            const content = <><span className={item.readAt ? styles.notificationRead : styles.notificationUnread}><i aria-hidden="true" /><strong>{item.title}</strong><small>{relativeTime(item.createdAt)}</small></span><p>{item.body}</p></>;
-            const safeAction = item.actionUrl?.startsWith("/") && !item.actionUrl.startsWith("//") ? item.actionUrl : null;
-            return safeAction
-              ? <Link href={safeAction} key={item.id} onClick={() => { void markOneRead(item.id); setOpen(false); }}>{content}</Link>
-              : <button key={item.id} onClick={() => void markOneRead(item.id)} type="button">{content}</button>;
-          })}</div>}
-          <footer><Link href="/settings?section=notifications" onClick={() => setOpen(false)}>Reminder settings</Link></footer>
-        </section>
-      )}
+      {open && (inSidebar ? createPortal(<div className={styles.sidebarNotifications}>{panel}</div>, document.body) : panel)}
     </div>
   );
 }

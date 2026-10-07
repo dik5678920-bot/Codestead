@@ -19,6 +19,21 @@ const payload = {
 };
 
 describe("NotificationMenu", () => {
+  it("opens the sidebar panel outside the rail that clips overflow", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })));
+    const user = userEvent.setup();
+    const { container } = render(<aside data-testid="sidebar"><NotificationMenu inSidebar /></aside>);
+    await user.click(await screen.findByRole("button", { name: "Notifications, 1 unread" }));
+    const panel = await screen.findByRole("dialog", { name: "Notifications" });
+    expect(container.contains(panel)).toBe(false);
+    expect(panel).toBeVisible();
+    expect(panel).toHaveFocus();
+    await user.click(screen.getByRole("button", { name: "Mark all read" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Notifications" })).toBeEnabled());
+    expect(panel).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    await waitFor(() => expect(screen.getByRole("button", { name: "Notifications" })).toHaveFocus());
+  });
   afterEach(() => vi.unstubAllGlobals());
 
   it("loads a private feed, exposes unread state, and marks all read", async () => {
