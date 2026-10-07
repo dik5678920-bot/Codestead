@@ -10,7 +10,7 @@ import {
   type AuthoredFallbackLessonBlueprint,
   type AuthoredLesson,
 } from "@/lib/content";
-import { CodeLab, LessonWorkspace, Visualizer } from "../lesson-workspace";
+import { CodeLab, LessonWorkspace, Visualizer, selectActiveLessonSection } from "../lesson-workspace";
 import { TutorLessonProvider } from "../tutor-context";
 import { TutorLauncherHost } from "../tutor-panel";
 
@@ -36,6 +36,7 @@ beforeAll(async () => {
 });
 
 afterEach(() => {
+  document.documentElement.style.removeProperty("scroll-padding-top");
   vi.restoreAllMocks();
   vi.useRealTimers();
   vi.unstubAllGlobals();
@@ -51,6 +52,62 @@ const baseProps = () => ({
 });
 
 describe("lesson workspace interactions", () => {
+  it("preserves indentation and computed whitespace in visualizer code lines", () => {
+    const artifact = ["    four", "        eight", "\ttab"];
+    const { container } = render(<Visualizer trace={{ ...authoredLesson.trace, artifact }} />);
+    const lines = container.querySelectorAll("code");
+    artifact.forEach((line, index) => {
+      expect(lines[index].textContent).toBe(`${index + 1}${line}`);
+      expect(getComputedStyle(lines[index]).whiteSpace).toBe("pre");
+    });
+  });
+
+  it("numbers all nine lesson stages and selects anchors immediately", () => {
+    render(<LessonWorkspace {...baseProps()} authoredLesson={authoredLesson} />);
+    const predict = screen.getByRole("link", { name: /1\s*Predict/ });
+    const examples = screen.getByRole("link", { name: /3\s*Worked examples/ });
+    expect(predict).toHaveAttribute("href", "#predict");
+    fireEvent.click(examples);
+    expect(examples).toHaveAttribute("aria-current", "location");
+    expect(screen.getByRole("link", { name: /9\s*Sources/ })).toHaveAttribute("href", "#source-provenance");
+  });
+
+  it("recomputes all section positions on scroll, selects the last at bottom, and cancels pending frames", () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.spyOn(window, "requestAnimationFrame").mockImplementation((callback) => { frames.push(callback); return frames.length; });
+    const cancel = vi.spyOn(window, "cancelAnimationFrame");
+    document.documentElement.style.scrollPaddingTop = "110px";
+    const positions: Record<string, number> = { predict: -400, explain: -100, "worked-examples": 105, trace: 600, misconceptions: 900, "transfer-practice": 1200, remediation: 1500, recap: 1800, "source-provenance": 2100 };
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      return { top: positions[this.id] ?? 0, bottom: this.tagName === "HEADER" ? 90 : 0 } as DOMRect;
+    });
+    vi.spyOn(document.documentElement, "scrollHeight", "get").mockReturnValue(3000);
+    vi.spyOn(window, "innerHeight", "get").mockReturnValue(800);
+    const scrollY = vi.spyOn(window, "scrollY", "get").mockReturnValue(0);
+    const view = render(<LessonWorkspace {...baseProps()} authoredLesson={authoredLesson} />);
+    act(() => frames.shift()!(0));
+    expect(screen.getByRole("link", { name: /3\s*Worked examples/ })).toHaveAttribute("aria-current", "location");
+    positions.trace = 85;
+    fireEvent.scroll(window);
+    act(() => frames.shift()!(0));
+    expect(screen.getByRole("link", { name: /4\s*Trace/ })).toHaveAttribute("aria-current", "location");
+    scrollY.mockReturnValue(2200);
+    fireEvent.scroll(window);
+    act(() => frames.shift()!(0));
+    expect(screen.getByRole("link", { name: /9\s*Sources/ })).toHaveAttribute("aria-current", "location");
+    fireEvent.scroll(window);
+    view.unmount();
+    expect(cancel).toHaveBeenCalled();
+  });
+
+  it("selects the latest heading at the reading top and the last section at the bottom", () => {
+    const sections = [{ id: "predict", top: -400 }, { id: "explain", top: -100 }, { id: "worked-examples", top: 95 }, { id: "trace", top: 600 }];
+    expect(selectActiveLessonSection(sections, 90, false)).toBe("worked-examples");
+    expect(selectActiveLessonSection(sections, 90, true)).toBe("trace");
+    expect(selectActiveLessonSection(sections.map((section) => ({ ...section, top: section.top + 1000 })), 90, false)).toBe("predict");
+    expect(selectActiveLessonSection([], 90, false)).toBeUndefined();
+  });
+
   it("cancels a pending fallback reflection transition on unmount", () => {
     vi.useFakeTimers();
     const schedule = vi.spyOn(globalThis, "setTimeout");

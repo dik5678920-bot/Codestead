@@ -147,7 +147,7 @@ export function InteractiveLessonFlow({ lesson }: { readonly lesson: AuthoredLes
         <Brain aria-hidden="true" size={24} />
       </header>
       <p className={styles.stageLead}>Do not worry about being right. A prediction gives your brain something concrete to compare with the real execution.</p>
-      <pre className={styles.codeArtifact}>{lesson.trace.artifact.join("\n")}</pre>
+      <pre className={styles.codeArtifact} style={{ whiteSpace: "pre" }}>{lesson.trace.artifact.join("\n")}</pre>
       <label className={styles.answerField}>
         <span>Your prediction</span>
         <textarea
@@ -164,11 +164,11 @@ export function InteractiveLessonFlow({ lesson }: { readonly lesson: AuthoredLes
       <div className={styles.actionRow}>
         <button
           className={styles.primaryAction}
-          disabled={!enoughToContinue(prediction)}
+          disabled={prediction.replace(/\s/g, "").length < 3}
           onClick={() => setPredictionRevealed(true)}
           type="button"
         ><Eye aria-hidden="true" size={17} /> Reveal the first step</button>
-        <small id={predictionStatusId}>Write one complete thought ({MIN_SCRATCHPAD_LENGTH}+ characters) to compare it with the trace.</small>
+        <small id={predictionStatusId}>Write a short prediction to compare it with the trace.</small>
       </div>
       {predictionRevealed && <div aria-live="polite" className={styles.reveal} role="status">
         <Check aria-hidden="true" size={18} />
@@ -246,7 +246,7 @@ export function InteractiveLessonFlow({ lesson }: { readonly lesson: AuthoredLes
         <div><small>Open the black box</small><h2 id="trace-heading">Watch state change, not just lines move</h2></div>
         <RefreshCw aria-hidden="true" size={24} />
       </header>
-      <pre className={styles.codeArtifact}>{lesson.trace.artifact.join("\n")}</pre>
+      <pre className={styles.codeArtifact} style={{ whiteSpace: "pre" }}>{lesson.trace.artifact.join("\n")}</pre>
       <div aria-live="polite" className={styles.traceCard}>
         <div className={styles.traceProgress}><span style={{ width: `${((traceStep + 1) / lesson.trace.steps.length) * 100}%` }} /></div>
         <small>Machine step {traceStep + 1} of {lesson.trace.steps.length}</small>

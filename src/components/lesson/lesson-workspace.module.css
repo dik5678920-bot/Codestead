@@ -86,7 +86,7 @@
 .referenceDisclosure { margin-top: 30px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
 .referenceDisclosure > summary { min-height: 48px; padding: 13px 15px; color: var(--ink-soft); font-size: .78rem; font-weight: 850; cursor: pointer; }
 .referenceDisclosure > section { padding: 0 15px 15px; }
-.lessonCard section { scroll-margin-top: 90px; margin-top: 34px; }
+.lessonCard section { scroll-margin-top: 0; margin-top: 34px; }
 .lessonCard section > h2 { margin-bottom: 14px; font-size: 1.25rem; }
 .scopeGrid { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
 .scopeGrid > h2 { grid-column: 1 / -1; }
