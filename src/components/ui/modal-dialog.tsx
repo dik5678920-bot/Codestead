@@ -19,13 +19,16 @@ type ModalDialogProps = {
 
 // Reuse existing visible headings and descriptions as Radix's labels.
 function labels(children: ReactNode, title: string, description?: string): ReactNode {
-  return Children.map(children, (child) => {
+  const labelled = Children.map(children, (child) => {
     if (!isValidElement<{ id?: string; children?: ReactNode }>(child)) return child;
     const content = cloneElement(child, { children: labels(child.props.children, title, description) });
     if (child.props.id === title) return <Dialog.Title asChild>{content}</Dialog.Title>;
     if (description && child.props.id === description) return <Dialog.Description asChild>{content}</Dialog.Description>;
     return content;
   });
+  // Composite controls such as Field require their single element child.
+  // Children.map always returns an array, even for that single element.
+  return isValidElement(children) ? labelled?.[0] : labelled;
 }
 
 export function ModalDialog({ backdropClassName, children, describedBy, dialogClassName, labelledBy, onClose, role = "dialog", dismissible = true, asChild = false }: ModalDialogProps) {
