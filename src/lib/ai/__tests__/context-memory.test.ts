@@ -138,3 +138,13 @@ describe("Patch role policy (shared between lesson and general chat)", () => {
     for (const line of TUTOR_ROLE_POLICY_LINES) expect(system?.content).toContain(line);
   });
 });
+
+it.each([{ confirmedInterests: [] }, { confirmedInterests: ['Cooking'] }])('honors explicit hobby requests regardless of analogy preference: %j', ({ confirmedInterests }) => {
+  for (const build of [buildTutorMessages, buildGeneralTutorMessages]) {
+    const result = build({ ...context, analogyPreference: 'neutral', confirmedInterests }, 'EXPLAIN ME WITH HELP OF HOBBY');
+    expect(result[0].content).toContain('explicitly requests an analogy or hobby');
+    expect(result[0].content).toContain('ask which hobby');
+    expect(result[0].content).toContain('Never add unprompted analogies to greetings or simple answers');
+    expect(result.filter(message => message.role === 'user').map(message => message.content).join('\n')).toContain(JSON.stringify(confirmedInterests));
+  }
+});

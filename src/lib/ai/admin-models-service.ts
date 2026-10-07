@@ -8,8 +8,35 @@ import { adminModelsStore, type AdminModelsStore } from "./admin-models-store";
 import { createModelProof, verifyModelProof, modelListUrl, nextModelListUrl, parseModelList, modelProviders, type ModelCommand } from "./admin-models-domain";
 import { resolvePublicProviderUrl, safeProviderRequest } from "./safe-provider-http";
 import { ProviderError, type SupportedProvider } from "./types";
+import { safeTutorResponse } from "./response-safety";
 
 type Actor = { actorId: string; sessionId: string };
+async function boundedModelList(response: Response) {
+  const reader = response.body?.getReader();
+  if (!reader) throw new ProviderError("Provider returned an empty model list.", "BAD_RESPONSE");
+  const chunks: Uint8Array[] = [];
+  let bytes = 0;
+  for (;;) {
+    const next = await reader.read();
+    if (next.done) break;
+    bytes += next.value.byteLength;
+    if (bytes > 8_388_608) {
+      void reader.cancel().catch(() => undefined);
+      throw new ProviderError("Provider model list exceeds the size limit.", "MODEL_LIST_LIMIT");
+    }
+    chunks.push(next.value);
+  }
+  let payload: unknown;
+  try { payload = JSON.parse(Buffer.concat(chunks).toString("utf8")); }
+  catch { throw new ProviderError("Provider returned an invalid model list.", "BAD_RESPONSE"); }
+  if (payload && typeof payload === "object") {
+    const list = payload as { data?: unknown; models?: unknown };
+    if ([list.data, list.models].some((entries) => Array.isArray(entries) && entries.length > 10_000)) {
+      throw new ProviderError("Provider model list exceeds the size limit.", "MODEL_LIST_LIMIT");
+    }
+  }
+  return payload;
+}
 export const platformVaultOwner = "platform-ai-models";
 function masterKey() { return parseMasterKey(process.env.CREDENTIAL_MASTER_KEY ?? ""); }
 export function defaultBaseUrl(provider: SupportedProvider) {
@@ -76,31 +103,42 @@ export async function executeAdminModelCommand(actor: Actor, command: ModelComma
     const models = new Map<string, ReturnType<typeof parseModelList>[number]>();
     const visited = new Set<string>();
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000);
+    let timer: ReturnType<typeof setTimeout>;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        reject(new ProviderError("Provider model listing timed out.", "TIMEOUT"));
+        controller.abort();
+      }, 60_000);
+    });
     let httpStatus = 200;
     try {
       for (let page = 0; url && page < 10; page++) {
         if (visited.has(url)) throw new ProviderError("Provider pagination did not advance.", "BAD_RESPONSE");
         visited.add(url);
-        const response = await deps.request(url, { headers, redirect: "error", signal: controller.signal });
+        const response = await Promise.race([deps.request(url, { headers, redirect: "error", signal: controller.signal }), deadline]);
         httpStatus = response.status;
-        if (!response.ok) throw new ProviderError("Provider model listing failed.", response.status === 401 || response.status === 403 ? "AUTHENTICATION" : "UNAVAILABLE", response.status);
-        const payload: unknown = await response.json();
-        for (const model of parseModelList(command.provider, payload)) {
+        if (!response.ok) throw new ProviderError("Provider model listing failed.", response.status === 401 || response.status === 403 ? "AUTHENTICATION" : response.status === 404 || response.status === 410 ? "MODEL_NOT_FOUND" : "UNAVAILABLE", response.status);
+        const payload = await Promise.race([boundedModelList(response), deadline]);
+        let entries: ReturnType<typeof parseModelList>;
+        try { entries = parseModelList(command.provider, payload); }
+        catch { throw new ProviderError("Provider returned an invalid model list.", "BAD_RESPONSE"); }
+        for (const model of entries) {
           assertSafeOutput(`${model.id} ${model.name}`, key);
           models.set(model.id, model);
         }
-        if (models.size > 10_000) throw new ProviderError("Provider model list exceeds the size limit.", "BAD_RESPONSE");
+        if (models.size > 10_000) throw new ProviderError("Provider model list exceeds the size limit.", "MODEL_LIST_LIMIT");
         url = nextModelListUrl(command.provider, initialUrl, payload);
       }
-      if (url) throw new ProviderError("Provider model list exceeds the page limit.", "BAD_RESPONSE");
+      if (url) throw new ProviderError("Provider model list exceeds the page limit.", "MODEL_LIST_LIMIT");
       return { models: [...models.values()], httpStatus };
-    } finally { clearTimeout(timer); }
+    } finally { clearTimeout(timer!); }
   }
   const reply = await deps.probe({ provider: command.provider, apiKey: key, baseUrl, transport: deps.request,
     model: command.model, messages: [{ role: "user", content: command.message }], maxOutputTokens: 1500, timeoutMs: 60_000 });
+  const safe = safeTutorResponse(reply.content);
+  reply.content = safe.content;
   assertSafeOutput(reply.content, key);
   assertSafeOutput(reply.model, key);
   await deps.audit({ actorUserId: actor.actorId, action: "ai_models.test", resourceType: "provider_policy", outcome: "success", metadata: { provider: command.provider, model: command.model, httpStatus: reply.httpStatus ?? 200 } });
-  return { content: reply.content, latencyMs: reply.latencyMs, httpStatus: reply.httpStatus ?? 200, reportedModel: reply.model, proof: createModelProof({ ...binding, reportedModel: reply.model }, masterKey()) };
+  return { content: reply.content, reasoningDetected: reply.reasoningDetected || safe.reasoningDetected, latencyMs: reply.latencyMs, httpStatus: reply.httpStatus ?? 200, reportedModel: reply.model, proof: createModelProof({ ...binding, reportedModel: reply.model }, masterKey()) };
 }

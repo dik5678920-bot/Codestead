@@ -77,3 +77,30 @@ it("loads Anthropic display names and cursor pagination", async () => {
  expect(result).toMatchObject({ models: [{ id: "claude-first", name: "First" }, { id: "claude-second", name: "Second" }] });
  expect(new URL(deps.request.mock.calls[1][0]).searchParams.get("after_id")).toBe("claude-first");
 });
+
+it.each(['bytes', 'models'])('rejects oversized public catalogs with a clear limit error: %s', async (kind) => {
+ deps.request.mockResolvedValue(new Response(JSON.stringify({ data: Array.from({ length: kind === 'models' ? 10001 : 1 }, (_, i) => ({ id: `model-${i}`, description: kind === 'bytes' ? 'x'.repeat(8_388_608) : '' })) })));
+ await expect(executeAdminModelCommand(actor, { action: 'load', provider: 'openrouter', version: 0 }, deps)).rejects.toMatchObject({ code: 'MODEL_LIST_LIMIT' });
+});
+it('bounds the entire catalog operation even if transport ignores abort', async () => {
+ vi.useFakeTimers();
+ try {
+  deps.request.mockImplementation(() => new Promise(() => {}));
+  const pending = executeAdminModelCommand(actor, { action: 'load', provider: 'openrouter', version: 0 }, deps);
+  const assertion = expect(pending).rejects.toMatchObject({ code: 'TIMEOUT' });
+  await vi.advanceTimersByTimeAsync(60000);
+  await assertion;
+ } finally { vi.useRealTimers(); }
+});
+
+it('reports the ten-page catalog limit without returning a partial list', async () => {
+ await executeAdminModelCommand(actor, { action: 'configure', provider: 'anthropic', version: 0, baseUrl: 'https://api.anthropic.com/v1', platformKey: 'platform-secret-123' }, deps);
+ let page = 0;
+ deps.request.mockImplementation(async () => new Response(JSON.stringify({ data: [{ id: `claude-${++page}` }], has_more: true, last_id: `claude-${page}` })));
+ await expect(executeAdminModelCommand(actor, { action: 'load', provider: 'anthropic', version: 1 }, deps)).rejects.toMatchObject({ code: 'MODEL_LIST_LIMIT' });
+ expect(deps.request).toHaveBeenCalledTimes(10);
+});
+it('turns malformed model JSON into a safe provider error', async () => {
+ deps.request.mockResolvedValue(new Response('<html>upstream details</html>'));
+ await expect(executeAdminModelCommand(actor, { action: 'load', provider: 'openrouter', version: 0 }, deps)).rejects.toMatchObject({ code: 'BAD_RESPONSE' });
+});

@@ -16,6 +16,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { MentorRecommendation } from "@/lib/ai/mentor-policy";
+import { TutorMarkdown } from "@/components/lesson/tutor-markdown";
 
 import { AiOutputReport } from "./ai-output-report";
 import { ContactAdminButton } from "./contact-admin";
@@ -611,7 +612,7 @@ export function TutorView() {
             {!historyBusy && messages.length === 0 && <p className={styles.threadEmpty}>This conversation has no messages.</p>}
             {messages.map((message) => (
               <div className={message.role === "user" ? styles.learnerBubble : styles.assistantBubble} key={message.id}>
-                <span>{message.content}</span>
+                {message.role === "assistant" ? <TutorMarkdown>{message.content}</TutorMarkdown> : <span>{message.content}</span>}
                 {message.role === "assistant" && <small className={styles.messageProvenance}>{messageProvenance(message)}</small>}
                 {message.role === "assistant" && message.callId && <AiOutputReport callId={message.callId} />}
               </div>
