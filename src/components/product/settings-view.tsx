@@ -1,4 +1,5 @@
 "use client";
+import { ENROLLMENT_DISCLOSURE_VERSION } from "@/lib/privacy/disclosure-version";
 
 import { credentialValidationReason } from "@/lib/ai/credential-status";
 
@@ -185,7 +186,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
             requestId: crypto.randomUUID(),
             purpose: `provider:${provider}`,
             decision: "accepted",
-            policyVersion: "enrollment-disclosure-2026-07-12.v2",
+            policyVersion: ENROLLMENT_DISCLOSURE_VERSION,
           }),
         });
         if (!consentResponse.ok) {
