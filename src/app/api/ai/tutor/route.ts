@@ -17,6 +17,7 @@ import {
 } from "@/lib/ai/fallback-budget";
 import { AI_PROVIDER_CATALOG, defaultModelForProvider } from "@/lib/ai/provider-catalog";
 import { routeTutorRequest, type ProviderCandidate } from "@/lib/ai/router";
+import { safeTutorResponse } from "@/lib/ai/response-safety";
 import { buildPlatformCandidates } from "@/lib/ai/platform-credentials";
 import { consumePlatformQuota, isPlatformQuotaError } from "@/lib/ai/platform-quota";
 import {
@@ -582,6 +583,8 @@ export async function POST(request: NextRequest) {
       }),
     });
     const routedCredentialSnapshot = credentialSnapshots.get(routed.credentialId);
+    // Recheck before any assistant text is displayed or persisted.
+    routed.result.content = safeTutorResponse(routed.result.content, messages).content;
     if (
       containsCredentialOrHiddenEvidence(routed.result.content)
       || containsExposedCredentialVariant(routed.result.content, secretBuffers)

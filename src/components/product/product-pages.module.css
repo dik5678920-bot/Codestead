@@ -334,6 +334,7 @@
 .tutorIdentity small { color: var(--ink-soft); font-size: .75rem; }
 .messageList { display: flex; overflow-y: auto; flex-direction: column; gap: 10px; padding: 22px; }
 .assistantBubble,.learnerBubble { max-width: min(680px,85%); padding: 12px 14px; border-radius: 14px 14px 14px 4px; background: var(--surface-muted); font-size: .875rem; white-space: pre-wrap; }
+.assistantBubble { white-space: normal; }
 .learnerBubble { align-self: flex-end; border-radius: 14px 14px 4px 14px; color: var(--on-brand); background: var(--brand); }
 .messageProvenance { display: block; margin-top: 7px; color: var(--ink-soft); font-size: .75rem; line-height: 1.4; white-space: normal; }
 .threadEmpty { margin: auto; color: var(--ink-soft); font-size: .875rem; text-align: center; }

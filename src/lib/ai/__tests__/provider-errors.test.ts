@@ -104,14 +104,14 @@ describe("provider protocol and response hardening", () => {
   });
 
   it.each([
-    {},
-    { choices: [] },
-    { choices: [{ message: { content: null } }] },
-    { choices: [{ message: { content: null, reasoning_content: "Only reasoning, no final text" } }] },
-    { choices: [{ message: { content: "   " } }] },
-  ])("rejects malformed or empty OpenAI-compatible payload %#", async (payload) => {
+    { payload: {}, code: "BAD_RESPONSE" },
+    { payload: { choices: [] }, code: "BAD_RESPONSE" },
+    { payload: { choices: [{ message: { content: null } }] }, code: "BAD_RESPONSE" },
+    { payload: { choices: [{ message: { content: null, reasoning_content: "Only reasoning, no final text" } }] }, code: "REASONING_LEAK" },
+    { payload: { choices: [{ message: { content: "   " } }] }, code: "BAD_RESPONSE" },
+  ])("rejects malformed or empty OpenAI-compatible payload %#", async ({ payload, code }) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200 })));
-    await expect(callProvider(request())).rejects.toMatchObject({ code: "BAD_RESPONSE" });
+    await expect(callProvider(request())).rejects.toMatchObject({ code });
   });
 
   it("preserves a coded error from another realm across the transport boundary", async () => {

@@ -687,6 +687,9 @@ describe("tutor route durable execution coverage", () => {
         "admin_fallback",
       ]);
       expect(input.allowedProviders).toEqual(["nvidia_nim", "openai"]);
+      const untrustedContext = input.messages.filter((message: { role: string }) => message.role === "user").map((message: { content: string }) => message.content).join("\n");
+      expect(untrustedContext).toContain('"confirmedInterests":["cricket"]');
+      expect(untrustedContext).not.toContain('"music"');
       expect(JSON.stringify(input.messages)).toContain("[REDACTED]");
       expect(JSON.stringify(input.messages)).not.toContain("nvapi-");
       await input.onFailure({
@@ -935,4 +938,15 @@ describe("tutor route durable execution coverage", () => {
       outcome: { kind: "failure", code: "BAD_RESPONSE" },
     }));
   });
+
+it.each(["Here's a thinking process: private reasoning", '<thinking>private reasoning</thinking>'])('blocks leaked reasoning before assistant persistence: %s', async (content) => {
+ queueExecution();
+ mocks.routeTutorRequest.mockResolvedValueOnce({ ...providerSuccess(), result: { ...providerSuccess().result, content } });
+ const reply = await POST(tutorRequest());
+ expect(reply.status).toBe(503);
+ expect(await reply.json()).toMatchObject({ degraded: true });
+ expect(JSON.stringify(state.persistedValues)).not.toContain('private reasoning');
+ expect(state.persistedValues).toHaveLength(0);
+});
+
 });

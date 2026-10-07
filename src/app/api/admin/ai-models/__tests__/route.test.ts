@@ -11,6 +11,31 @@ vi.mock("@/lib/security/rate-limit", () => ({ withRateLimit: mocks.rate }));
 import { GET, POST } from "../route";
 import { ProviderError } from "@/lib/ai/types";
 const command = { action: "test", provider: "openai", version: 0, model: "model", message: "secret message" };
+it.each([ ["AUTHENTICATION", 424], ["MODEL_NOT_FOUND", 424], ["UNAVAILABLE", 503], ["TIMEOUT", 503] ] as const)("returns JSON dependency status for %s", async (code, status) => {
+ mocks.execute.mockRejectedValue(new ProviderError("unsafe upstream text", code, 502));
+ const reply = await POST(request());
+ expect(reply.status).toBe(status);
+ expect(await reply.json()).toMatchObject({ code });
+});
+it("reports model not found and reasoning warnings without upstream text", async () => {
+ for (const code of ["MODEL_NOT_FOUND", "REASONING_LEAK"] as const) {
+  mocks.execute.mockRejectedValue(new ProviderError("private reasoning and system prompt", code));
+  const reply = await POST(request());
+  expect(reply.status).toBe(424);
+  const body = await reply.json();
+  expect(body.error).toContain(code === "MODEL_NOT_FOUND" ? "Model not found" : "This model returns reasoning text");
+  expect(JSON.stringify(body)).not.toContain("private reasoning");
+ }
+});
+it("logs safe exception classification without secret-bearing messages", async () => {
+ mocks.execute.mockRejectedValue(new SyntaxError("https://example.com/?key=secret-platform-key"));
+ const log = vi.spyOn(console, "warn").mockImplementation(() => {});
+ try {
+  expect((await POST(request())).status).toBe(503);
+  expect(log).toHaveBeenCalledWith("Admin AI model unexpected error", { name: "SyntaxError", message: "Response could not be parsed as JSON." });
+  expect(JSON.stringify(log.mock.calls)).not.toContain("secret-platform-key");
+ } finally { log.mockRestore(); }
+});
 function request(body: unknown = command, origin = "https://app.example.com") { return new NextRequest("https://app.example.com/api/admin/ai-models", { method: "POST", headers: { origin, "content-type": "application/json" }, body: JSON.stringify(body) }); }
 beforeEach(() => {
  vi.resetAllMocks(); vi.stubEnv("APP_URL", "https://app.example.com");

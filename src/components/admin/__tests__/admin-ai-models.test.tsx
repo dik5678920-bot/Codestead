@@ -5,6 +5,17 @@ import { AdminAiModels } from "../admin-ai-models";
 const provider = { provider: "openrouter", label: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", version: 2, hasPlatformKey: true, model: "test/model", priority: 1, verification: "untested", source: "admin" };
 const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
 afterEach(() => vi.unstubAllGlobals());
+it("explains HTML gateway failures with their status", async () => {
+ vi.stubGlobal("fetch", vi.fn(async (_url, init) => init?.method ? new Response("<html>gateway</html>", { status: 502 }) : json({ providers: [provider] })));
+ render(<AdminAiModels />); fireEvent.click(await screen.findByRole("button", { name: "Load models" }));
+ expect(await screen.findByRole("alert")).toHaveTextContent("non-JSON response (HTTP 502)");
+});
+it("warns when a model's reasoning was removed", async () => {
+ vi.stubGlobal("fetch", vi.fn(async (_url, init) => init?.method ? json({ content: "Safe answer", reasoningDetected: true, latencyMs: 1, httpStatus: 200, proof: "proof", reportedModel: "model" }) : json({ providers: [provider] })));
+ render(<AdminAiModels />); fireEvent.click(await screen.findByRole("button", { name: "Test" }));
+ fireEvent.click(screen.getByRole("button", { name: "Send test message" }));
+ expect(await screen.findByText("This model returns reasoning text")).toBeInTheDocument();
+});
 it("shows today's authoritative platform usage and configured per-user daily limit", async () => {
   vi.stubGlobal("fetch", vi.fn(async () => json({ providers: [provider], platformUsage: { count: 17, date: "2026-10-05", dailyLimit: 25 } })));
   render(<AdminAiModels />);
@@ -74,4 +85,14 @@ it("shows provider test failure status without enabling verification", async () 
 it("refuses fractional failover priorities in the UI", async () => {
  vi.stubGlobal("fetch", vi.fn(async () => json({ providers: [provider] }))); render(<AdminAiModels />);
  fireEvent.change(await screen.findByLabelText("Failover priority"), { target: { value: "1.5" } }); expect(screen.getByRole("button", { name: "Save default model" })).toBeDisabled();
+});
+
+it('preserves the non-JSON HTTP status when retrying settings', async () => {
+ let status = 502;
+ vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>gateway</html>', { status })));
+ render(<AdminAiModels />);
+ expect(await screen.findByRole('alert')).toHaveTextContent('HTTP 502');
+ status = 503;
+ fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+ await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('HTTP 503'));
 });

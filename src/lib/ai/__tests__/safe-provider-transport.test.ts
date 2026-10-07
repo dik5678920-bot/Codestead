@@ -35,7 +35,7 @@ it("rejects redirects without following their Location", async () => {
  expect(mock.request).toHaveBeenCalledTimes(1); expect(incoming.destroy).toHaveBeenCalled();
 });
 it("rejects oversized provider responses", async () => {
- const pending = safeProviderRequest("https://api.example.com/models"); const rejection = expect(pending).rejects.toMatchObject({ code: "BAD_RESPONSE" });
+ const pending = safeProviderRequest("https://api.example.com/models"); const rejection = expect(pending).rejects.toMatchObject({ code: "MODEL_LIST_LIMIT" });
  await vi.waitFor(() => expect(mock.request).toHaveBeenCalled()); incoming.emit("data", Buffer.alloc(8_388_609));
  await rejection; expect(incoming.destroy).toHaveBeenCalled();
 });

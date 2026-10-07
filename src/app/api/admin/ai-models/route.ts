@@ -11,6 +11,16 @@ import { isProviderError } from "@/lib/ai/types";
 import { todayPlatformUsage } from "@/lib/ai/platform-quota";
 
 export const runtime = "nodejs";
+function logUnexpectedError(error: unknown) {
+  // Never log arbitrary exception strings: they can include credentials,
+  // provider response bodies, or URLs with secret query parameters.
+  const names = ["Error", "SyntaxError", "TypeError", "RangeError", "ReferenceError", "ZodError", "AbortError"];
+  const name = error instanceof Error && names.includes(error.name) ? error.name : "UnknownError";
+  console.warn("Admin AI model unexpected error", {
+    name,
+    message: name === "SyntaxError" ? "Response could not be parsed as JSON." : name === "TypeError" ? "Operation failed due to an invalid value or transport error." : "Unexpected AI model operation failure.",
+  });
+}
 export async function GET() {
   const authz = await requireAdmin();
   if (!authz.session) return secureAdminResponse(authz.response);
@@ -19,7 +29,10 @@ export async function GET() {
       const [providers, platformUsage] = await Promise.all([listAdminModels(), todayPlatformUsage()]);
       return adminJson({ providers, platformUsage });
     }
-    catch { return adminJson({ error: "AI model settings are temporarily unavailable." }, 503); }
+    catch (error) {
+      if (!isProviderError(error)) logUnexpectedError(error);
+      return adminJson({ error: "AI model settings are temporarily unavailable." }, 503);
+    }
   });
 }
 async function boundedBody(request: NextRequest) {
@@ -58,17 +71,20 @@ export async function POST(request: NextRequest) {
         const normalized = isProviderError(error) ? error : null;
         const code = normalized?.code ?? "UNAVAILABLE";
         console.warn("Admin AI model operation failed", { provider: command.provider, code, httpStatus: normalized?.status ?? null });
+        if (!normalized) logUnexpectedError(error);
         await writeAuditEvent({ actorUserId: authz.session.user.id, action: "ai_models." + command.action, resourceType: "provider_policy", outcome: "failure", metadata: { provider: command.provider, errorCode: code, httpStatus: normalized?.status ?? null } });
         const messages: Record<string, string> = {
           AUTHENTICATION: "Set or replace the platform API key before loading or testing this provider.",
           POLICY: "Check the public HTTPS endpoint, reload changed settings, and test this exact model before saving it as verified. Replace or remove the key when changing its endpoint.",
-          MODEL_NOT_FOUND: "This model was not found or has been retired. Choose another model.",
+          MODEL_NOT_FOUND: "Model not found. It may have been retired. Choose another model.",
           BAD_REQUEST: "The provider rejected this request. Check its model and endpoint.",
           RATE_LIMIT: "The provider rate limit was reached. Try again later.",
           TIMEOUT: "The provider request timed out. Try again.",
           BAD_RESPONSE: "The provider returned an invalid or unsafe response.",
+          REASONING_LEAK: "This model returns reasoning text. Its response was blocked.",
+          MODEL_LIST_LIMIT: "The provider model list exceeds the size (8 MiB / 10,000 models) or page (10 pages) limit. Use a model ID directly or try a smaller provider catalog.",
         };
-        return adminJson({ error: messages[code] ?? "AI model operation failed. Try again.", code, httpStatus: normalized?.status ?? null }, normalized?.status === 409 ? 409 : code === "POLICY" ? 400 : 502);
+        return adminJson({ error: messages[code] ?? "AI model operation failed. Try again.", code, httpStatus: normalized?.status ?? null }, normalized?.status === 409 ? 409 : code === "POLICY" ? 400 : code === "UNAVAILABLE" || code === "TIMEOUT" ? 503 : 424);
       }
     };
     return command.action === "test"

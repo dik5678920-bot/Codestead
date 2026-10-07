@@ -199,7 +199,7 @@
       "admin": "allowed",
       "objectAuthorization": "administrator-scope",
       "ownershipProof": "requireAdmin() before request parsing or data access",
-      "operationSourceSha256": "2786e86c0edb785cedb0ddc625a349604538754169979c9c6b0ea3c7ba100541"
+      "operationSourceSha256": "04f4175d1a833e9d6bfdbe9bbdbab9d68eeca0ff7baf76493ca8ac32b93f4a36"
     },
     {
       "operation": "POST /api/admin/ai-models",
@@ -212,7 +212,7 @@
       "admin": "allowed",
       "objectAuthorization": "administrator-scope",
       "ownershipProof": "requireAdmin() before request parsing or data access",
-      "operationSourceSha256": "071ae158f4e293cdce96f794707f5ccfca947d5b8902e34bdcd598d40655ea69"
+      "operationSourceSha256": "724b98f519fd5dd0dee70d77100225e7f1e951e61e676798de4a5ca0370a0079"
     },
     {
       "operation": "POST /api/admin/appeals/[appealId]/decision",
@@ -1057,7 +1057,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by eq(chatThread.userId, authz.session.user.id)",
-      "operationSourceSha256": "4202cf5ba341108cf710480a711828071556eef814048dd77c101e653a4e1fb1"
+      "operationSourceSha256": "ab954cc6565d9bc884af8ed040020c52191988fd460f43b1249f9858f81f2c5c"
     },
     {
       "operation": "GET /api/auth/[...all]",

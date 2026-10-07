@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { safeProviderRequest } from "./safe-provider-http";
+import { safeTutorResponse } from "./response-safety";
 
 import {
   isProviderError,
@@ -14,7 +15,7 @@ const openAiResponseSchema = z.object({
   model: z.string().optional(),
   choices: z.array(
     z.object({
-      message: z.object({ content: z.string().nullable() }),
+      message: z.object({ content: z.string().nullable(), reasoning: z.unknown().optional(), reasoning_content: z.unknown().optional(), reasoning_details: z.unknown().optional() }),
       finish_reason: z.string().nullable().optional(),
     }),
   ),
@@ -173,6 +174,11 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
             temperature: request.temperature ?? 0.2,
             max_tokens: maxOutputTokens,
             stream: false,
+            ...(request.provider === "openrouter" ? { reasoning: { exclude: true } } : {}),
+            // NVIDIA documents this option for Nemotron 3.5 Lightning; don't
+            // send model-specific template settings to unrelated NIM models.
+            ...(request.provider === "nvidia_nim" && request.model === "nvidia/nemotron-3.5-lightning-30b-a3b"
+              ? { chat_template_kwargs: { enable_thinking: false } } : {}),
           };
 
       const response = await transport(url, {
@@ -206,12 +212,15 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
           .map((part) => part.text ?? "")
           .join("\n")
           .trim();
-        if (!content) throw new ProviderError("Provider returned no tutor text.", "BAD_RESPONSE");
+        const separateReasoning = parsed.data.content.some((part) => part.type === "thinking" || part.type === "redacted_thinking");
+        if (!content) throw new ProviderError("Provider returned no tutor text.", separateReasoning ? "REASONING_LEAK" : "BAD_RESPONSE");
+        const safe = safeTutorResponse(content, request.messages);
         return {
           httpStatus: response.status,
           provider: request.provider,
           model: parsed.data.model ?? request.model,
-          content,
+          ...safe,
+          reasoningDetected: separateReasoning || safe.reasoningDetected,
           finishReason: parsed.data.stop_reason ?? null,
           inputTokens: parsed.data.usage?.input_tokens ?? null,
           outputTokens: parsed.data.usage?.output_tokens ?? null,
@@ -224,12 +233,15 @@ export async function callProvider(request: ProviderRequest): Promise<ProviderRe
       if (!parsed.success) throw new ProviderError("Malformed provider response.", "BAD_RESPONSE");
       const choice = parsed.data.choices[0];
       const content = choice?.message.content?.trim();
-      if (!content) throw new ProviderError("Provider returned no tutor text.", "BAD_RESPONSE");
+      const separateReasoning = Boolean(choice?.message.reasoning || choice?.message.reasoning_content || choice?.message.reasoning_details);
+      if (!content) throw new ProviderError("Provider returned no tutor text.", separateReasoning ? "REASONING_LEAK" : "BAD_RESPONSE");
+      const safe = safeTutorResponse(content, request.messages);
       return {
         httpStatus: response.status,
         provider: request.provider,
         model: parsed.data.model ?? request.model,
-        content,
+        ...safe,
+        reasoningDetected: separateReasoning || safe.reasoningDetected,
         finishReason: choice.finish_reason ?? null,
         inputTokens: parsed.data.usage?.prompt_tokens ?? null,
         outputTokens: parsed.data.usage?.completion_tokens ?? null,

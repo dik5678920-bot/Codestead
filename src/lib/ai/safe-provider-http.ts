@@ -97,7 +97,7 @@ export async function safeProviderRequest(value: string, init: RequestInit = {})
         incoming.on("data", (chunk: Buffer) => {
           bytes += chunk.length;
           if (bytes > maxResponseBytes) {
-            incoming.destroy(); reject(new ProviderError("Provider response exceeds the size limit.", "BAD_RESPONSE", status)); return;
+            incoming.destroy(); reject(new ProviderError("Provider response exceeds the size limit.", maxResponseBytes === 8_388_608 ? "MODEL_LIST_LIMIT" : "BAD_RESPONSE", status)); return;
           }
           chunks.push(chunk);
         });
