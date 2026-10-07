@@ -5,7 +5,7 @@
 .safetyNote svg { flex: 0 0 auto; color: var(--brand-strong); }
 .safetyNote strong, .safetyNote p { display: block; margin: 0; }
 .safetyNote p { margin-top: 3px; color: var(--ink-soft); font-size: .78rem; }
-.stage { display: grid; gap: 18px; scroll-margin-top: 90px; margin: 0; padding: clamp(18px,3vw,30px); border: 1px solid var(--line); border-radius: 20px; background: var(--surface-solid); box-shadow: var(--shadow-small); }
+.stage { display: grid; gap: 18px; scroll-margin-top: 0; margin: 0; padding: clamp(18px,3vw,30px); border: 1px solid var(--line); border-radius: 20px; background: var(--surface-solid); box-shadow: var(--shadow-small); }
 .stageHeader { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; }
 .stageHeader > span { display: grid; width: 38px; height: 38px; place-items: center; border-radius: 12px; color: var(--brand-strong); background: var(--brand-soft); font-family: var(--font-mono); font-size: .75rem; font-weight: 900; }
 .stageHeader small { color: var(--brand-strong); font-size: .67rem; font-weight: 850; letter-spacing: .08em; text-transform: uppercase; }

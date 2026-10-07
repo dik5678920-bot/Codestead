@@ -285,8 +285,8 @@ function PracticePanelState({
           <h3 ref={questionHeadingRef} tabIndex={-1}>{specification.title}</h3>
           <p>{specification.prompt}</p>
 
-          {specification.artifact.length > 0 && <pre className={styles.practiceArtifact}>{specification.artifact.join("\n")}</pre>}
-          {specification.template && <pre className={styles.practiceArtifact}>{specification.template}</pre>}
+          {specification.artifact.length > 0 && <pre className={styles.practiceArtifact} style={{ whiteSpace: "pre" }}>{specification.artifact.join("\n")}</pre>}
+          {specification.template && <pre className={styles.practiceArtifact} style={{ whiteSpace: "pre" }}>{specification.template}</pre>}
           {specification.starterCode && <pre className={styles.practiceArtifact} aria-label={`${specification.language ?? "Code"} starter code`}>{specification.starterCode}</pre>}
 
           {specification.kind === "mcq" && (

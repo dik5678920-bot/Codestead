@@ -178,7 +178,7 @@ export function Visualizer({ trace }: { trace?: AuthoredLesson["trace"] }) {
     return () => window.clearTimeout(timer);
   }, [autoplaying, index, visualStates.length]);
   if (!state) return <div className={styles.visualizer} role="status"><p>No visual trace for this skill yet</p></div>;
-  return <div className={styles.visualizer}><div className={styles.visualTop}><span><Sparkles size={16} /> {trace ? "Topic trace visualizer" : "State visualizer"}</span><div><button aria-label="Restart visualizer" onClick={() => { setIndex(0); setPlaying(false); }}><RotateCcw size={15} /></button><button aria-label={autoplaying ? "Pause visualizer" : "Play visualizer"} disabled={!hasNextStep} onClick={() => setPlaying(!playing)}>{autoplaying ? <Pause size={15} /> : <Play size={15} />}</button><button aria-label="Next visualizer step" disabled={!hasNextStep} onClick={() => setIndex((value) => Math.min(visualStates.length - 1, value + 1))}><StepForward size={15} /></button></div></div><div className={styles.fakeCode}>{artifact.map((line, lineIndex) => <code className={state.line === lineIndex + 1 ? styles.activeLine : ""} key={`${lineIndex}-${line}`}><b>{lineIndex + 1}</b>{line}</code>)}</div><div className={styles.memoryTable}><span>Variable</span><span>Value now</span>{Object.entries(state.values).flatMap(([key, value]) => [<code key={`${key}-k`}>{key}</code>,<strong key={`${key}-v`}>{value}</strong>])}</div><div aria-live="polite" className={styles.visualNote}><b>Step {index + 1}: {state.label}</b><p>{state.note}</p></div><div className={styles.visualProgress}>{visualStates.map((_, item) => <i className={item <= index ? styles.doneStep : ""} key={item} />)}</div></div>;
+  return <div className={styles.visualizer}><div className={styles.visualTop}><span><Sparkles size={16} /> {trace ? "Topic trace visualizer" : "State visualizer"}</span><div><button aria-label="Restart visualizer" onClick={() => { setIndex(0); setPlaying(false); }}><RotateCcw size={15} /></button><button aria-label={autoplaying ? "Pause visualizer" : "Play visualizer"} disabled={!hasNextStep} onClick={() => setPlaying(!playing)}>{autoplaying ? <Pause size={15} /> : <Play size={15} />}</button><button aria-label="Next visualizer step" disabled={!hasNextStep} onClick={() => setIndex((value) => Math.min(visualStates.length - 1, value + 1))}><StepForward size={15} /></button></div></div><div className={styles.fakeCode}>{artifact.map((line, lineIndex) => <code className={state.line === lineIndex + 1 ? styles.activeLine : ""} style={{ whiteSpace: "pre" }} key={`${lineIndex}-${line}`}><b>{lineIndex + 1}</b>{line}</code>)}</div><div className={styles.memoryTable}><span>Variable</span><span>Value now</span>{Object.entries(state.values).flatMap(([key, value]) => [<code key={`${key}-k`}>{key}</code>,<strong key={`${key}-v`}>{value}</strong>])}</div><div aria-live="polite" className={styles.visualNote}><b>Step {index + 1}: {state.label}</b><p>{state.note}</p></div><div className={styles.visualProgress}>{visualStates.map((_, item) => <i className={item <= index ? styles.doneStep : ""} key={item} />)}</div></div>;
 }
 
 function FallbackLogicGame({ skill }: { skill: AtomicSkill }) {
@@ -871,7 +871,7 @@ export function AuthoredLessonCard({ lesson, publishedStage }: { lesson: Authore
     <section aria-labelledby="reference-canonical-explanation"><h2 id="reference-canonical-explanation">Canonical explanation</h2>{lesson.canonicalExplanation.sections.map((section) => <div key={section.heading}><h3>{section.heading}</h3><LessonProse>{section.body}</LessonProse></div>)}</section>
     <section className={styles.scopeGrid} aria-labelledby="reference-lesson-boundaries"><h2 id="reference-lesson-boundaries">Lesson boundaries</h2><div><h3>In scope</h3><ul>{lesson.scope.includes.map((item) => <li key={item}><LessonInline>{item}</LessonInline></li>)}</ul></div><div><h3>Not in scope</h3><ul>{lesson.scope.excludes.map((item) => <li key={item}><LessonInline>{item}</LessonInline></li>)}</ul></div></section>
     <section aria-labelledby="reference-worked-examples"><h2 id="reference-worked-examples">Worked examples</h2><div className={styles.authoredExamples}>{lesson.examples.map((example) => <article key={example.id}><h3>{example.title}</h3><LessonProse>{example.situation}</LessonProse><ol>{example.walkthrough.map((step) => <li key={step}><LessonInline>{step}</LessonInline></li>)}</ol><strong><LessonInline>{example.result}</LessonInline></strong></article>)}</div></section>
-    <section aria-labelledby="reference-trace"><h2 id="reference-trace">Trace and text alternative</h2><pre className={styles.traceArtifact}>{lesson.trace.artifact.join("\n")}</pre><ol className={styles.traceSteps}>{lesson.trace.steps.map((step) => <li key={step.step}><strong>{step.step}. {step.focus}</strong><code>{Object.entries(step.state).map(([name, value]) => `${name}=${value}`).join(" · ")}</code><LessonProse>{step.explanation}</LessonProse></li>)}</ol><div className={styles.callout}><BookOpen size={18} /><div><strong>Linear text alternative</strong><p>{lesson.trace.textAlternative}</p></div></div></section>
+    <section aria-labelledby="reference-trace"><h2 id="reference-trace">Trace and text alternative</h2><pre className={styles.traceArtifact} style={{ whiteSpace: "pre" }}>{lesson.trace.artifact.join("\n")}</pre><ol className={styles.traceSteps}>{lesson.trace.steps.map((step) => <li key={step.step}><strong>{step.step}. {step.focus}</strong><code>{Object.entries(step.state).map(([name, value]) => `${name}=${value}`).join(" · ")}</code><LessonProse>{step.explanation}</LessonProse></li>)}</ol><div className={styles.callout}><BookOpen size={18} /><div><strong>Linear text alternative</strong><p>{lesson.trace.textAlternative}</p></div></div></section>
     <section aria-labelledby="reference-misconceptions"><h2 id="reference-misconceptions">Misconceptions and correction</h2><div className={styles.misconceptions}>{lesson.misconceptions.map((item) => <details key={item.id}><summary><LessonInline>{item.mistakenBelief}</LessonInline></summary><p><strong>Correction:</strong> <LessonInline>{item.correction}</LessonInline></p><p><strong>Check:</strong> <LessonInline>{item.diagnosticPrompt}</LessonInline></p></details>)}</div></section>
     <section aria-labelledby="reference-analogy-limits"><h2 id="reference-analogy-limits">Optional analogy and its limits</h2><div className={styles.callout}><Sparkles size={18} /><div><LessonProse>{lesson.analogy.example}</LessonProse><strong>Where it stops helping</strong><ul>{lesson.analogy.limitations.map((limit) => <li key={limit}><LessonInline>{limit}</LessonInline></li>)}</ul></div></div></section>
     <section aria-labelledby="reference-transfer-practice"><h2 id="reference-transfer-practice">Practice for transfer</h2><div className={styles.practiceGrid}>{([ ["Faded", lesson.practice.faded], ["Near transfer", lesson.practice.nearTransfer], ["Far transfer", lesson.practice.farTransfer] ] as const).map(([label, practice]) => <article key={label}><span>{label}</span><LessonProse>{practice.prompt}</LessonProse><h3>Scaffold</h3><ul>{practice.scaffold.map((item) => <li key={item}><LessonInline>{item}</LessonInline></li>)}</ul><h3>Evidence</h3><ul>{practice.expectedEvidence.map((item) => <li key={item}><LessonInline>{item}</LessonInline></li>)}</ul></article>)}</div></section>
@@ -977,7 +977,8 @@ export function DsaLanguageRequired() {
 
 const OUTLINE_COLLAPSED_KEY = "codestead.lesson-outline-collapsed";
 const LESSON_OUTLINE = [
-  { id: "canonical-explanation", label: "Explanation" },
+  { id: "predict", label: "Predict" },
+  { id: "explain", label: "Explanation" },
   { id: "worked-examples", label: "Worked examples" },
   { id: "trace", label: "Trace" },
   { id: "misconceptions", label: "Misconceptions" },
@@ -987,6 +988,21 @@ const LESSON_OUTLINE = [
   { id: "source-provenance", label: "Sources" },
 ] as const;
 
+// Positions are measured together in lesson order, not from partial observer callbacks.
+export function selectActiveLessonSection(
+  sections: readonly { id: string; top: number }[],
+  readingTop: number,
+  atBottom: boolean,
+): string | undefined {
+  if (atBottom) return sections.at(-1)?.id;
+  let active = sections[0]?.id;
+  for (const section of sections) {
+    if (section.top > readingTop + 12) break;
+    active = section.id;
+  }
+  return active;
+}
+
 function AuthoredLessonWorkspace({ authoredLesson, assessmentBank, blueprint, skill, courseTitle, moduleTitle, dsaRunnerLanguage, previousHref, nextHref, publishedStage, runnerLabel }: LessonWorkspaceProps & { authoredLesson: AuthoredLesson }) {
   const [mode, setMode] = useState<LearningMode>("lesson");
   // Collapsed by default so the lesson gets the width; a viewer who opens it
@@ -995,6 +1011,7 @@ function AuthoredLessonWorkspace({ authoredLesson, assessmentBank, blueprint, sk
   // Like the app sidebar: right after collapsing, stay collapsed until the pointer leaves.
   const [outlineHoverSuppressed, setOutlineHoverSuppressed] = useState(false);
   const [activeSection, setActiveSection] = useState<string>(LESSON_OUTLINE[0]!.id);
+  const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     try {
@@ -1006,19 +1023,37 @@ function AuthoredLessonWorkspace({ authoredLesson, assessmentBank, blueprint, sk
     }
   }, []);
 
-  // Highlight the outline entry for the section currently in view.
+  // Read the complete layout after scrolling, including jumps over short sections.
   useEffect(() => {
-    if (typeof IntersectionObserver === "undefined") return;
-    const observer = new IntersectionObserver((entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting)
-        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-      if (visible) setActiveSection(visible.target.id);
-    }, { rootMargin: "-20% 0px -60% 0px" });
-    for (const { id } of LESSON_OUTLINE) {
-      const element = document.getElementById(id);
-      if (element) observer.observe(element);
-    }
-    return () => observer.disconnect();
+    if (mode !== "lesson") return;
+    let frame: number | null = null;
+    const update = () => {
+      frame = null;
+      const sections = LESSON_OUTLINE.flatMap(({ id }) => {
+        const element = document.getElementById(id);
+        return element ? [{ id, top: element.getBoundingClientRect().top }] : [];
+      });
+      const readingTop = Math.max(
+        headerRef.current?.getBoundingClientRect().bottom ?? 0,
+        Number.parseFloat(window.getComputedStyle(document.documentElement).scrollPaddingTop) || 0,
+      );
+      const root = document.scrollingElement ?? document.documentElement;
+      const atBottom = root.scrollHeight > window.innerHeight &&
+        window.scrollY + window.innerHeight >= root.scrollHeight - 1;
+      const selected = selectActiveLessonSection(sections, readingTop, atBottom);
+      if (selected) setActiveSection(selected);
+    };
+    const schedule = () => {
+      if (frame === null) frame = window.requestAnimationFrame(update);
+    };
+    schedule();
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+    };
   }, [mode]);
 
   function toggleOutline() {
@@ -1033,7 +1068,7 @@ function AuthoredLessonWorkspace({ authoredLesson, assessmentBank, blueprint, sk
   }
   useRegisterTutorLesson({ courseId: blueprint.courseId, skillId: skill.id, skillTitle: skill.title });
   return <div className={styles.workspace} data-lesson-workspace>
-    <header className={styles.header}>
+    <header className={styles.header} ref={headerRef}>
       <Link href={`/courses/${blueprint.courseId}`}><ArrowLeft size={16} /> {courseTitle}</Link>
       <div className={styles.lessonTitle}><span>{moduleTitle}</span><strong>{skill.title}</strong></div>
       <div className={styles.headerProgress}>{!publishedStage && <span>Draft preview</span>}</div>
