@@ -19,6 +19,22 @@ const payload = {
 };
 
 describe("NotificationMenu", () => {
+  it("marks an activated sidebar notification read and clears its unread dot", async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
+      new Response(JSON.stringify(init?.method === "PATCH" ? { updated: 1 } : payload), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const user = userEvent.setup();
+    render(<NotificationMenu inSidebar />);
+    await user.click(await screen.findByRole("button", { name: "Notifications, 1 unread" }));
+    await user.click(await screen.findByRole("link", { name: /five-question refresh/i }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Notifications" })).toBeEnabled());
+    expect(fetchMock).toHaveBeenCalledWith("/api/notifications", expect.objectContaining({
+      method: "PATCH", body: JSON.stringify({ ids: [payload.notifications[0].id], read: true }),
+    }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Notifications" }));
+    expect(screen.getByRole("button", { name: "Mark all read" })).toBeDisabled();
+  });
   it("opens the sidebar panel outside the rail that clips overflow", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })));
     const user = userEvent.setup();
