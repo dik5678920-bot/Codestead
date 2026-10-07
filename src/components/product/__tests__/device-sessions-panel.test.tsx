@@ -64,6 +64,22 @@ const endedSession = {
 };
 
 describe("device session controls", () => {
+  it("prominently separates the current device and bounds the session history preview", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ sessions: [
+      activeSession,
+      ...Array.from({ length: 5 }, (_, index) => ({ ...endedSession, id: `past-${index}`, deviceLabel: `Past browser ${index}` })),
+    ], requests: [] })));
+    const user = userEvent.setup();
+    render(<DeviceSessionsPanel />);
+    const history = await screen.findByRole("button", { name: "Show all devices (5)" });
+    expect(history).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("region", { name: "Current device" })).toHaveTextContent(activeSession.deviceLabel);
+    expect(screen.getByText("Past browser 2")).toBeInTheDocument();
+    expect(screen.queryByText("Past browser 3")).not.toBeInTheDocument();
+    await user.click(history);
+    expect(history).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Past browser 4")).toBeVisible();
+  });
   beforeEach(() => {
     durability.close.mockReset();
     durability.openBrowserOutbox.mockReset();

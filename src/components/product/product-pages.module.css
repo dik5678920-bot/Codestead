@@ -209,7 +209,7 @@
 .badge { display: flex; align-items: center; gap: 5px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 9px; font-size: .64rem; }
 .privacy { display: flex; align-items: flex-start; gap: 8px; padding: 10px; border-radius: 10px; color: var(--ink-soft); background: var(--surface-muted); font-size: .68rem; }
 .settingsLayout { display: grid; grid-template-columns: 220px minmax(0,1fr); gap: 18px; }
-.settingsNav { display: grid; align-content: start; gap: 5px; padding: 9px; }
+.settingsNav { position: sticky; top: var(--page-header-offset); align-self: start; max-height: calc(100dvh - var(--page-header-offset) - 16px); overflow-y: auto; display: grid; align-content: start; gap: 5px; padding: 9px; }
 .settingsNav button { display: flex; min-height: 44px; align-items: center; gap: 8px; padding: 10px; border: 0; border-radius: 9px; color: var(--ink-soft); background: transparent; text-align: left; cursor: pointer; }
 .settingsNav .activeSetting { color: var(--ink); background: var(--brand-soft); }
 .settingsPanel { display: grid; gap: 17px; padding: 22px; }
@@ -357,3 +357,18 @@
 
 html[data-motion="reduce"] .roadmap::after,
 html[data-motion="reduce"] .roadmapCard[data-state="current"]::before { animation: none; }
+
+.settingsNav button:hover { color: var(--ink); background: color-mix(in srgb, var(--signal-cyan-soft) 30%, var(--surface-muted)); }
+.deviceSession { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto auto; align-items: center; gap: 11px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+.deviceSession > span:nth-child(2) { display: grid; min-width: 0; overflow-wrap: anywhere; }
+.deviceSession strong { font-size: .78rem; }
+.deviceSession small { color: var(--ink-soft); font-size: .7rem; }
+.deviceSession > button { white-space: nowrap; min-height: 44px; width: max-content; }
+.currentDevice { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--brand); border-radius: 14px; background: var(--brand-soft); }
+.currentDevice h3 { margin: 0; font-size: .9rem; }
+.smallBadge { display: inline-flex; align-items: center; width: fit-content; padding: 2px 6px; border-radius: 6px; color: var(--brand-strong); background: var(--brand-soft); font-size: .65rem; font-style: normal; font-weight: 650; white-space: nowrap; }
+.disclosureToggle { display: flex; width: 100%; min-height: 44px; align-items: center; gap: 10px; padding: 0; border: 0; color: var(--ink); background: transparent; font: inherit; text-align: left; cursor: pointer; }
+.disclosureToggle > svg { margin-left: auto; flex-shrink: 0; }
+.disclosureToggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
+@media (max-width: 1000px) { .deviceSession { grid-template-columns: 42px minmax(0, 1fr) auto; } .deviceSession > button { grid-column: 2 / -1; justify-self: start; } }
+@media (max-width: 760px) { .settingsNav { z-index: 8; background: var(--surface-solid); } }
