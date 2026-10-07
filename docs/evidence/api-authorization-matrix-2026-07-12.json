@@ -524,7 +524,7 @@
       "admin": "allowed",
       "objectAuthorization": "administrator-scope",
       "ownershipProof": "requireAdmin() before request parsing or data access",
-      "operationSourceSha256": "3679566a779f46590189a4c0e9136203754c73556096b9c40b45f0c365302218"
+      "operationSourceSha256": "296d09ee1714616551a1fef615b9343aeba4e63722d7893c81ad8bb3671ae232"
     },
     {
       "operation": "GET /api/admin/curriculum/versions/[versionId]/gate",
