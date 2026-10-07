@@ -3,6 +3,7 @@ import type { PoolClient } from "pg";
 
 import { pool } from "@/lib/db/client";
 import { ENROLLMENT_DISCLOSURE_VERSION } from "@/lib/privacy/consent";
+import { lockUserAuthorityOnPgClient } from "@/lib/security/user-authority-lock";
 
 import { hashSocialEvidence } from "./hash";
 
@@ -276,12 +277,28 @@ export async function withdrawCohortProfileForConsent(input: {
   const client = await pool.connect();
   try {
     await client.query("begin");
+    // Same authority boundary as the consent route, taken first (before the
+    // cohort lock) so a grant and this cleanup serialize on committed state.
+    await lockUserAuthorityOnPgClient(client, input.userId);
     await client.query("select pg_advisory_xact_lock(hashtext($1))", [`cohort-profile:${input.userId}`]);
     const existing = (await client.query<ProfileRow>(`select * from cohort_profile where user_id = $1 for update`, [input.userId])).rows[0] ?? null;
     const prior = await client.query(`select id from cohort_profile_event where user_id = $1 and request_id = $2`, [input.userId, requestId]);
+    if (prior.rows[0]) {
+      // Replayed withdrawal: its cleanup already ran. Never touch visibility
+      // again, or a retry would undo a later grant and republication.
+      await client.query("commit");
+      return { withdrawn: Boolean(existing), replayed: true };
+    }
+    // Consent generation: cleanup belongs to a withdrawal. If the learner has
+    // since granted cohort consent again, this (delayed) cleanup is stale.
+    const latest = await currentConsent(client, input.userId, "cohort_profile");
+    if (latest?.decision === "accepted") {
+      await client.query("commit");
+      return { withdrawn: false, replayed: false, superseded: true };
+    }
     await client.query(`update user_achievement set visibility = 'private' where user_id = $1`, [input.userId]);
     await client.query(`update project set visibility = 'private' where user_id = $1`, [input.userId]);
-    if (existing && !prior.rows[0]) {
+    if (existing) {
       const resultingVersion = Number(existing.row_version) + 1;
       const snapshot = {
         requestHash: hashSocialEvidence({ consentRequestId: input.consentRequestId, action: "withdraw" }),
@@ -314,7 +331,7 @@ export async function withdrawCohortProfileForConsent(input: {
       );
     }
     await client.query("commit");
-    return { withdrawn: Boolean(existing), replayed: Boolean(prior.rows[0]) };
+    return { withdrawn: Boolean(existing), replayed: false };
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     throw error;

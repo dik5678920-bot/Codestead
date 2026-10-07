@@ -161,6 +161,10 @@ describe("monitoring relay security", () => {
     expect(bytes.byteLength).toBe(MAX_ENVELOPE_BYTES);
     expect((await post("192.0.2.1", stream)).status).toBe(202);
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
-    expect(String(init?.body).split("\n").slice(1).join("\n")).toBe(body.split("\n").slice(1).join("\n"));
+    const [, itemHeader, payload] = String(init?.body).split("\n");
+    expect(JSON.parse(itemHeader!)).toEqual({ type: "event", length: Buffer.byteLength(payload!) });
+    // The event is rebuilt by the scrubber (text is length-capped), but the
+    // multi-byte character split across chunks must decode intact.
+    expect(JSON.parse(payload!).message.startsWith("\u00e9[token]")).toBe(true);
   });
 });

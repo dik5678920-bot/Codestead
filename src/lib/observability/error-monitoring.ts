@@ -62,10 +62,15 @@ function scrubStackFrames(frames: unknown) {
     // Keep only location fields; drop vars, context lines and absolute paths
     // that could carry learner code or secrets.
     const kept: Record<string, unknown> = {};
-    for (const key of ["filename", "function", "module", "lineno", "colno", "in_app"]) {
-      if (source[key] !== undefined) kept[key] = source[key];
+    if (typeof source.filename === "string") kept.filename = scrubUrl(source.filename) ?? REDACTED;
+    for (const key of ["function", "module"]) {
+      const text = safeString(source[key]);
+      if (text !== undefined) kept[key] = text;
     }
-    if (typeof kept.filename === "string") kept.filename = scrubUrl(kept.filename) ?? REDACTED;
+    for (const key of ["lineno", "colno"]) {
+      if (typeof source[key] === "number" && Number.isFinite(source[key])) kept[key] = source[key];
+    }
+    if (typeof source.in_app === "boolean") kept.in_app = source.in_app;
     return kept;
   });
 }
@@ -77,11 +82,12 @@ function scrubException(exception: unknown) {
     values: source.values.map((value) => {
       const item = (value ?? {}) as Record<string, unknown>;
       const stacktrace = item.stacktrace as { frames?: unknown } | undefined;
+      const mechanism = item.mechanism as { type?: unknown; handled?: unknown } | undefined;
       return {
-        type: typeof item.type === "string" ? item.type : "Error",
+        type: safeString(item.type)?.slice(0, 100) ?? "Error",
         value: scrubText(item.value),
-        ...(item.mechanism && typeof item.mechanism === "object"
-          ? { mechanism: { type: (item.mechanism as { type?: unknown }).type, handled: (item.mechanism as { handled?: unknown }).handled } }
+        ...(mechanism && typeof mechanism === "object"
+          ? { mechanism: { type: unchangedString(mechanism.type, 50), handled: typeof mechanism.handled === "boolean" ? mechanism.handled : undefined } }
           : {}),
         ...(stacktrace ? { stacktrace: { frames: scrubStackFrames(stacktrace.frames) } } : {}),
       };
@@ -100,6 +106,44 @@ function scrubTags(tags: unknown) {
   return kept;
 }
 
+const LEVELS = new Set(["fatal", "error", "warning", "log", "info", "debug"]);
+const SAFE_ID = /^[A-Za-z0-9-]{1,64}$/;
+
+function safeString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const text = scrubText(value);
+  return text === undefined || text.length === 0 ? undefined : text;
+}
+
+/** Strings are kept only when the scrubber would not alter them. */
+function unchangedString(value: unknown, max = 200): string | undefined {
+  if (typeof value !== "string" || value.length === 0 || value.length > max) return undefined;
+  return scrubText(value) === value ? value : undefined;
+}
+
+function scrubSdk(sdk: unknown) {
+  if (!sdk || typeof sdk !== "object") return undefined;
+  const source = sdk as Record<string, unknown>;
+  const name = unchangedString(source.name, 100);
+  const version = unchangedString(source.version, 50);
+  if (!name && !version) return undefined;
+  return { ...(name ? { name } : {}), ...(version ? { version } : {}) };
+}
+
+export function scrubEnvelopeSdk(sdk: unknown) {
+  return scrubSdk(sdk);
+}
+
+/**
+ * Fingerprints are grouping hints. Keep them only when every entry is a short
+ * string the scrubber leaves untouched; otherwise fall back to default grouping.
+ */
+function scrubFingerprint(fingerprint: unknown) {
+  if (!Array.isArray(fingerprint) || fingerprint.length > 10) return undefined;
+  const kept = fingerprint.map((entry) => unchangedString(entry, 100));
+  return kept.every((entry) => entry !== undefined) ? kept : undefined;
+}
+
 /**
  * Rebuilds the event from an allow-list instead of deleting known-bad fields,
  * so fields added by future SDK versions are dropped by default.
@@ -108,22 +152,24 @@ export function scrubEvent<T extends object>(input: T): T {
   const event = input as MonitoredEvent;
   const request = event.request as { method?: unknown; url?: unknown } | undefined;
   const scrubbed: MonitoredEvent = {
-    event_id: event.event_id,
-    timestamp: event.timestamp,
-    platform: event.platform,
-    level: event.level,
-    logger: event.logger,
-    release: event.release,
-    environment: event.environment,
-    sdk: event.sdk,
-    type: event.type,
+    event_id: typeof event.event_id === "string" && SAFE_ID.test(event.event_id) ? event.event_id : undefined,
+    timestamp: typeof event.timestamp === "number" && Number.isFinite(event.timestamp)
+      ? event.timestamp
+      : unchangedString(event.timestamp, 40),
+    platform: unchangedString(event.platform, 40),
+    level: typeof event.level === "string" && LEVELS.has(event.level) ? event.level : undefined,
+    logger: unchangedString(event.logger, 100),
+    release: unchangedString(event.release, 100),
+    environment: unchangedString(event.environment, 100),
+    sdk: scrubSdk(event.sdk),
+    type: event.type === "transaction" ? "transaction" : undefined,
     message: typeof event.message === "string" ? scrubText(event.message) : undefined,
     exception: scrubException(event.exception),
     tags: scrubTags(event.tags),
-    fingerprint: Array.isArray(event.fingerprint) ? event.fingerprint : undefined,
+    fingerprint: scrubFingerprint(event.fingerprint),
     transaction: typeof event.transaction === "string" ? scrubUrl(event.transaction) : undefined,
     ...(request
-      ? { request: { method: typeof request.method === "string" ? request.method : undefined, url: scrubUrl(request.url) } }
+      ? { request: { method: typeof request.method === "string" && /^[A-Za-z]{3,10}$/.test(request.method) ? request.method : undefined, url: scrubUrl(request.url) } }
       : {}),
   };
   for (const key of Object.keys(scrubbed)) if (scrubbed[key] === undefined) delete scrubbed[key];
