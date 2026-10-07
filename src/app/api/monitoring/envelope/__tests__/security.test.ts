@@ -165,6 +165,6 @@ describe("monitoring relay security", () => {
     expect(JSON.parse(itemHeader!)).toEqual({ type: "event", length: Buffer.byteLength(payload!) });
     // The event is rebuilt by the scrubber (text is length-capped), but the
     // multi-byte character split across chunks must decode intact.
-    expect(JSON.parse(payload!).message.startsWith("éxxx")).toBe(true);
+    expect(JSON.parse(payload!).message.startsWith("\u00e9[token]")).toBe(true);
   });
 });
