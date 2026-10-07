@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { ChevronDown } from "lucide-react";
 
 import styles from "./product-pages.module.css";
 
@@ -107,6 +108,7 @@ export function PrivacyConsentPanel() {
   const [busyPurpose, setBusyPurpose] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [disclosuresOpen, setDisclosuresOpen] = useState(false);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     const response = await fetch("/api/privacy/consents", {
@@ -306,7 +308,12 @@ export function PrivacyConsentPanel() {
       {status && <p className={styles.success} role="status">{status}</p>}
 
       <section aria-labelledby="core-disclosures-title" className={styles.consentSection}>
-        <h3 id="core-disclosures-title">Core service disclosures</h3>
+        <h3 id="core-disclosures-title"><button className={styles.disclosureToggle} type="button" aria-expanded={disclosuresOpen} aria-controls="core-disclosures-list" onClick={() => setDisclosuresOpen(!disclosuresOpen)}>
+          Core service disclosures
+          <span className={styles.smallBadge}>{snapshot.requiredDisclosures.filter((item) => snapshot.current[item.purpose]?.currentVersionAccepted).length} acknowledged</span>
+          <ChevronDown size={18} aria-hidden="true" />
+        </button></h3>
+        {disclosuresOpen && <div id="core-disclosures-list">
         <p>These explain required service processing and are not optional switches.</p>
         <ul className={styles.disclosureList}>
           {snapshot.requiredDisclosures.map((disclosure) => (
@@ -315,19 +322,20 @@ export function PrivacyConsentPanel() {
                 <strong>{disclosure.title}</strong>
                 <small>{disclosure.summary}</small>
               </span>
-              <span className="pill">
+              <span className={styles.smallBadge}>
                 {snapshot.current[disclosure.purpose]?.currentVersionAccepted ? "acknowledged" : "review required"}
               </span>
             </li>
           ))}
         </ul>
+        </div>}
       </section>
 
-      <fieldset className={styles.consentSection}>
-        <legend>Cohort sharing</legend>
+      <section className={styles.consentSection} aria-labelledby="cohort-sharing-title">
+        <h3 id="cohort-sharing-title">Cohort sharing</h3>
         <p>Both choices are private by default. Leaderboard participation requires an enabled cohort profile.</p>
         <div className={styles.consentGrid}>{sharing.map(purposeControl)}</div>
-      </fieldset>
+      </section>
 
       <fieldset className={styles.consentSection}>
         <legend>Administrator-funded AI</legend>

@@ -31,7 +31,8 @@
   --radius-xl: 28px;
   --radius-lg: 20px;
   --radius-md: 14px;
-  --focus: #146ad3;
+  --focus: var(--brand);
+  --page-header-offset: 16px;
   --control-min: 2.75rem;
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
@@ -258,8 +259,8 @@ a {
 }
 
 :focus-visible {
-  outline: 3px solid var(--focus);
-  outline-offset: 3px;
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
 }
 
 .skip-link {
@@ -553,3 +554,5 @@ textarea {
 select {
   padding-inline: 12px 32px;
 }
+
+@media (max-width: 920px) { :root { --page-header-offset: calc(74px + env(safe-area-inset-top)); } }

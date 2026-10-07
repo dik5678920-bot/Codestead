@@ -3,18 +3,18 @@
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .catalogPage { display: grid; gap: 24px; }
-.catalogHero { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 36px; align-items: end; padding-top: 8px; }
+.catalogHero { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; align-items: start; padding-top: 8px; }
 .catalogHero h1 { margin: 6px 0 10px; font-size: clamp(2.2rem, 4vw, 3.8rem); letter-spacing: -.055em; line-height: 1; }
 .catalogHero > div:first-child p { max-width: 720px; margin: 0; color: var(--ink-soft); }
 .heroPrinciples { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.heroPrinciples > span { display: grid; gap: 5px; min-height: 125px; align-content: start; padding: 14px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); }
+.heroPrinciples > span { display: grid; gap: 5px; min-height: 0; align-content: start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 15px; background: var(--surface); }
 .heroPrinciples svg { color: var(--brand); }
 .heroPrinciples b { font-size: .76rem; }
 .heroPrinciples small { color: var(--ink-soft); font-size: .66rem; line-height: 1.45; }
 .deviceGate { display: flex; align-items: center; gap: 12px; padding: 14px 17px; border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent); border-radius: 15px; color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface-solid)); }
 .deviceGate div { display: grid; }
 .deviceGate span { color: var(--ink-soft); font-size: .76rem; }
-.catalogToolbar { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding: 15px 17px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
+.catalogToolbar { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface); }
 .catalogToolbar > div { display: flex; align-items: baseline; gap: 7px; }
 .catalogToolbar > div strong { font-size: 1.35rem; }
 .catalogToolbar > div span { color: var(--ink-soft); font-size: .75rem; }
@@ -154,7 +154,7 @@
 @media (max-width: 800px) {
   .examGrid { grid-template-columns: 1fr; }
   .heroPrinciples { grid-template-columns: 1fr; }
-  .heroPrinciples > span { min-height: auto; }
+  .heroPrinciples > span { min-height: 0; }
 }
 /* Keep this boundary one pixel below MIN_EXAM_VIEWPORT_WIDTH in the exam policy. */
 @media (max-width: 767px) {
