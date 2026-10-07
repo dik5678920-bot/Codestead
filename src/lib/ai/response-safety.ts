@@ -5,7 +5,8 @@ import { ProviderError, type TutorMessage } from "./types";
 export function safeTutorResponse(text: string, messages: TutorMessage[] = []) {
   const content = text.replace(/<\s*(think|thinking)\s*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "").trim();
   const reasoningDetected = content !== text.trim();
-  const leakedTrace = /<\s*\/?\s*(?:think|thinking)\b|(?:here(?:'s| is)|this is)\s+(?:my |a |the )?(?:thinking process|reasoning process)|(?:^|\n)\s*(?:\*\*|#{1,6}\s*)?(?:analysis|internal reasoning|chain[ -]of[ -]thought|system prompt|system instructions)\s*[:\n]|(?:I (?:need|must|should) to|the (?:user|learner) (?:asks|wants|said)).{0,100}(?:system prompt|instructions|respond|answer)|You are Patch, the Codestead tutor/i.test(content);
+  const leadingReasoningLabel = /^(?:\*\*|#{1,6}\s*)?(?:analysis|internal reasoning|chain[ -]of[ -]thought)(?:\*\*)?[ \t]*(?::[ \t]*(?:\*\*)?\s*|\r?\n\s*)(?=\S)(?!\*\*$)/i.test(content);
+  const leakedTrace = leadingReasoningLabel || /<\s*\/?\s*(?:think|thinking)\b|(?:here(?:'s| is)|this is)\s+(?:my |a |the )?(?:thinking process|reasoning process)|(?:I (?:need|must|should) to|the (?:user|learner) (?:asks|wants|said)).{0,100}(?:system prompt|instructions|respond|answer)|You are Patch, the Codestead tutor/i.test(content);
   const normalized = content.replace(/\s+/g, " ").toLowerCase();
   const echoesSystem = messages.some((message) => message.role === "system" &&
     message.content.split(/\n+/).some((line) => {
