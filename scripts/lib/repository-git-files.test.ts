@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   decodeGitPathList,
@@ -17,6 +17,7 @@ const temporaryDirectories: string[] = [];
 const execFileAsync = promisify(execFile);
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   await Promise.all(
     temporaryDirectories
       .splice(0)
@@ -78,5 +79,30 @@ describe("Git repository path identity", () => {
     await expect(tryListGitTrackedRepositoryPaths(root)).rejects.toMatchObject({
       code: 128,
     });
+  });
+
+  it("recognizes a Git-free archive even when the parent process requests another locale", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "codestead-localized-archive-"));
+    temporaryDirectories.push(root);
+    vi.stubEnv("LC_ALL", "fr_FR.UTF-8");
+    vi.stubEnv("GIT_DISCOVERY_ACROSS_FILESYSTEM", undefined);
+    await expect(tryListGitTrackedRepositoryPaths(root)).resolves.toBeNull();
+  });
+
+  it("recognizes the canonical no-repository diagnostic when mount discovery is enabled", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "codestead-cross-filesystem-archive-"));
+    temporaryDirectories.push(root);
+    vi.stubEnv("GIT_DISCOVERY_ACROSS_FILESYSTEM", "1");
+    await expect(tryListGitTrackedRepositoryPaths(root)).resolves.toBeNull();
+  });
+
+  it("fails closed for an unrelated Git configuration error", async () => {
+    const root = await mkdtemp(path.join(tmpdir(), "codestead-bad-git-config-"));
+    temporaryDirectories.push(root);
+    await execFileAsync("git", ["init", "--quiet", root]);
+    vi.stubEnv("GIT_CONFIG_COUNT", "1");
+    vi.stubEnv("GIT_CONFIG_KEY_0", "invalid-key-without-section");
+    vi.stubEnv("GIT_CONFIG_VALUE_0", "1");
+    await expect(tryListGitTrackedRepositoryPaths(root)).rejects.toMatchObject({ code: 128 });
   });
 });
