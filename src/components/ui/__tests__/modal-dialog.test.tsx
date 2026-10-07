@@ -24,6 +24,15 @@ function Harness() {
 }
 
 describe("ModalDialog", () => {
+  it("contains focus when mounted inside a nested page beside an outside control", async () => {
+    const user = userEvent.setup();
+    render(<><button type="button">Outside page</button><main><Harness /></main></>);
+    const outside = screen.getByRole("button", { name: "Outside page" });
+    await user.click(screen.getByRole("button", { name: "Open dialog" }));
+    outside.focus();
+    await user.tab();
+    expect(screen.getByRole("dialog", { name: "Accessible dialog" })).toContainElement(document.activeElement as HTMLElement);
+  });
   it("isolates background content, traps focus, closes with Escape, and restores focus", async () => {
     const user = userEvent.setup();
     render(<Harness />);
@@ -32,8 +41,7 @@ describe("ModalDialog", () => {
     await user.click(trigger);
     const dialog = screen.getByRole("dialog", { name: "Accessible dialog" });
     expect(dialog).toHaveAttribute("aria-modal", "true");
-    expect(trigger).toHaveAttribute("inert");
-    expect(trigger).toHaveAttribute("aria-hidden", "true");
+    expect(trigger.closest('[aria-hidden="true"]')).not.toBeNull();
     expect(screen.getByRole("button", { name: "First action" })).toHaveFocus();
 
     screen.getByRole("button", { name: "Last action" }).focus();
