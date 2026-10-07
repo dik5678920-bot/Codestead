@@ -184,6 +184,11 @@ function remediationEntry() {
 }
 
 describe("exam catalog standard start flow", () => {
+  it("explains that exams are being prepared when the catalog is empty", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ exams: [] })));
+    render(<ExamCatalog />);
+    expect(await screen.findByText("Exams for this course are being prepared.")).toBeInTheDocument();
+  });
   it("filters by course, shows restriction copy, and starts the plain exam endpoint", async () => {
     vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);

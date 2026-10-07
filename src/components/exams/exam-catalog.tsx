@@ -189,7 +189,7 @@ export function ExamCatalog() {
 
       {loading && <div className={styles.loading}><LoaderCircle className={styles.spin} /> Loading exam readiness…</div>}
       {!loading && error && !selected && <div className={styles.inlineError} role="alert">{error}</div>}
-      {!loading && !error && visible.length === 0 && <div className={styles.empty}>No module exams match this course.</div>}
+      {!loading && !error && visible.length === 0 && <div className={styles.empty}>{exams.length === 0 ? "Exams for this course are being prepared." : "No module exams match this course."}</div>}
 
       <section className={styles.examGrid} aria-label="Module exams">
         {visible.map((entry) => {
