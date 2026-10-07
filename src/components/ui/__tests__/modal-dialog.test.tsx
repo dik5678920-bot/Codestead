@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { describe, expect, it } from "vitest";
 
+import { Field } from "../field";
 import { ModalDialog } from "../modal-dialog";
 
 function Harness() {
@@ -24,6 +25,15 @@ function Harness() {
 }
 
 describe("ModalDialog", () => {
+  it("keeps a single element child single so Field can label its control", () => {
+    render(<ModalDialog backdropClassName="backdrop" dialogClassName="dialog" labelledBy="field-title" onClose={() => {}}>
+      <h2 id="field-title">Field dialog</h2>
+      <form><Field id="field-message" label="Message" help="Plain text only."><textarea /></Field></form>
+    </ModalDialog>);
+    const message = screen.getByRole("textbox", { name: "Message" });
+    expect(message).toHaveAttribute("aria-describedby", "field-message-help");
+    expect(screen.getByRole("dialog", { name: "Field dialog" })).toContainElement(message);
+  });
   it("contains focus when mounted inside a nested page beside an outside control", async () => {
     const user = userEvent.setup();
     render(<><button type="button">Outside page</button><main><Harness /></main></>);
