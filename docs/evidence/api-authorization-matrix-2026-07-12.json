@@ -2136,7 +2136,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "all user context is derived from authz.session.user.id",
-      "operationSourceSha256": "114a0dd417fe0978e7ff064b6007715b4c2fcc2cb233cb2c3a2057402a02abae"
+      "operationSourceSha256": "aa0a77c97fdd749916da6cefbb7572db543ab8a67472a73679bf43a390a7cae2"
     },
     {
       "operation": "POST /api/security/forced-password-change",
