@@ -2,6 +2,7 @@
 import { ENROLLMENT_DISCLOSURE_VERSION } from "@/lib/privacy/disclosure-version";
 
 import { credentialValidationReason } from "@/lib/ai/credential-status";
+import { LearnerModelChoice } from "./learner-model-choice";
 
 import { Accessibility, Bell, BrainCircuit, KeyRound, Laptop, Plus, Shield, ShieldCheck, Trash2, UserRound, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -295,6 +296,7 @@ export function SettingsView({ initialTab = "ai" }: { initialTab?: SettingsTab }
 
   function aiProvidersPanel() {
     return <>
+      <LearnerModelChoice />
       <div className={styles.sectionTitle}>
         <div>
           <h2>Your AI providers</h2>
