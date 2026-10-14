@@ -1,24 +1,36 @@
 {
   "schemaVersion": 1,
-  "files": 130,
-  "operations": 168,
-  "matrixRows": 168,
+  "files": 134,
+  "operations": 173,
+  "matrixRows": 173,
   "boundaryCounts": {
     "public": 6,
     "auth-handler": 2,
-    "authenticated": 95,
+    "authenticated": 100,
     "admin": 65
   },
   "objectAuthorizationCounts": {
     "public-input": 6,
     "administrator-scope": 65,
-    "session-user": 89,
+    "session-user": 94,
     "auth-provider": 2,
     "no-user-object": 4,
     "consent-projected-cohort": 2
   },
-  "identifierOwnershipContracts": 37,
+  "identifierOwnershipContracts": 39,
   "supportingOwnershipProofs": [
+    {
+      "file": "src/lib/runner/interactive-control.ts",
+      "purpose": "owner-bound durable login, account/MFA, consent and closed-book revalidation under shared exam authority",
+      "anchors": 6,
+      "sourceSha256": "397dda4e3389f551955474e3da951cb6e68370fb4781a223681a204155b178f0"
+    },
+    {
+      "file": "services/interactive-runner/server.mjs",
+      "purpose": "single-use grant and durable-login owner binding with independent admission and fail-closed cleanup",
+      "anchors": 11,
+      "sourceSha256": "a0be4cb1cc7b016a64e2bcb38d27cbd934460e2bdda8b291cafd91f5ad09a9cf"
+    },
     {
       "file": "src/lib/learning-requests/support-service.ts",
       "purpose": "session-owned support receipts and open-request dedupe",
@@ -41,7 +53,7 @@
       "file": "src/app/api/exams/_lib/service.ts",
       "purpose": "exam sessions and answers",
       "anchors": 4,
-      "sourceSha256": "a29b284e3d232ffbb4e53fff16f6771006caaf214898e1a348007c10456f52f9"
+      "sourceSha256": "d75f7087c5d7c21e348fd9eb33c6cbbc90325704e5c024028920eb3c43584425"
     },
     {
       "file": "src/lib/learning-service/drizzle-store.ts",
@@ -1057,7 +1069,7 @@
       "admin": "allowed",
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by eq(chatThread.userId, authz.session.user.id)",
-      "operationSourceSha256": "bf119d7fa969722d4b5a6e73989964d9a157101c283752e6a55357e293c1f9cf"
+      "operationSourceSha256": "595444f822ab2bec1455e8bf27d568d6fdf1c5de0ed747b69e7159e3209f2b1e"
     },
     {
       "operation": "GET /api/auth/[...all]",
@@ -1188,6 +1200,45 @@
       "objectAuthorization": "session-user",
       "ownershipProof": "identifier bound by userId: authz.session!.user.id",
       "operationSourceSha256": "1dbd583a2275bedc3d54426d40a303e7a85029994cf5a8dfcb84bc21b1585b2d"
+    },
+    {
+      "operation": "GET /api/code/interactive/[sessionId]/authorize",
+      "file": "src/app/api/code/interactive/[sessionId]/authorize/route.ts",
+      "route": "/api/code/interactive/[sessionId]/authorize",
+      "method": "GET",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "session-user",
+      "ownershipProof": "identifier bound by proof.userId !== authz.session.user.id",
+      "operationSourceSha256": "f7189179a688c56e11b614959cf08f2c441aba6044a59f12096743d5530e522d"
+    },
+    {
+      "operation": "DELETE /api/code/interactive/[sessionId]",
+      "file": "src/app/api/code/interactive/[sessionId]/route.ts",
+      "route": "/api/code/interactive/[sessionId]",
+      "method": "DELETE",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "session-user",
+      "ownershipProof": "identifier bound by sessionId, userId: authz.session.user.id, authSessionId: authz.session.session.id",
+      "operationSourceSha256": "903e7d25017e0eef283edaefe9712c2209df6e98db281a840ac3b6498a9229ba"
+    },
+    {
+      "operation": "POST /api/code/interactive",
+      "file": "src/app/api/code/interactive/route.ts",
+      "route": "/api/code/interactive",
+      "method": "POST",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "session-user",
+      "ownershipProof": "all user context is derived from authz.session.user.id",
+      "operationSourceSha256": "89c0ced78e5e3dfd39ea9e8901041a41f3413265c91e02f84d21fddcc3c7a6ec"
     },
     {
       "operation": "GET /api/code/run",
@@ -2282,6 +2333,32 @@
       "operationSourceSha256": "936d1e311f20de1d1ac9c5a7a4f1194462f6fa1deb83e10cb328828252fdc902"
     },
     {
+      "operation": "GET /api/settings/ai-model",
+      "file": "src/app/api/settings/ai-model/route.ts",
+      "route": "/api/settings/ai-model",
+      "method": "GET",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "session-user",
+      "ownershipProof": "all user context is derived from authz.session.user.id",
+      "operationSourceSha256": "a9d6b794ab4a5f5ec9a968b1898d4337f5c3a9961ab5146b830197748eb6a50b"
+    },
+    {
+      "operation": "PATCH /api/settings/ai-model",
+      "file": "src/app/api/settings/ai-model/route.ts",
+      "route": "/api/settings/ai-model",
+      "method": "PATCH",
+      "boundary": "authenticated",
+      "anonymous": "authenticated",
+      "learner": "allowed",
+      "admin": "allowed",
+      "objectAuthorization": "session-user",
+      "ownershipProof": "all user context is derived from authz.session.user.id",
+      "operationSourceSha256": "8171607b848490c4e0045321def5ae883b1f09901dff2e1298d85cc4493446d8"
+    },
+    {
       "operation": "GET /api/settings/profile",
       "file": "src/app/api/settings/profile/route.ts",
       "route": "/api/settings/profile",
@@ -2327,7 +2404,7 @@
     "guardDecisionTest": "src/lib/http/__tests__/authz.test.ts",
     "representativeObjectAuthorizationTest": "integration/runtime-authorization.integration.test.ts",
     "protectedOperationInvocations": {
-      "anonymousAuthenticated": 95,
+      "anonymousAuthenticated": 100,
       "anonymousAdmin": 65,
       "learnerAdmin": 65
     },
