@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BLUEPRINT_RESPONSE_KEY } from "@/app/api/exams/_lib/contracts";
 
@@ -342,11 +342,15 @@ describe("N03: formal attempts bind the learner's enrollment for the assessed ve
   }
 
   beforeEach(() => {
+    vi.stubEnv("CODE_RUNNER_PROVIDER", "piston");
+    vi.stubEnv("PISTON_URL", "http://piston:2000");
+    vi.stubEnv("PISTON_IMAGE", `codestead-piston@sha256:${"a".repeat(64)}`);
     mocks.listPublishedExamCourses.mockResolvedValue([{
       courseVersionId, course: examCourse, assessmentBanks: [],
     }]);
     mocks.listPointerSelectedCourseSlugs.mockResolvedValue(new Set([examCourse.id]));
   });
+  afterEach(() => vi.unstubAllEnvs());
 
   async function admit() {
     // getExamSession after admission reads the created session; the empty
