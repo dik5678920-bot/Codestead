@@ -111,8 +111,12 @@ describe("endpoint-wide executable authorization boundary", () => {
     const operations = await protectedOperations("authenticated");
     // Explicit reviewed inventory: additions must update the API matrix and
     // this executable boundary together rather than silently expanding scope.
-    expect(operations).toHaveLength(100);
+    expect(operations).toHaveLength(104);
     for (const [route, method] of [
+      ["/api/security/passkeys", "GET"],
+      ["/api/security/passkeys/[id]", "DELETE"],
+      ["/api/security/passkeys/[id]", "PATCH"],
+      ["/api/security/passkey-step-up", "POST"],
       ["/api/code/interactive", "POST"],
       ["/api/code/interactive/[sessionId]", "DELETE"],
       ["/api/code/interactive/[sessionId]/authorize", "GET"],

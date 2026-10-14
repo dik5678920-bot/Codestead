@@ -6,6 +6,7 @@ import { ModalDialog } from "@/components/ui/modal-dialog";
 
 import styles from "./admin.module.css";
 import { registerStepUpPrompter } from "./step-up-request";
+import { verifyWithPasskey } from "@/components/auth/passkey-step-up";
 
 export function AdminStepUpDialog() {
   const [resolver, setResolver] = useState<((verified: boolean) => void) | null>(null);
@@ -88,10 +89,18 @@ export function AdminStepUpDialog() {
     <ModalDialog asChild backdropClassName={styles.stepUpBackdrop} dialogClassName={styles.stepUpDialog} labelledBy="admin-step-up-title" onClose={() => close(false)}>
       <form onSubmit={(event) => void verify(event)}>
         <h2 id="admin-step-up-title"><ShieldCheck size={18} /> Confirm it&apos;s you</h2>
-        <p>This action needs a fresh authenticator code. It then continues automatically.</p>
+        <p>Verify your authenticator or passkey to continue this action.</p>
         <label>Authenticator code<input data-dialog-initial-focus autoComplete="one-time-code" inputMode="numeric" maxLength={6} value={code} onChange={(event) => setCode(event.target.value)} /></label>
         {error && <p className={styles.inlineError} role="alert">{error}</p>}
         <div className={styles.headActions}>
+          <button className="button button-secondary" disabled={busy} type="button" onClick={() => void (async () => {
+            const owner = attempt.current;
+            const controller = new AbortController(); verification.current = controller;
+            setBusy(true); setError(null);
+            try { await verifyWithPasskey(controller.signal); if (owner === attempt.current) close(true); }
+            catch { if (owner === attempt.current) setError("Passkey verification was not accepted."); }
+            finally { if (owner === attempt.current) setBusy(false); }
+          })()}>Verify with a passkey</button>
           <button className="button button-secondary" onClick={() => close(false)} type="button">Cancel</button>
           <button className="button button-primary" disabled={busy} type="submit">{busy ? "Verifying…" : "Verify and continue"}</button>
         </div>

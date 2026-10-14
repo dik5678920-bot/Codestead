@@ -1,5 +1,6 @@
 export type RawBetterAuthAction =
   | "pass-through"
+  | "passkey-management"
   | "deny"
   | "google-social-sign-in"
   | "initial-totp-enrollment";
@@ -9,11 +10,13 @@ const ALLOWED_GET_PATHS = new Set([
   "/verify-email",
   "/callback/google",
   "/error",
+  "/passkey/generate-authenticate-options",
 ]);
 
 const ALLOWED_POST_PATHS = new Set([
   "/sign-in/email",
   "/sign-out",
+  "/passkey/verify-authentication",
   "/request-password-reset",
   "/reset-password",
   "/two-factor/verify-totp",
@@ -46,12 +49,14 @@ export function classifyRawBetterAuthRequest(
   if (!path) return "deny";
 
   if (method === "GET") {
+    if (path === "/passkey/generate-register-options") return "passkey-management";
     if (ALLOWED_GET_PATHS.has(path)) return "pass-through";
     if (/^\/reset-password\/[A-Za-z0-9_-]+$/.test(path)) return "pass-through";
     return "deny";
   }
 
   if (method !== "POST") return "deny";
+  if (path === "/passkey/verify-registration") return "passkey-management";
   if (path === "/two-factor/enable") return "initial-totp-enrollment";
   if (path === "/sign-in/social") return "google-social-sign-in";
   return ALLOWED_POST_PATHS.has(path) ? "pass-through" : "deny";

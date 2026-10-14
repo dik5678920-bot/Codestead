@@ -5,6 +5,8 @@ import { withRateLimit, type RateLimitPolicy } from "./rate-limit";
 
 // Auth budgets are fixed and fail closed, independent of API policy overrides.
 const rules: Record<string, RateLimitPolicy> = {
+  "/passkey/generate-authenticate-options": { name: "passkey_login_ip", limit: 8, windowSeconds: 60, failureMode: "closed" },
+  "/passkey/verify-authentication": { name: "passkey_login_ip", limit: 8, windowSeconds: 60, failureMode: "closed" },
   "/request-password-reset": { name: "auth_reset_request_ip", limit: 3, windowSeconds: 600, failureMode: "closed" },
   "/reset-password": { name: "auth_reset_password_ip", limit: 6, windowSeconds: 60, failureMode: "closed" },
   "/reset-password/:token": { name: "auth_reset_callback_ip", limit: 10, windowSeconds: 60, failureMode: "closed" },

@@ -271,6 +271,16 @@ export function LoginForm({ googleEnabled = true }: { googleEnabled?: boolean } 
       </div>
       <label className={styles.check}><input name="remember" type="checkbox" defaultChecked /> Keep me signed in on this device for 30 days</label>
       <button className={`button button-primary ${styles.submit}`} disabled={busy} type="submit"><LogIn size={18} /> {busy ? "Signing in…" : "Sign in"}</button>
+      <button className="button button-secondary" disabled={busy} type="button" onClick={() => void (async () => {
+        if (submittingRef.current) return;
+        submittingRef.current = true; setBusy(true); setError(null);
+        try {
+          const result = await authClient.signIn.passkey();
+          if (result.error) { setError(result.error.message ?? "Passkey sign-in failed."); return; }
+          router.push("/onboarding"); router.refresh();
+        } catch { setError("Passkey sign-in is temporarily unavailable."); }
+        finally { submittingRef.current = false; setBusy(false); }
+      })()}>Sign in with a passkey</button>
       {googleEnabled && <div className={styles.divider}>or</div>}
       {googleEnabled && <button className={`button button-secondary ${styles.googleButton}`} disabled={busy} type="button" onClick={google}>G&nbsp; Continue with Google</button>}
       <p className={styles.footLink}>Cannot reach the only approved browser profile? <Link href="/lost-device">Request lost-device help</Link></p>

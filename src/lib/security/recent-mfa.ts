@@ -7,6 +7,8 @@ import { writeAuditEvent } from "@/lib/security/audit-writer";
 import { isFreshMfa, LEARNER_SELF_SERVICE_MFA_MS } from "@/lib/security/privileged-access";
 
 export type RecentMfaAction =
+  | "passkey.add"
+  | "passkey.remove"
   | "credential.add"
   | "credential.prefer"
   | "credential.disable"
@@ -30,6 +32,7 @@ export async function requireRecentMfa(input: {
   action: RecentMfaAction;
   resourceId?: string;
   now?: Date;
+  maxAgeMs?: number;
 }): Promise<RecentMfaResult> {
   const [record] = await db
     .select({ mfaVerifiedAt: session.mfaVerifiedAt })
@@ -37,13 +40,13 @@ export async function requireRecentMfa(input: {
     .where(and(eq(session.id, input.sessionId), eq(session.userId, input.userId)))
     .limit(1);
 
-  if (isFreshMfa(record?.mfaVerifiedAt, input.now, LEARNER_SELF_SERVICE_MFA_MS)) return { allowed: true };
+  if (isFreshMfa(record?.mfaVerifiedAt, input.now, input.maxAgeMs ?? LEARNER_SELF_SERVICE_MFA_MS)) return { allowed: true };
 
   await writeAuditEvent({
     actorUserId: input.userId,
     subjectUserId: input.userId,
     action: input.action,
-    resourceType: "provider_credential",
+    resourceType: input.action.startsWith("passkey.") ? "passkey" : "provider_credential",
     resourceId: input.resourceId,
     outcome: "denied",
     metadata: { denialCode: "FRESH_MFA_REQUIRED" },
@@ -53,7 +56,7 @@ export async function requireRecentMfa(input: {
     allowed: false,
     response: NextResponse.json(
       {
-        error: "Verify your authenticator before changing provider credentials.",
+        error: input.action.startsWith("passkey.") ? "Verify your authenticator or passkey before changing passkeys." : "Verify your authenticator before changing provider credentials.",
         code: "FRESH_MFA_REQUIRED",
       },
       { status: 403, headers: { "Cache-Control": "no-store" } },

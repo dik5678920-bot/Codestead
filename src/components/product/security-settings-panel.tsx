@@ -4,6 +4,7 @@ import { PasswordInput } from "@/components/ui/password-input";
 import styles from "./product-pages.module.css";
 import formStyles from "../ui/form.module.css";
 import { Field } from "../ui/field";
+import { PasskeySettings } from "./passkey-settings";
 
 async function readPasswordStatus(signal?: AbortSignal): Promise<boolean> {
   const response = await fetch("/api/security/password-status", { cache: "no-store", signal });
@@ -13,6 +14,7 @@ async function readPasswordStatus(signal?: AbortSignal): Promise<boolean> {
 }
 
 export function SecuritySettingsPanel() {
+  const [passkeysOpen, setPasskeysOpen] = useState(false);
   const [hasPassword, setHasPassword] = useState<boolean | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [open, setOpen] = useState(false);
@@ -51,6 +53,10 @@ export function SecuritySettingsPanel() {
     finally { clearSecrets(); mutation.current = false; setBusy(false); }
   }
   return <><h2>Security</h2><p>Multi-factor authentication is required for every account.</p>
+    <section className={styles.sideCard}><h3>Passkeys</h3><p>Manage passkeys for signing in and verifying your identity.</p>
+      <button type="button" className="button button-secondary" aria-expanded={passkeysOpen} onClick={() => setPasskeysOpen(!passkeysOpen)}>Manage passkeys</button>
+      {passkeysOpen && <PasskeySettings />}
+    </section>
     <section className={styles.sideCard}><h3>Authenticator</h3><p>Use your authenticator when signing in on an untrusted device.</p>
       <button className="button button-secondary" aria-expanded={recoveryOpen} aria-controls="mfa-recovery-guidance" onClick={() => setRecoveryOpen(!recoveryOpen)}>View recovery guidance</button>
       {recoveryOpen && <div id="mfa-recovery-guidance"><h4>MFA recovery</h4><p>Use one of the backup codes saved during authenticator setup if you cannot access your authenticator. Choose the recovery-code option at sign-in. Each code can be used only once.</p><p>Keep backup codes private. Never include them or passwords in a support request.</p></div>}

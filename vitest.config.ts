@@ -8,6 +8,7 @@ export default defineConfig({
     }
   },
   test: {
+    server: { deps: { inline: ["@better-auth/passkey"] } },
     include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.{ts,tsx}"],
     // This route-import sweep intentionally loads the complete API graph. It
     // has its own mandatory gate so those import-only modules do not become

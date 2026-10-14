@@ -9,6 +9,13 @@ import { pool } from "@/lib/db/client";
 export type RateLimitFailureMode = "closed" | "open";
 
 export type RateLimitPolicyName =
+  | "passkey_login_ip"
+  | "passkey_login_user"
+  | "passkey_register_ip"
+  | "passkey_register_user"
+  | "passkey_list_user"
+  | "passkey_manage_user"
+  | "passkey_step_up_ip"
   | "auth_sign_in_ip"
   | "auth_sign_up_ip"
   | "auth_totp_ip"
@@ -94,6 +101,13 @@ export type RateLimitPolicy = Readonly<{
 }>;
 
 const DEFAULT_POLICIES: Record<RateLimitPolicyName, RateLimitPolicy> = {
+  passkey_login_ip: policy("passkey_login_ip", 8, 60),
+  passkey_login_user: policy("passkey_login_user", 10, 900),
+  passkey_register_ip: policy("passkey_register_ip", 20, 900),
+  passkey_register_user: policy("passkey_register_user", 5, 900),
+  passkey_list_user: policy("passkey_list_user", 30, 60),
+  passkey_manage_user: policy("passkey_manage_user", 10, 900),
+  passkey_step_up_ip: policy("passkey_step_up_ip", 20, 900),
   auth_sign_in_ip: policy("auth_sign_in_ip", 8, 60),
   auth_sign_up_ip: policy("auth_sign_up_ip", 3, 600),
   auth_totp_ip: policy("auth_totp_ip", 6, 60),

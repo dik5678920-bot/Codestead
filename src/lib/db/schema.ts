@@ -376,6 +376,25 @@ export const verification = pgTable(
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+export const passkey = pgTable("passkey", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  publicKey: text("public_key").notNull(),
+  userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  credentialID: text("credential_id").notNull(),
+  counter: bigint("counter", { mode: "number" }).notNull(),
+  deviceType: text("device_type").notNull(),
+  backedUp: boolean("backed_up").notNull(),
+  transports: text("transports"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  aaguid: text("aaguid"),
+  disabledAt: timestamp("disabled_at", { withTimezone: true }),
+}, (table) => [
+  index("passkey_user_idx").on(table.userId),
+  uniqueIndex("passkey_credential_unique").on(table.credentialID),
+  check("passkey_counter_nonnegative", sql`${table.counter} >= 0`),
+]);
+
 export const twoFactor = pgTable(
   "two_factor",
   {

@@ -67,6 +67,10 @@ const NO_USER_OBJECT_OPERATIONS = new Map<string, Readonly<{ ownershipProof: str
  * its object-authorization contract has been reviewed.
  */
 const SESSION_USER_OPERATIONS = new Set([
+  "GET /api/security/passkeys",
+  "DELETE /api/security/passkeys/[id]",
+  "PATCH /api/security/passkeys/[id]",
+  "POST /api/security/passkey-step-up",
   "GET /api/security/password-status",
   "POST /api/security/change-password",
   "POST /api/ai/reports",
@@ -170,6 +174,8 @@ const SESSION_USER_OPERATIONS = new Set([
  * service whose first/input user id is session-derived.
  */
 const IDENTIFIER_OWNERSHIP_ANCHORS = new Map<string, string>([
+  ["DELETE /api/security/passkeys/[id]", "userId: authz.session.user.id, sessionId: authz.session.session.id"],
+  ["PATCH /api/security/passkeys/[id]", "userId: authz.session.user.id, sessionId: authz.session.session.id"],
   ["DELETE /api/code/interactive/[sessionId]", "sessionId, userId: authz.session.user.id, authSessionId: authz.session.session.id"],
   ["GET /api/code/interactive/[sessionId]/authorize", "proof.userId !== authz.session.user.id"],
   ["POST /api/ai/reports", "eq(modelCall.userId, authz.session.user.id)"],

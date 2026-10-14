@@ -3,6 +3,7 @@ import { toNextJsHandler } from "better-auth/next-js";
 import { NextResponse } from "next/server";
 
 import { auth } from "@/lib/auth";
+import { authorizePasskeyRegistration, requirePasskeyUvOptions } from "@/lib/security/passkey-registration-policy";
 import { readInitialTotpEnrollmentAuthority } from "@/lib/security/better-auth-management-authority";
 import {
   classifyRawBetterAuthRequest,
@@ -22,13 +23,21 @@ function unavailableSecurityAction() {
 }
 
 export async function GET(request: Request) {
+  if (classifyRawBetterAuthRequest(request.method, request.url) === "passkey-management") {
+    const denial = await authorizePasskeyRegistration(request);
+    return denial ?? betterAuthHandlers.GET(request);
+  }
   return classifyRawBetterAuthRequest(request.method, request.url) === "pass-through"
-    ? betterAuthHandlers.GET(request)
+    ? requirePasskeyUvOptions(request, await betterAuthHandlers.GET(request))
     : unavailableSecurityAction();
 }
 
 export async function POST(request: Request) {
   const action = classifyRawBetterAuthRequest(request.method, request.url);
+  if (action === "passkey-management") {
+    const denial = await authorizePasskeyRegistration(request);
+    return denial ?? betterAuthHandlers.POST(request);
+  }
   if (action === "pass-through") return betterAuthHandlers.POST(request);
   if (action === "deny") return unavailableSecurityAction();
   if (action === "google-social-sign-in") {

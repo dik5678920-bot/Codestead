@@ -50,6 +50,7 @@ import {
 import { PERSISTENT_SESSION_LIFETIME } from "@/lib/security/session-lifetime";
 import { breachedPasswordPlugin } from "@/lib/security/breached-passwords";
 import { atomicAuthRateLimitPlugin } from "@/lib/security/auth-rate-limit";
+import { createPasskeyPlugin, completePasskeyCeremony } from "@/lib/security/passkey-plugin";
 
 /** Account behind a password-verified sign-in that is waiting for its second factor. */
 async function pendingTwoFactorUserId(ctx: GenericEndpointContext) {
@@ -225,6 +226,7 @@ export const auth = betterAuth({
       if (await hasActiveSession(pendingUserId)) throw activeSessionElsewhereError();
     }),
     after: createAuthMiddleware(async (ctx) => {
+      await completePasskeyCeremony(ctx);
       if (ctx.path === "/sign-in/email") {
         // A second device never gets here: session creation is refused while
         // another device is active (session_one_active_user_unique), and the
@@ -380,6 +382,7 @@ export const auth = betterAuth({
   plugins: [
     atomicAuthRateLimitPlugin(databaseRateLimitsRequired),
     breachedPasswordPlugin(),
+    createPasskeyPlugin(),
     twoFactor({
       issuer: process.env.APP_NAME ?? "Codestead",
       allowPasswordless: true,

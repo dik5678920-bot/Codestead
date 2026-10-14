@@ -9,6 +9,7 @@ export default defineConfig({
     },
   },
   test: {
+    server: { deps: { inline: ["@better-auth/passkey"] } },
     include: ["integration/**/*.integration.test.ts"],
     environment: "node",
     globals: true,
